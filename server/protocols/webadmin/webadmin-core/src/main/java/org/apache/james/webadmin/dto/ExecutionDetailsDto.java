@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.apache.james.task.Hostname;
 import org.apache.james.task.TaskExecutionDetails;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -52,11 +53,25 @@ public class ExecutionDetailsDto {
     }
 
     public String getType() {
-        return executionDetails.getType();
+        return executionDetails.getType().asString();
     }
 
     public String getStatus() {
         return executionDetails.getStatus().getValue();
+    }
+
+    public String getSubmittedFrom() {
+        return executionDetails.getSubmittedNode().asString();
+    }
+
+    public Optional<String> getExecutedOn() {
+        return executionDetails.getRanNode()
+            .map(Hostname::asString);
+    }
+
+    public Optional<String> getCancelledFrom() {
+        return executionDetails.getCancelRequestedNode()
+            .map(Hostname::asString);
     }
 
     public Optional<TaskExecutionDetails.AdditionalInformation> getAdditionalInformation() {
@@ -66,7 +81,7 @@ public class ExecutionDetailsDto {
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSZ")
     public ZonedDateTime getSubmitDate() {
-        return executionDetails.getSubmitDate();
+        return executionDetails.getSubmittedDate();
     }
 
     @JsonInclude(JsonInclude.Include.NON_ABSENT)

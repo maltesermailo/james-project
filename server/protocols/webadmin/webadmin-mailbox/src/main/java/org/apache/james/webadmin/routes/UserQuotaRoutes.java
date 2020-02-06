@@ -34,9 +34,9 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 
 import org.apache.james.core.Domain;
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.quota.search.Limit;
 import org.apache.james.quota.search.Offset;
 import org.apache.james.quota.search.QuotaBoundary;
@@ -46,6 +46,7 @@ import org.apache.james.user.api.UsersRepositoryException;
 import org.apache.james.webadmin.Routes;
 import org.apache.james.webadmin.dto.QuotaDTO;
 import org.apache.james.webadmin.dto.QuotaDetailsDTO;
+import org.apache.james.webadmin.dto.ValidatedQuotaDTO;
 import org.apache.james.webadmin.service.UserQuotaService;
 import org.apache.james.webadmin.utils.ErrorResponder;
 import org.apache.james.webadmin.utils.ErrorResponder.ErrorType;
@@ -55,6 +56,7 @@ import org.apache.james.webadmin.utils.JsonTransformer;
 import org.apache.james.webadmin.utils.JsonTransformerModule;
 import org.apache.james.webadmin.utils.ParametersExtractor;
 import org.apache.james.webadmin.utils.Responses;
+import org.apache.james.webadmin.validation.QuotaDTOValidator;
 import org.apache.james.webadmin.validation.Quotas;
 import org.eclipse.jetty.http.HttpStatus;
 
@@ -85,6 +87,7 @@ public class UserQuotaRoutes implements Routes {
     private final UserQuotaService userQuotaService;
     private final JsonTransformer jsonTransformer;
     private final JsonExtractor<QuotaDTO> jsonExtractor;
+    private final QuotaDTOValidator quotaDTOValidator;
     private Service service;
 
     @Inject
@@ -93,6 +96,7 @@ public class UserQuotaRoutes implements Routes {
         this.userQuotaService = userQuotaService;
         this.jsonTransformer = jsonTransformer;
         this.jsonExtractor = new JsonExtractor<>(QuotaDTO.class, modules.stream().map(JsonTransformerModule::asJacksonModule).collect(Collectors.toList()));
+        this.quotaDTOValidator = new QuotaDTOValidator();
     }
 
     @Override
@@ -121,21 +125,30 @@ public class UserQuotaRoutes implements Routes {
     @PUT
     @ApiOperation(value = "Updating count and size at the same time")
     @ApiImplicitParams({
-            @ApiImplicitParam(required = true, dataType = "org.apache.james.webadmin.dto.QuotaDTO", paramType = "body")
+            @ApiImplicitParam(required = true, dataTypeClass = QuotaDTO.class, paramType = "body")
     })
     @ApiResponses(value = {
             @ApiResponse(code = HttpStatus.NO_CONTENT_204, message = "OK. The value has been updated."),
             @ApiResponse(code = HttpStatus.BAD_REQUEST_400, message = "The body is not a positive integer or not unlimited value (-1)."),
             @ApiResponse(code = HttpStatus.NOT_FOUND_404, message = "The user name does not exist."),
-            @ApiResponse(code = HttpStatus.CONFLICT_409, message = "The requested restriction can't be enforced right now."),
             @ApiResponse(code = HttpStatus.INTERNAL_SERVER_ERROR_500, message = "Internal server error - Something went bad on the server side.")
     })
     public void defineUpdateQuota() {
         service.put(QUOTA_ENDPOINT, ((request, response) -> {
-            User user = checkUserExist(request);
-            QuotaDTO quotaDTO = parseQuotaDTO(request);
-            userQuotaService.defineQuota(user, quotaDTO);
-            return Responses.returnNoContent(response);
+            try {
+                Username username = checkUserExist(request);
+                QuotaDTO quotaDTO = jsonExtractor.parse(request.body());
+                ValidatedQuotaDTO validatedQuotaDTO = quotaDTOValidator.validatedQuotaDTO(quotaDTO);
+                userQuotaService.defineQuota(username, validatedQuotaDTO);
+                return Responses.returnNoContent(response);
+            } catch (IllegalArgumentException e) {
+                throw ErrorResponder.builder()
+                    .statusCode(HttpStatus.BAD_REQUEST_400)
+                    .type(ErrorType.INVALID_ARGUMENT)
+                    .message("Quota should be positive or unlimited (-1)")
+                    .cause(e)
+                    .haltError();
+            }
         }));
     }
 
@@ -151,8 +164,8 @@ public class UserQuotaRoutes implements Routes {
     })
     public void defineGetQuota() {
         service.get(QUOTA_ENDPOINT, (request, response) -> {
-            User user = checkUserExist(request);
-            return userQuotaService.getQuota(user);
+            Username username = checkUserExist(request);
+            return userQuotaService.getQuota(username);
         }, jsonTransformer);
     }
 
@@ -248,8 +261,8 @@ public class UserQuotaRoutes implements Routes {
     })
     public void defineDeleteQuotaSize() {
         service.delete(SIZE_ENDPOINT, (request, response) -> {
-            User user = checkUserExist(request);
-            userQuotaService.deleteMaxSizeQuota(user);
+            Username username = checkUserExist(request);
+            userQuotaService.deleteMaxSizeQuota(username);
             return Responses.returnNoContent(response);
         });
     }
@@ -264,14 +277,13 @@ public class UserQuotaRoutes implements Routes {
             @ApiResponse(code = HttpStatus.NO_CONTENT_204, message = "OK. The value has been updated."),
             @ApiResponse(code = HttpStatus.BAD_REQUEST_400, message = "The body is not a positive integer nor -1."),
             @ApiResponse(code = HttpStatus.NOT_FOUND_404, message = "The user name does not exist."),
-            @ApiResponse(code = HttpStatus.CONFLICT_409, message = "The requested restriction can't be enforced right now."),
             @ApiResponse(code = HttpStatus.INTERNAL_SERVER_ERROR_500, message = "Internal server error - Something went bad on the server side.")
     })
     public void defineUpdateQuotaSize() {
         service.put(SIZE_ENDPOINT, (request, response) -> {
-            User user = checkUserExist(request);
-            QuotaSize quotaSize = Quotas.quotaSize(request.body());
-            userQuotaService.defineMaxSizeQuota(user, quotaSize);
+            Username username = checkUserExist(request);
+            QuotaSizeLimit quotaSize = Quotas.quotaSize(request.body());
+            userQuotaService.defineMaxSizeQuota(username, quotaSize);
             return Responses.returnNoContent(response);
         });
     }
@@ -287,8 +299,8 @@ public class UserQuotaRoutes implements Routes {
     })
     public void defineGetQuotaSize() {
         service.get(SIZE_ENDPOINT, (request, response) -> {
-            User user = checkUserExist(request);
-            Optional<QuotaSize> maxSizeQuota = userQuotaService.getMaxSizeQuota(user);
+            Username username = checkUserExist(request);
+            Optional<QuotaSizeLimit> maxSizeQuota = userQuotaService.getMaxSizeQuota(username);
             if (maxSizeQuota.isPresent()) {
                 return maxSizeQuota;
             }
@@ -306,8 +318,8 @@ public class UserQuotaRoutes implements Routes {
     })
     public void defineDeleteQuotaCount() {
         service.delete(COUNT_ENDPOINT, (request, response) -> {
-            User user = checkUserExist(request);
-            userQuotaService.deleteMaxCountQuota(user);
+            Username username = checkUserExist(request);
+            userQuotaService.deleteMaxCountQuota(username);
             return Responses.returnNoContent(response);
         });
     }
@@ -322,14 +334,13 @@ public class UserQuotaRoutes implements Routes {
             @ApiResponse(code = HttpStatus.NO_CONTENT_204, message = "OK. The value has been updated."),
             @ApiResponse(code = HttpStatus.BAD_REQUEST_400, message = "The body is not a positive integer nor -1."),
             @ApiResponse(code = HttpStatus.NOT_FOUND_404, message = "The user name does not exist."),
-            @ApiResponse(code = HttpStatus.CONFLICT_409, message = "The requested restriction can't be enforced right now."),
             @ApiResponse(code = HttpStatus.INTERNAL_SERVER_ERROR_500, message = "Internal server error - Something went bad on the server side.")
     })
     public void defineUpdateQuotaCount() {
         service.put(COUNT_ENDPOINT, (request, response) -> {
-            User user = checkUserExist(request);
-            QuotaCount quotaCount = Quotas.quotaCount(request.body());
-            userQuotaService.defineMaxCountQuota(user, quotaCount);
+            Username username = checkUserExist(request);
+            QuotaCountLimit quotaCount = Quotas.quotaCount(request.body());
+            userQuotaService.defineMaxCountQuota(username, quotaCount);
             return Responses.returnNoContent(response);
         });
     }
@@ -345,8 +356,8 @@ public class UserQuotaRoutes implements Routes {
     })
     public void defineGetQuotaCount() {
         service.get(COUNT_ENDPOINT, (request, response) -> {
-            User user = checkUserExist(request);
-            Optional<QuotaCount> maxCountQuota = userQuotaService.getMaxCountQuota(user);
+            Username username = checkUserExist(request);
+            Optional<QuotaCountLimit> maxCountQuota = userQuotaService.getMaxCountQuota(username);
             if (maxCountQuota.isPresent()) {
                 return maxCountQuota;
             }
@@ -354,18 +365,20 @@ public class UserQuotaRoutes implements Routes {
         }, jsonTransformer);
     }
 
-    private User checkUserExist(Request request) throws UsersRepositoryException, UnsupportedEncodingException {
+    private Username checkUserExist(Request request) throws UsersRepositoryException, UnsupportedEncodingException {
         String user = URLDecoder.decode(request.params(USER),
             StandardCharsets.UTF_8.displayName());
 
-        if (!usersRepository.contains(user)) {
+        Username username = Username.of(user);
+
+        if (!usersRepository.contains(username)) {
             throw ErrorResponder.builder()
                 .statusCode(HttpStatus.NOT_FOUND_404)
                 .type(ErrorType.NOT_FOUND)
                 .message("User not found")
                 .haltError();
         }
-        return User.fromUsername(user);
+        return username;
     }
 
     private QuotaDTO parseQuotaDTO(Request request) {

@@ -40,7 +40,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
 
 public class MimePart {
 
@@ -152,18 +151,26 @@ public class MimePart {
         }
 
         private ParsedContent extractText(TextExtractor textExtractor, InputStream bodyContent) throws Exception {
-            if (isTextBody()) {
-                return new ParsedContent(
-                        Optional.ofNullable(IOUtils.toString(bodyContent, charset.orElse(StandardCharsets.UTF_8))),
-                        ImmutableMap.of());
+            if (shouldPerformTextExtraction()) {
+                return textExtractor.extractContent(
+                    bodyContent,
+                    computeContentType().orElse(null));
             }
-            return textExtractor.extractContent(
-                bodyContent,
-                computeContentType().orElse(null));
+            return new ParsedContent(
+                Optional.ofNullable(IOUtils.toString(bodyContent, charset.orElse(StandardCharsets.UTF_8))),
+                ImmutableMap.of());
+        }
+
+        private boolean shouldPerformTextExtraction() {
+            return !isTextBody() || isHtml();
         }
 
         private Boolean isTextBody() {
             return mediaType.map("text"::equals).orElse(false);
+        }
+
+        private Boolean isHtml() {
+            return isTextBody() && subType.map("html"::equals).orElse(false);
         }
 
         private Optional<String> computeContentType() {
@@ -212,11 +219,6 @@ public class MimePart {
     @JsonIgnore
     public HeaderCollection getHeaderCollection() {
         return headerCollection;
-    }
-
-    @JsonProperty(JsonMessageConstants.HEADERS)
-    public Multimap<String, String> getHeaders() {
-        return headerCollection.getHeaders();
     }
 
     @JsonProperty(JsonMessageConstants.Attachment.FILENAME)

@@ -18,17 +18,17 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
-import org.apache.james.imap.api.ImapSessionUtils;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.CreateRequest;
 import org.apache.james.mailbox.MailboxSession;
-import org.apache.james.protocols.imap.DecodingException;
 
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
@@ -38,15 +38,15 @@ import com.google.common.base.Strings;
  */
 public class CreateCommandParser extends AbstractImapCommandParser {
 
-    public CreateCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.CREATE_COMMAND_NAME));
+    public CreateCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.CREATE_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
         String mailboxName = request.mailbox();
 
-        MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
+        MailboxSession mailboxSession = session.getMailboxSession();
 
         // Check if we have an mailboxsession. This is a workaround for
         // IMAP-240:
@@ -61,7 +61,7 @@ public class CreateCommandParser extends AbstractImapCommandParser {
         }
         request.eol();
         assertMailboxNameJustContainDelimiter(mailboxName, mailboxSession.getPathDelimiter());
-        return new CreateRequest(command, mailboxName, tag);
+        return new CreateRequest(mailboxName, tag);
     }
 
     private void assertMailboxNameJustContainDelimiter(String mailboxName, char delimiter) throws DecodingException {

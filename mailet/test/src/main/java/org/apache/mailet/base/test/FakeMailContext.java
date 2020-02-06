@@ -251,6 +251,9 @@ public class FakeMailContext implements MailetContext {
             return subject;
         }
 
+        public Map<AttributeName, Attribute> getAttributes() {
+            return ImmutableMap.copyOf(attributes);
+        }
 
         public Optional<Delay> getDelay() {
             return delay;
@@ -540,10 +543,6 @@ public class FakeMailContext implements MailetContext {
 
     public void setAttribute(Attribute attribute) {
         attributes.put(attribute.getName(), attribute);
-    }
-
-    public void storeMail(MailAddress sender, MailAddress recipient, MimeMessage msg) throws MessagingException {
-        // trivial implementation
     }
 
     /**

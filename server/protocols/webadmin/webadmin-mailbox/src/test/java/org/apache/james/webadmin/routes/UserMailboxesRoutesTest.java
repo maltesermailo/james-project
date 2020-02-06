@@ -19,75 +19,113 @@
 
 package org.apache.james.webadmin.routes;
 
+import static io.restassured.RestAssured.given;
 import static io.restassured.RestAssured.when;
 import static io.restassured.RestAssured.with;
 import static org.apache.james.webadmin.Constants.SEPARATOR;
 import static org.apache.james.webadmin.routes.UserMailboxesRoutes.USERS_BASE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.collection.IsCollectionWithSize.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxManager;
+import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
+import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.MailboxExistsException;
 import org.apache.james.mailbox.exception.MailboxNotFoundException;
+import org.apache.james.mailbox.indexer.ReIndexer;
 import org.apache.james.mailbox.inmemory.InMemoryId;
+import org.apache.james.mailbox.inmemory.InMemoryMailboxManager;
 import org.apache.james.mailbox.inmemory.manager.InMemoryIntegrationResources;
+import org.apache.james.mailbox.model.ComposedMessageId;
+import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxMetaData;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.search.MailboxQuery;
-import org.apache.james.queue.api.MailQueueFactory;
-import org.apache.james.queue.api.ManageableMailQueue;
+import org.apache.james.mailbox.store.MailboxSessionMapperFactory;
+import org.apache.james.mailbox.store.mail.model.MailboxMessage;
+import org.apache.james.mailbox.store.search.ListeningMessageSearchIndex;
+import org.apache.james.task.Hostname;
+import org.apache.james.task.MemoryTaskManager;
 import org.apache.james.user.api.UsersRepository;
 import org.apache.james.webadmin.WebAdminServer;
 import org.apache.james.webadmin.WebAdminUtils;
 import org.apache.james.webadmin.service.UserMailboxesService;
+import org.apache.james.webadmin.utils.ErrorResponder;
 import org.apache.james.webadmin.utils.JsonTransformer;
+import org.apache.mailbox.tools.indexer.ReIndexerImpl;
+import org.apache.mailbox.tools.indexer.ReIndexerPerformer;
+import org.apache.mailbox.tools.indexer.UserReindexingTask;
 import org.eclipse.jetty.http.HttpStatus;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 
 class UserMailboxesRoutesTest {
-    private static final String USERNAME = "username";
+    private static final Username USERNAME = Username.of("username");
     private static final String MAILBOX_NAME = "myMailboxName";
+    private static final MailboxPath INBOX = MailboxPath.inbox(USERNAME);
 
     private WebAdminServer webAdminServer;
     private UsersRepository usersRepository;
-    private MailQueueFactory<? extends ManageableMailQueue> mailQueue;
+    private ListeningMessageSearchIndex searchIndex;
+    private MemoryTaskManager taskManager;
 
-    private void createServer(MailboxManager mailboxManager) throws Exception {
+    private void createServer(MailboxManager mailboxManager, MailboxSessionMapperFactory mapperFactory) throws Exception {
         usersRepository = mock(UsersRepository.class);
-        mailQueue = mock(MailQueueFactory.class);
         when(usersRepository.contains(USERNAME)).thenReturn(true);
 
+
+        taskManager = new MemoryTaskManager(new Hostname("foo"));
+        searchIndex = mock(ListeningMessageSearchIndex.class);
+        ReIndexerPerformer reIndexerPerformer = new ReIndexerPerformer(
+            mailboxManager,
+            searchIndex,
+            mapperFactory);
+        ReIndexer reIndexer = new ReIndexerImpl(
+            reIndexerPerformer,
+            mailboxManager,
+            mapperFactory);
+
         webAdminServer = WebAdminUtils.createWebAdminServer(
-                new UserMailboxesRoutes(new UserMailboxesService(mailboxManager, usersRepository, mailQueue), new JsonTransformer()))
+                new UserMailboxesRoutes(new UserMailboxesService(mailboxManager, usersRepository), new JsonTransformer(),
+                    taskManager,
+                    ImmutableSet.of(new UserMailboxesRoutes.UserReIndexingTaskRegistration(reIndexer))),
+                new TasksRoutes(taskManager, new JsonTransformer()))
             .start();
 
         RestAssured.requestSpecification = WebAdminUtils.buildRequestSpecification(webAdminServer)
-            .setBasePath(USERS_BASE + SEPARATOR + USERNAME + SEPARATOR + UserMailboxesRoutes.MAILBOXES)
+            .setBasePath(USERS_BASE + SEPARATOR + USERNAME.asString() + SEPARATOR + UserMailboxesRoutes.MAILBOXES)
             .build();
     }
 
     @AfterEach
     void tearDown() {
         webAdminServer.destroy();
+        taskManager.stop();
     }
 
     @Nested
@@ -95,7 +133,8 @@ class UserMailboxesRoutesTest {
 
         @BeforeEach
         void setUp() throws Exception {
-            createServer(InMemoryIntegrationResources.defaultResources().getMailboxManager());
+            InMemoryMailboxManager mailboxManager = InMemoryIntegrationResources.defaultResources().getMailboxManager();
+            createServer(mailboxManager, mailboxManager.getMapperFactory());
         }
 
         @Test
@@ -498,7 +537,9 @@ class UserMailboxesRoutesTest {
                 .get()
             .then()
                 .statusCode(HttpStatus.OK_200)
-                .body(is("[{\"mailboxName\":\"myMailboxName\"}]"));
+                .body(".", hasSize(1))
+                .body("[0].mailboxName", is("myMailboxName"))
+                .body("[0].mailboxId", is("1"));
         }
 
         @Test
@@ -679,7 +720,12 @@ class UserMailboxesRoutesTest {
                     .jsonPath()
                     .getList(".");
 
-            assertThat(list).containsExactly(ImmutableMap.of("mailboxName", mailboxName));
+            assertThat(list)
+                .hasSize(1)
+                .first()
+                .satisfies(map -> assertThat(map).hasSize(2)
+                    .containsKeys("mailboxId")
+                    .containsEntry("mailboxName", mailboxName));
         }
 
         @Test
@@ -718,13 +764,17 @@ class UserMailboxesRoutesTest {
                     .jsonPath()
                     .getList(".");
 
-            assertThat(list).containsExactly(ImmutableMap.of("mailboxName", MAILBOX_NAME));
+            assertThat(list)
+                .hasSize(1)
+                .first()
+                .satisfies(map -> assertThat(map).hasSize(2)
+                    .containsKeys("mailboxId")
+                    .containsEntry("mailboxName", MAILBOX_NAME));
         }
     }
 
     @Nested
     class ExceptionHandling {
-
         private MailboxManager mailboxManager;
 
         @BeforeEach
@@ -732,7 +782,7 @@ class UserMailboxesRoutesTest {
             mailboxManager = mock(MailboxManager.class);
             when(mailboxManager.createSystemSession(any())).thenReturn(MailboxSessionUtil.create(USERNAME));
 
-            createServer(mailboxManager);
+            createServer(mailboxManager, mock(MailboxSessionMapperFactory.class));
         }
 
         @Test
@@ -773,7 +823,7 @@ class UserMailboxesRoutesTest {
                         ImmutableList.of(
                                 MailboxMetaData.unselectableMailbox(
                                         MailboxPath.forUser(USERNAME, MAILBOX_NAME), mailboxId, '.')));
-            doThrow(new RuntimeException()).when(mailboxManager).deleteMailbox(any(), any());
+            doThrow(new RuntimeException()).when(mailboxManager).deleteMailbox(any(MailboxPath.class), any());
 
             when()
                 .delete(MAILBOX_NAME)
@@ -798,7 +848,7 @@ class UserMailboxesRoutesTest {
                 .thenReturn(
                         ImmutableList.of(
                                 MailboxMetaData.unselectableMailbox(MailboxPath.forUser(USERNAME, MAILBOX_NAME), mailboxId, '.')));
-            doThrow(new MailboxException()).when(mailboxManager).deleteMailbox(any(), any());
+            doThrow(new MailboxException()).when(mailboxManager).deleteMailbox(any(MailboxPath.class), any());
 
             when()
                 .delete(MAILBOX_NAME)
@@ -818,7 +868,7 @@ class UserMailboxesRoutesTest {
 
         @Test
         void deleteShouldReturnOkOnMailboxDoesNotExists() throws Exception {
-            doThrow(new MailboxNotFoundException(MAILBOX_NAME)).when(mailboxManager).deleteMailbox(any(), any());
+            doThrow(new MailboxNotFoundException(MAILBOX_NAME)).when(mailboxManager).deleteMailbox(any(MailboxPath.class), any());
 
             when()
                 .delete(MAILBOX_NAME)
@@ -854,7 +904,7 @@ class UserMailboxesRoutesTest {
                 .thenReturn(
                         ImmutableList.of(
                                 MailboxMetaData.unselectableMailbox(MailboxPath.forUser(USERNAME, "any"), mailboxId, '.')));
-            doThrow(new RuntimeException()).when(mailboxManager).deleteMailbox(any(), any());
+            doThrow(new RuntimeException()).when(mailboxManager).deleteMailbox(any(MailboxPath.class), any());
 
             when()
                 .delete()
@@ -868,7 +918,7 @@ class UserMailboxesRoutesTest {
             when(mailboxManager.search(any(MailboxQuery.class), any()))
                 .thenReturn(
                         ImmutableList.of(MailboxMetaData.unselectableMailbox(MailboxPath.forUser(USERNAME, "any"), mailboxId, '.')));
-            doThrow(new MailboxNotFoundException("any")).when(mailboxManager).deleteMailbox(any(), any());
+            doThrow(new MailboxNotFoundException("any")).when(mailboxManager).deleteMailbox(any(MailboxPath.class), any());
 
             when()
                 .delete()
@@ -882,7 +932,7 @@ class UserMailboxesRoutesTest {
             when(mailboxManager.search(any(MailboxQuery.class), any()))
                 .thenReturn(
                         ImmutableList.of(MailboxMetaData.unselectableMailbox(MailboxPath.forUser(USERNAME, "any"), mailboxId, '.')));
-            doThrow(new MailboxException()).when(mailboxManager).deleteMailbox(any(), any());
+            doThrow(new MailboxException()).when(mailboxManager).deleteMailbox(any(MailboxPath.class), any());
 
             when()
                 .delete()
@@ -982,4 +1032,199 @@ class UserMailboxesRoutesTest {
 
     }
 
+    @Nested
+    class UserReprocessing {
+
+        private InMemoryMailboxManager mailboxManager;
+
+        @BeforeEach
+        void setUp() throws Exception {
+            mailboxManager = InMemoryIntegrationResources.defaultResources().getMailboxManager();
+            createServer(mailboxManager, mailboxManager.getMapperFactory());
+        }
+
+        @Nested
+        class Validation {
+            @Test
+            void userReprocessingShouldFailWithNoTask() {
+                when()
+                    .post()
+                .then()
+                    .statusCode(HttpStatus.BAD_REQUEST_400)
+                    .body("statusCode", Matchers.is(400))
+                    .body("type", Matchers.is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
+                    .body("message", Matchers.is("Invalid arguments supplied in the user request"))
+                    .body("details", Matchers.is("'task' query parameter is compulsory. Supported values are [reIndex]"));
+            }
+
+            @Test
+            void userReprocessingShouldFailWithBadTask() {
+                given()
+                    .queryParam("task", "bad")
+                .when()
+                    .post()
+                .then()
+                    .statusCode(HttpStatus.BAD_REQUEST_400)
+                    .body("statusCode", Matchers.is(400))
+                    .body("type", Matchers.is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
+                    .body("message", Matchers.is("Invalid arguments supplied in the user request"))
+                    .body("details", Matchers.is("Invalid value supplied for query parameter 'task': bad. Supported values are [reIndex]"));
+            }
+
+            @Test
+            void userReprocessingShouldFailWithBadUser() {
+                RestAssured.requestSpecification = WebAdminUtils.buildRequestSpecification(webAdminServer)
+                    .setBasePath(USERS_BASE + SEPARATOR + "bad@bad@bad" + SEPARATOR + UserMailboxesRoutes.MAILBOXES)
+                    .build();
+
+                given()
+                    .queryParam("user", "bad@bad@bad")
+                    .queryParam("task", "reIndex")
+                .when()
+                    .post()
+                .then()
+                    .statusCode(HttpStatus.BAD_REQUEST_400)
+                    .body("statusCode", Matchers.is(400))
+                    .body("type", Matchers.is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
+                    .body("message", Matchers.is("Invalid arguments supplied in the user request"))
+                    .body("details", Matchers.is("The username should not contain multiple domain delimiter."));
+            }
+        }
+
+        @Nested
+        class TaskDetails {
+            @Test
+            void userReprocessingShouldNotFailWhenNoMail() {
+                String taskId = given()
+                    .queryParam("task", "reIndex")
+                .when()
+                    .post()
+                    .jsonPath()
+                    .get("taskId");
+
+                given()
+                    .basePath(TasksRoutes.BASE)
+                    .when()
+                    .get(taskId + "/await")
+                    .then()
+                    .body("status", Matchers.is("completed"))
+                    .body("taskId", Matchers.is(notNullValue()))
+                    .body("type", Matchers.is(UserReindexingTask.USER_RE_INDEXING.asString()))
+                    .body("additionalInformation.username", Matchers.is("username"))
+                    .body("additionalInformation.successfullyReprocessedMailCount", Matchers.is(0))
+                    .body("additionalInformation.failedReprocessedMailCount", Matchers.is(0))
+                    .body("startedDate", Matchers.is(notNullValue()))
+                    .body("submitDate", Matchers.is(notNullValue()))
+                    .body("completedDate", Matchers.is(notNullValue()));
+            }
+
+            @Test
+            void userReprocessingShouldReturnTaskDetailsWhenMail() throws Exception {
+                MailboxSession systemSession = mailboxManager.createSystemSession(USERNAME);
+                mailboxManager.createMailbox(INBOX, systemSession).get();
+                mailboxManager.getMailbox(INBOX, systemSession)
+                    .appendMessage(
+                        MessageManager.AppendCommand.builder().build("header: value\r\n\r\nbody"),
+                        systemSession);
+
+                String taskId = given()
+                    .queryParam("task", "reIndex")
+                .when()
+                    .post()
+                    .jsonPath()
+                    .get("taskId");
+
+                given()
+                    .basePath(TasksRoutes.BASE)
+                .when()
+                    .get(taskId + "/await")
+                .then()
+                    .body("status", Matchers.is("completed"))
+                    .body("taskId", Matchers.is(notNullValue()))
+                    .body("type", Matchers.is(UserReindexingTask.USER_RE_INDEXING.asString()))
+                    .body("additionalInformation.username", Matchers.is("username"))
+                    .body("additionalInformation.successfullyReprocessedMailCount", Matchers.is(1))
+                    .body("additionalInformation.failedReprocessedMailCount", Matchers.is(0))
+                    .body("startedDate", Matchers.is(notNullValue()))
+                    .body("submitDate", Matchers.is(notNullValue()))
+                    .body("completedDate", Matchers.is(notNullValue()));
+            }
+
+            @Test
+            void userReprocessingShouldReturnTaskDetailsWhenFailing() throws Exception {
+                MailboxSession systemSession = mailboxManager.createSystemSession(USERNAME);
+                MailboxId mailboxId = mailboxManager.createMailbox(INBOX, systemSession).get();
+                ComposedMessageId composedMessageId = mailboxManager.getMailbox(INBOX, systemSession)
+                    .appendMessage(
+                        MessageManager.AppendCommand.builder().build("header: value\r\n\r\nbody"),
+                        systemSession);
+
+                doThrow(new RuntimeException())
+                    .when(searchIndex)
+                    .add(any(MailboxSession.class), any(Mailbox.class), any(MailboxMessage.class));
+
+                String taskId = with()
+                    .queryParam("task", "reIndex")
+                .post()
+                    .jsonPath()
+                    .get("taskId");
+
+                long uidAsLong = composedMessageId.getUid().asLong();
+                given()
+                    .basePath(TasksRoutes.BASE)
+                .when()
+                    .get(taskId + "/await")
+                .then()
+                    .body("status", Matchers.is("failed"))
+                    .body("taskId", Matchers.is(notNullValue()))
+                    .body("type", Matchers.is(UserReindexingTask.USER_RE_INDEXING.asString()))
+                    .body("additionalInformation.successfullyReprocessedMailCount", Matchers.is(0))
+                    .body("additionalInformation.failedReprocessedMailCount", Matchers.is(1))
+                    .body("additionalInformation.failures.\"" + mailboxId.serialize() + "\"[0].uid", Matchers.is(Long.valueOf(uidAsLong).intValue()))
+                    .body("startedDate", Matchers.is(notNullValue()))
+                    .body("submitDate", Matchers.is(notNullValue()));
+            }
+        }
+
+        @Nested
+        class SideEffects {
+            @Test
+            void userReprocessingShouldPerformReprocessingWhenMail() throws Exception {
+                MailboxSession systemSession = mailboxManager.createSystemSession(USERNAME);
+                MailboxId mailboxId = mailboxManager.createMailbox(INBOX, systemSession).get();
+                ComposedMessageId createdMessage = mailboxManager.getMailbox(INBOX, systemSession)
+                    .appendMessage(
+                        MessageManager.AppendCommand.builder().build("header: value\r\n\r\nbody"),
+                        systemSession);
+
+                String taskId = given()
+                    .queryParam("task", "reIndex")
+                .when()
+                    .post()
+                    .jsonPath()
+                    .get("taskId");
+
+                given()
+                    .basePath(TasksRoutes.BASE)
+                .when()
+                    .get(taskId + "/await")
+                .then()
+                    .body("status", Matchers.is("completed"));
+
+
+                ArgumentCaptor<MailboxMessage> messageCaptor = ArgumentCaptor.forClass(MailboxMessage.class);
+                ArgumentCaptor<MailboxId> mailboxIdCaptor = ArgumentCaptor.forClass(MailboxId.class);
+                ArgumentCaptor<Mailbox> mailboxCaptor2 = ArgumentCaptor.forClass(Mailbox.class);
+
+                verify(searchIndex).deleteAll(any(MailboxSession.class), mailboxIdCaptor.capture());
+                verify(searchIndex).add(any(MailboxSession.class), mailboxCaptor2.capture(), messageCaptor.capture());
+                verifyNoMoreInteractions(searchIndex);
+
+                assertThat(mailboxIdCaptor.getValue()).matches(capturedMailboxId -> capturedMailboxId.equals(mailboxId));
+                assertThat(mailboxCaptor2.getValue()).matches(mailbox -> mailbox.getMailboxId().equals(mailboxId));
+                assertThat(messageCaptor.getValue()).matches(message -> message.getMailboxId().equals(mailboxId)
+                    && message.getUid().equals(createdMessage.getUid()));
+            }
+        }
+    }
 }

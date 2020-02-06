@@ -28,9 +28,7 @@ import java.util.List;
 import org.apache.commons.io.IOUtils;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.Content;
-import org.apache.james.mailbox.model.MessageResult;
-import org.apache.james.mailbox.model.MessageResult.Header;
-import org.apache.james.mailbox.store.ResultHeader;
+import org.apache.james.mailbox.model.Header;
 import org.apache.james.mime4j.MimeException;
 import org.apache.james.mime4j.stream.EntityState;
 import org.apache.james.mime4j.stream.MimeConfig;
@@ -132,19 +130,18 @@ public class PartContentBuilder {
                 case T_START_MULTIPART:
                     ignoreInnerMessage();
                     break;
-            case T_BODY:
-            case T_END_BODYPART:
-            case T_END_HEADER:
-            case T_END_MESSAGE:
-            case T_END_MULTIPART:
-            case T_EPILOGUE:
-            case T_FIELD:
-            case T_PREAMBLE:
-            case T_RAW_ENTITY:
-            case T_START_BODYPART:
-            case T_START_HEADER:
-            case T_START_MESSAGE:
-                break;
+                case T_BODY:
+                case T_END_BODYPART:
+                case T_END_HEADER:
+                case T_END_MESSAGE:
+                case T_EPILOGUE:
+                case T_FIELD:
+                case T_PREAMBLE:
+                case T_RAW_ENTITY:
+                case T_START_BODYPART:
+                case T_START_HEADER:
+                case T_START_MESSAGE:
+                    break;
             }
         }
     }
@@ -224,11 +221,10 @@ public class PartContentBuilder {
         return content;
     }
 
-    @SuppressWarnings("unchecked")
-    public List<MessageResult.Header> getMimeHeaders() throws IOException, UnexpectedEOFException, MimeException {
-        final List<MessageResult.Header> results;
+    public List<Header> getMimeHeaders() throws IOException, UnexpectedEOFException, MimeException {
+        final List<Header> results;
         if (empty) {
-            results = Collections.EMPTY_LIST;
+            results = Collections.emptyList();
         } else {
             results = new ArrayList<>();
             for (EntityState state = parser.getState(); state != EntityState.T_END_HEADER; state = parser
@@ -240,7 +236,7 @@ public class PartContentBuilder {
                     case T_FIELD:
                         final String fieldValue = parser.getField().getBody().trim();
                         final String fieldName = parser.getField().getName();
-                        ResultHeader header = new ResultHeader(fieldName, fieldValue);
+                        Header header = new Header(fieldName, fieldValue);
                         results.add(header);
                         break;
                 case T_BODY:
@@ -262,11 +258,10 @@ public class PartContentBuilder {
         return results;
     }
 
-    @SuppressWarnings("unchecked")
-    public List<MessageResult.Header> getMessageHeaders() throws IOException, MimeException {
-        final List<MessageResult.Header> results;
+    public List<Header> getMessageHeaders() throws IOException, MimeException {
+        final List<Header> results;
         if (empty) {
-            results = Collections.EMPTY_LIST;
+            results = Collections.emptyList();
         } else {
             results = new ArrayList<>();
             try {
@@ -281,7 +276,7 @@ public class PartContentBuilder {
                         case T_FIELD:
                             final String fieldValue = parser.getField().getBody().trim();
                             final String fieldName = parser.getField().getName();
-                            ResultHeader header = new ResultHeader(fieldName, fieldValue);
+                            Header header = new Header(fieldName, fieldValue);
                             results.add(header);
                             break;
                     case T_BODY:

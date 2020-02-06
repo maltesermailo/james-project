@@ -20,49 +20,46 @@
 package org.apache.james.imap.main;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import org.apache.james.imap.api.ImapSessionUtils;
-import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.core.Username;
+import org.apache.james.imap.encode.FakeImapSession;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
 import org.apache.james.mailbox.model.MailboxConstants;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 public class PathConverterTest {
 
-    private static final String USERNAME = "username";
+    private static final Username USERNAME = Username.of("username");
     private static final char PATH_DELIMITER = '.';
 
-    private ImapSession imapSession;
+    private FakeImapSession imapSession;
     private MailboxSession mailboxSession;
     private PathConverter pathConverter;
     @Rule public ExpectedException expectedException = ExpectedException.none();
 
     @Before
     public void setUp() {
-        imapSession = mock(ImapSession.class);
+        imapSession = new FakeImapSession();
         mailboxSession = MailboxSessionUtil.create(USERNAME);
         pathConverter = PathConverter.forSession(imapSession);
-        when(imapSession.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY)).thenReturn(mailboxSession);
+        imapSession.setMailboxSession(mailboxSession);
     }
 
     @Test
     public void buildFullPathShouldAcceptNull() {
         assertThat(pathConverter.buildFullPath(null))
-            .isEqualTo(new MailboxPath("", "", ""));
+            .isEqualTo(new MailboxPath("", USERNAME, ""));
     }
 
     @Test
     public void buildPathShouldAcceptEmpty() {
         assertThat(pathConverter.buildFullPath(""))
-            .isEqualTo(new MailboxPath("", "", ""));
+            .isEqualTo(new MailboxPath("", USERNAME, ""));
     }
 
     @Test
@@ -72,25 +69,10 @@ public class PathConverterTest {
             .isEqualTo(MailboxPath.forUser(USERNAME, mailboxName));
     }
 
-    @Ignore("Shared mailbox is not supported yet")
-    @Test
-    public void buildFullPathShouldAcceptNamespacePrefix() {
-        assertThat(pathConverter.buildFullPath("#"))
-            .isEqualTo(new MailboxPath("#", null, ""));
-    }
-
     @Test
     public void buildFullPathShouldAcceptUserNamespace() {
         assertThat(pathConverter.buildFullPath(MailboxConstants.USER_NAMESPACE))
             .isEqualTo(MailboxPath.forUser(USERNAME, ""));
-    }
-
-    @Ignore("Shared mailbox is not supported yet")
-    @Test
-    public void buildFullPathShouldAcceptNamespaceAlone() {
-        String namespace = "#any";
-        assertThat(pathConverter.buildFullPath(namespace))
-            .isEqualTo(new MailboxPath(namespace, null, ""));
     }
 
     @Test
@@ -99,28 +81,11 @@ public class PathConverterTest {
             .isEqualTo(MailboxPath.forUser(USERNAME, ""));
     }
 
-    @Ignore("Shared mailbox is not supported yet")
-    @Test
-    public void buildFullPathShouldAcceptNamespaceAndDelimiter() {
-        String namespace = "#any";
-        assertThat(pathConverter.buildFullPath(namespace + PATH_DELIMITER))
-            .isEqualTo(new MailboxPath(namespace, null, ""));
-    }
-
     @Test
     public void buildFullPathShouldAcceptFullAbsoluteUserPath() {
         String mailboxName = "mailboxName";
         assertThat(pathConverter.buildFullPath(MailboxConstants.USER_NAMESPACE + PATH_DELIMITER + mailboxName))
             .isEqualTo(MailboxPath.forUser(USERNAME, mailboxName));
-    }
-
-    @Ignore("Shared mailbox is not supported yet")
-    @Test
-    public void buildFullPathShouldAcceptFullAbsolutePath() {
-        String namespace = "#any";
-        String mailboxName = "mailboxName";
-        assertThat(pathConverter.buildFullPath(namespace + PATH_DELIMITER + mailboxName))
-            .isEqualTo(new MailboxPath(namespace, null, mailboxName));
     }
 
     @Test
@@ -135,15 +100,6 @@ public class PathConverterTest {
         String mailboxName = "mailboxName.subFolder";
         assertThat(pathConverter.buildFullPath(MailboxConstants.USER_NAMESPACE + PATH_DELIMITER + mailboxName))
             .isEqualTo(MailboxPath.forUser(USERNAME, mailboxName));
-    }
-
-    @Ignore("Shared mailbox is not supported yet")
-    @Test
-    public void buildFullPathShouldAcceptAbsolutePathWithSubFolder() {
-        String namespace = "#any";
-        String mailboxName = "mailboxName.subFolder";
-        assertThat(pathConverter.buildFullPath(namespace + PATH_DELIMITER + mailboxName))
-            .isEqualTo(new MailboxPath(namespace, null, mailboxName));
     }
 
     @Test

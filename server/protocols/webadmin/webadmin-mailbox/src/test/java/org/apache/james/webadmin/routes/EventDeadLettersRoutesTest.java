@@ -30,7 +30,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
-import org.apache.james.core.User;
+import org.apache.james.core.Username;
 import org.apache.james.event.json.EventSerializer;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.events.Event;
@@ -49,13 +49,15 @@ import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.store.event.EventFactory;
 import org.apache.james.mailbox.store.quota.DefaultUserQuotaRootResolver;
 import org.apache.james.mailbox.util.EventCollector;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
+import org.apache.james.task.Hostname;
 import org.apache.james.task.MemoryTaskManager;
-import org.apache.james.task.eventsourcing.Hostname;
 import org.apache.james.webadmin.WebAdminServer;
 import org.apache.james.webadmin.WebAdminUtils;
+import org.apache.james.webadmin.service.EventDeadLettersRedeliverAllTask;
+import org.apache.james.webadmin.service.EventDeadLettersRedeliverGroupTask;
+import org.apache.james.webadmin.service.EventDeadLettersRedeliverOneTask;
 import org.apache.james.webadmin.service.EventDeadLettersRedeliverService;
-import org.apache.james.webadmin.service.EventDeadLettersRedeliverTask;
 import org.apache.james.webadmin.service.EventDeadLettersService;
 import org.apache.james.webadmin.utils.ErrorResponder;
 import org.apache.james.webadmin.utils.JsonTransformer;
@@ -70,7 +72,7 @@ import io.restassured.http.ContentType;
 
 class EventDeadLettersRoutesTest {
     private static final String EVENTS_ACTION = "reDeliver";
-    private static final String BOB = "bob@apache.org";
+    private static final Username BOB = Username.of("bob@apache.org");
     private static final String UUID_1 = "6e0dd59d-660e-4d9b-b22f-0354479f47b4";
     private static final String UUID_2 = "6e0dd59d-660e-4d9b-b22f-0354479f47b5";
     private static final String INSERTION_UUID_1 = "6e0dd59d-660e-4d9b-b22f-0354479f47b7";
@@ -81,14 +83,14 @@ class EventDeadLettersRoutesTest {
     private static final EventDeadLetters.InsertionId INSERTION_ID_3 = EventDeadLetters.InsertionId.of(INSERTION_UUID_3);
     private static final MailboxListener.MailboxAdded EVENT_1 = EventFactory.mailboxAdded()
         .eventId(Event.EventId.of(UUID_1))
-        .user(User.fromUsername(BOB))
+        .user(BOB)
         .sessionId(MailboxSession.SessionId.of(452))
         .mailboxId(InMemoryId.of(453))
         .mailboxPath(MailboxPath.forUser(BOB, "Important-mailbox"))
         .build();
     private static final MailboxListener.MailboxAdded EVENT_2 = EventFactory.mailboxAdded()
         .eventId(Event.EventId.of(UUID_2))
-        .user(User.fromUsername(BOB))
+        .user(BOB)
         .sessionId(MailboxSession.SessionId.of(455))
         .mailboxId(InMemoryId.of(456))
         .mailboxPath(MailboxPath.forUser(BOB, "project-3"))
@@ -118,7 +120,7 @@ class EventDeadLettersRoutesTest {
         deadLetters = new MemoryEventDeadLetters();
         JsonTransformer jsonTransformer = new JsonTransformer();
         EventSerializer eventSerializer = new EventSerializer(new InMemoryId.Factory(), new InMemoryMessageId.Factory(), new DefaultUserQuotaRootResolver.DefaultQuotaRootDeserializer());
-        eventBus = new InVMEventBus(new InVmEventDelivery(new NoopMetricFactory()), RetryBackoffConfiguration.DEFAULT, deadLetters);
+        eventBus = new InVMEventBus(new InVmEventDelivery(new RecordingMetricFactory()), RetryBackoffConfiguration.DEFAULT, deadLetters);
         EventDeadLettersRedeliverService redeliverService = new EventDeadLettersRedeliverService(eventBus, deadLetters);
         EventDeadLettersService service = new EventDeadLettersService(redeliverService, deadLetters);
 
@@ -410,7 +412,7 @@ class EventDeadLettersRoutesTest {
                 .body("additionalInformation.failedRedeliveriesCount", is(0))
                 .body("additionalInformation.group", is(nullValue()))
                 .body("additionalInformation.insertionId", is(nullValue()))
-                .body("type", is(EventDeadLettersRedeliverTask.TYPE))
+                .body("type", is(EventDeadLettersRedeliverAllTask.TYPE.asString()))
                 .body("startedDate", is(notNullValue()))
                 .body("submitDate", is(notNullValue()))
                 .body("completedDate", is(notNullValue()));
@@ -531,7 +533,7 @@ class EventDeadLettersRoutesTest {
                 .body("statusCode", is(400))
                 .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
                 .body("message", is("Invalid arguments supplied in the user request"))
-                .body("details", is("invalid-action is not a supported action"));
+                .body("details", is("Invalid value supplied for query parameter 'action': invalid-action. Supported values are [reDeliver]"));
         }
 
         @Test
@@ -546,7 +548,7 @@ class EventDeadLettersRoutesTest {
                 .body("statusCode", is(400))
                 .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
                 .body("message", is("Invalid arguments supplied in the user request"))
-                .body("details", is("'action' url parameter is mandatory"));
+                .body("details", is("'action' query parameter is compulsory. Supported values are [reDeliver]"));
         }
     }
 
@@ -597,7 +599,7 @@ class EventDeadLettersRoutesTest {
                 .body("additionalInformation.failedRedeliveriesCount", is(0))
                 .body("additionalInformation.group", is(SERIALIZED_GROUP_A))
                 .body("additionalInformation.insertionId", is(nullValue()))
-                .body("type", is(EventDeadLettersRedeliverTask.TYPE))
+                .body("type", is(EventDeadLettersRedeliverGroupTask.TYPE.asString()))
                 .body("startedDate", is(notNullValue()))
                 .body("submitDate", is(notNullValue()))
                 .body("completedDate", is(notNullValue()));
@@ -719,7 +721,7 @@ class EventDeadLettersRoutesTest {
                 .body("statusCode", is(400))
                 .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
                 .body("message", is("Invalid arguments supplied in the user request"))
-                .body("details", is("invalid-action is not a supported action"));
+                .body("details", is("Invalid value supplied for query parameter 'action': invalid-action. Supported values are [reDeliver]"));
         }
 
         @Test
@@ -734,7 +736,7 @@ class EventDeadLettersRoutesTest {
                 .body("statusCode", is(400))
                 .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
                 .body("message", is("Invalid arguments supplied in the user request"))
-                .body("details", is("'action' url parameter is mandatory"));
+                .body("details", is("'action' query parameter is compulsory. Supported values are [reDeliver]"));
         }
 
         @Test
@@ -817,7 +819,7 @@ class EventDeadLettersRoutesTest {
                 .body("additionalInformation.failedRedeliveriesCount", is(0))
                 .body("additionalInformation.group", is(SERIALIZED_GROUP_A))
                 .body("additionalInformation.insertionId", is(INSERTION_UUID_1))
-                .body("type", is(EventDeadLettersRedeliverTask.TYPE))
+                .body("type", is(EventDeadLettersRedeliverOneTask.TYPE.asString()))
                 .body("startedDate", is(notNullValue()))
                 .body("submitDate", is(notNullValue()))
                 .body("completedDate", is(notNullValue()));
@@ -898,7 +900,7 @@ class EventDeadLettersRoutesTest {
                 .body("statusCode", is(400))
                 .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
                 .body("message", is("Invalid arguments supplied in the user request"))
-                .body("details", is("invalid-action is not a supported action"));
+                .body("details", is("Invalid value supplied for query parameter 'action': invalid-action. Supported values are [reDeliver]"));
         }
 
         @Test
@@ -913,7 +915,7 @@ class EventDeadLettersRoutesTest {
                 .body("statusCode", is(400))
                 .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
                 .body("message", is("Invalid arguments supplied in the user request"))
-                .body("details", is("'action' url parameter is mandatory"));
+                .body("details", is("'action' query parameter is compulsory. Supported values are [reDeliver]"));
         }
 
         @Test

@@ -26,17 +26,17 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 
 public class UpdatedRepresentation {
-    private final String id;
+    private final DocumentId id;
     private final String updatedDocumentPart;
 
-    public UpdatedRepresentation(String id, String updatedDocumentPart) {
-        Preconditions.checkArgument(!Strings.isNullOrEmpty(id), "Updated id must be specified " + id);
+    public UpdatedRepresentation(DocumentId id, String updatedDocumentPart) {
+        Preconditions.checkNotNull(id);
         Preconditions.checkArgument(!Strings.isNullOrEmpty(updatedDocumentPart), "Updated document must be specified");
         this.id = id;
         this.updatedDocumentPart = updatedDocumentPart;
     }
 
-    public String getId() {
+    public DocumentId getId() {
         return id;
     }
 

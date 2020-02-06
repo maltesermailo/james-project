@@ -32,7 +32,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 
 import org.apache.james.core.MailAddress;
-import org.apache.james.core.User;
+import org.apache.james.core.Username;
 import org.apache.james.rrt.api.MappingAlreadyExistsException;
 import org.apache.james.rrt.api.RecipientRewriteTable;
 import org.apache.james.rrt.api.RecipientRewriteTableException;
@@ -79,7 +79,8 @@ public class ForwardRoutes implements Routes {
         "targets" + SEPARATOR + ":" + FORWARD_DESTINATION_ADDRESS;
     private static final String MAILADDRESS_ASCII_DISCLAIMER = "Note that email addresses are restricted to ASCII character set. " +
         "Mail addresses not matching this criteria will be rejected.";
-    private static final String ADDRESS_TYPE = "forward";
+    private static final String FORWARD_BASE_ADDRESS_TYPE = "base forward";
+    private static final String FORWARD_DESTINATION_ADDRESS_TYPE = "target forward";
 
     private final UsersRepository usersRepository;
     private final JsonTransformer jsonTransformer;
@@ -149,10 +150,10 @@ public class ForwardRoutes implements Routes {
             message = "Internal server error - Something went bad on the server side.")
     })
     public HaltException addToForwardDestinations(Request request, Response response) throws RecipientRewriteTableException, UsersRepositoryException {
-        MailAddress forwardBaseAddress = MailAddressParser.parseMailAddress(request.params(FORWARD_BASE_ADDRESS), ADDRESS_TYPE);
+        MailAddress forwardBaseAddress = MailAddressParser.parseMailAddress(request.params(FORWARD_BASE_ADDRESS), FORWARD_BASE_ADDRESS_TYPE);
         ensureUserExist(forwardBaseAddress);
-        MailAddress destinationAddress = MailAddressParser.parseMailAddress(request.params(FORWARD_DESTINATION_ADDRESS), ADDRESS_TYPE);
-        MappingSource source = MappingSource.fromUser(User.fromLocalPartWithDomain(forwardBaseAddress.getLocalPart(), forwardBaseAddress.getDomain()));
+        MailAddress destinationAddress = MailAddressParser.parseMailAddress(request.params(FORWARD_DESTINATION_ADDRESS), FORWARD_DESTINATION_ADDRESS_TYPE);
+        MappingSource source = MappingSource.fromUser(Username.fromLocalPartWithDomain(forwardBaseAddress.getLocalPart(), forwardBaseAddress.getDomain()));
         addForward(source, destinationAddress);
         return halt(HttpStatus.NO_CONTENT_204);
     }
@@ -172,7 +173,7 @@ public class ForwardRoutes implements Routes {
     }
 
     private void ensureUserExist(MailAddress mailAddress) throws UsersRepositoryException {
-        if (!usersRepository.contains(mailAddress.asString())) {
+        if (!usersRepository.contains(usersRepository.getUser(mailAddress))) {
             throw ErrorResponder.builder()
                 .statusCode(HttpStatus.NOT_FOUND_404)
                 .type(ErrorType.INVALID_ARGUMENT)
@@ -197,9 +198,9 @@ public class ForwardRoutes implements Routes {
             message = "Internal server error - Something went bad on the server side.")
     })
     public HaltException removeFromForwardDestination(Request request, Response response) throws RecipientRewriteTableException {
-        MailAddress baseAddress = MailAddressParser.parseMailAddress(request.params(FORWARD_BASE_ADDRESS), ADDRESS_TYPE);
-        MailAddress destinationAddressToBeRemoved = MailAddressParser.parseMailAddress(request.params(FORWARD_DESTINATION_ADDRESS), ADDRESS_TYPE);
-        MappingSource source = MappingSource.fromUser(User.fromLocalPartWithDomain(baseAddress.getLocalPart(), baseAddress.getDomain()));
+        MailAddress baseAddress = MailAddressParser.parseMailAddress(request.params(FORWARD_BASE_ADDRESS), FORWARD_BASE_ADDRESS_TYPE);
+        MailAddress destinationAddressToBeRemoved = MailAddressParser.parseMailAddress(request.params(FORWARD_DESTINATION_ADDRESS), FORWARD_DESTINATION_ADDRESS_TYPE);
+        MappingSource source = MappingSource.fromUser(Username.fromLocalPartWithDomain(baseAddress.getLocalPart(), baseAddress.getDomain()));
         recipientRewriteTable.removeForwardMapping(source, destinationAddressToBeRemoved.asString());
         return halt(HttpStatus.NO_CONTENT_204);
     }
@@ -212,13 +213,13 @@ public class ForwardRoutes implements Routes {
     })
     @ApiResponses(value = {
         @ApiResponse(code = HttpStatus.OK_200, message = "OK", response = List.class),
-        @ApiResponse(code = HttpStatus.BAD_REQUEST_400, message = "The forward is not an address"),
-        @ApiResponse(code = HttpStatus.NOT_FOUND_404, message = "The forward does not exist"),
+        @ApiResponse(code = HttpStatus.BAD_REQUEST_400, message = "The base forward is not an address"),
+        @ApiResponse(code = HttpStatus.NOT_FOUND_404, message = "The base forward does not exist"),
         @ApiResponse(code = HttpStatus.INTERNAL_SERVER_ERROR_500,
             message = "Internal server error - Something went bad on the server side.")
     })
     public ImmutableSet<ForwardDestinationResponse> listForwardDestinations(Request request, Response response) throws RecipientRewriteTableException {
-        MailAddress baseAddress = MailAddressParser.parseMailAddress(request.params(FORWARD_BASE_ADDRESS), ADDRESS_TYPE);
+        MailAddress baseAddress = MailAddressParser.parseMailAddress(request.params(FORWARD_BASE_ADDRESS), FORWARD_BASE_ADDRESS_TYPE);
         Mappings mappings = recipientRewriteTable.getStoredMappings(MappingSource.fromMailAddress(baseAddress))
             .select(Mapping.Type.Forward);
 

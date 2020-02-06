@@ -21,12 +21,14 @@ package org.apache.james.user.memory;
 
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.commons.configuration2.tree.ImmutableNode;
+import org.apache.james.core.Username;
+import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.user.api.UsersRepositoryException;
 import org.apache.james.user.api.model.User;
 import org.apache.james.user.lib.AbstractUsersRepository;
@@ -34,19 +36,20 @@ import org.apache.james.user.lib.model.DefaultUser;
 
 public class MemoryUsersRepository extends AbstractUsersRepository {
 
-    public static MemoryUsersRepository withVirtualHosting() {
-        return new MemoryUsersRepository(true);
+    public static MemoryUsersRepository withVirtualHosting(DomainList domainList) {
+        return new MemoryUsersRepository(domainList, true);
     }
 
-    public static MemoryUsersRepository withoutVirtualHosting() {
-        return new MemoryUsersRepository(false);
+    public static MemoryUsersRepository withoutVirtualHosting(DomainList domainList) {
+        return new MemoryUsersRepository(domainList, false);
     }
     
     private final Map<String, User> userByName;
     private final boolean supportVirtualHosting;
     private String algo;
 
-    private MemoryUsersRepository(boolean supportVirtualHosting) {
+    private MemoryUsersRepository(DomainList domainList, boolean supportVirtualHosting) {
+        super(domainList);
         this.userByName = new HashMap<>();
         this.algo = "MD5";
         this.supportVirtualHosting = supportVirtualHosting;
@@ -62,21 +65,21 @@ public class MemoryUsersRepository extends AbstractUsersRepository {
     }
 
     @Override
-    public void doConfigure(HierarchicalConfiguration config) throws ConfigurationException {
+    public void doConfigure(HierarchicalConfiguration<ImmutableNode> config) throws ConfigurationException {
         algo = config.getString("algorithm", "MD5");
         super.doConfigure(config);
     }
 
     @Override
-    protected void doAddUser(String username, String password) throws UsersRepositoryException {
+    protected void doAddUser(Username username, String password) {
         DefaultUser user = new DefaultUser(username, algo);
         user.setPassword(password);
-        userByName.put(username.toLowerCase(Locale.US), user);
+        userByName.put(username.asString(), user);
     }
 
     @Override
-    public User getUserByName(String name) throws UsersRepositoryException {
-        return userByName.get(name);
+    public User getUserByName(Username name) throws UsersRepositoryException {
+        return userByName.get(name.asString());
     }
 
     @Override
@@ -85,24 +88,24 @@ public class MemoryUsersRepository extends AbstractUsersRepository {
         if (existingUser == null) {
             throw new UsersRepositoryException("Please provide an existing user to update");
         }
-        userByName.put(user.getUserName().toLowerCase(Locale.US), user);
+        userByName.put(user.getUserName().asString(), user);
     }
 
     @Override
-    public void removeUser(String name) throws UsersRepositoryException {
-        if (userByName.remove(name) == null) {
-            throw new UsersRepositoryException("unable to remove unknown user " + name);
+    public void removeUser(Username name) throws UsersRepositoryException {
+        if (userByName.remove(name.asString()) == null) {
+            throw new UsersRepositoryException("unable to remove unknown user " + name.asString());
         }
     }
 
     @Override
-    public boolean contains(String name) throws UsersRepositoryException {
-        return userByName.containsKey(name.toLowerCase(Locale.US));
+    public boolean contains(Username name) throws UsersRepositoryException {
+        return userByName.containsKey(name.asString());
     }
 
     @Override
-    public boolean test(String name, final String password) throws UsersRepositoryException {
-        return Optional.ofNullable(userByName.get(org.apache.james.core.User.fromUsername(name).asString()))
+    public boolean test(Username name, final String password) throws UsersRepositoryException {
+        return Optional.ofNullable(userByName.get(name.asString()))
             .map(user -> user.verifyPassword(password))
             .orElse(false);
     }
@@ -113,7 +116,10 @@ public class MemoryUsersRepository extends AbstractUsersRepository {
     }
 
     @Override
-    public Iterator<String> list() throws UsersRepositoryException {
-        return userByName.keySet().iterator();
+    public Iterator<Username> list() throws UsersRepositoryException {
+        return userByName.keySet()
+            .stream()
+            .map(Username::of)
+            .iterator();
     }
 }

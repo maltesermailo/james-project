@@ -50,7 +50,7 @@ import org.junit.rules.TemporaryFolder;
 
 public class SmtpAuthIntegrationTest {
     private static final String FROM = "fromuser@" + DEFAULT_DOMAIN;
-    private static final MailRepositoryUrl DROPPED_MAILS = MailRepositoryUrl.from("file://var/mail/dropped-mails/");
+    private static final MailRepositoryUrl DROPPED_MAILS = MailRepositoryUrl.from("memory://var/mail/dropped-mails/");
 
     @Rule
     public IMAPMessageReader imapMessageReader = new IMAPMessageReader();
@@ -126,4 +126,15 @@ public class SmtpAuthIntegrationTest {
             .isFalse();
     }
 
+    @Test
+    public void mixedCaseSenderMailShouldBeDelivered() throws Exception {
+        messageSender.connect(LOCALHOST_IP, jamesServer.getProbe(SmtpGuiceProbe.class).getSmtpPort())
+            .authenticate(FROM, PASSWORD)
+            .sendMessage("FROMUSER@" + DEFAULT_DOMAIN, FROM);
+
+        imapMessageReader.connect(LOCALHOST_IP, jamesServer.getProbe(ImapGuiceProbe.class).getImapPort())
+            .login(FROM, PASSWORD)
+            .select(IMAPMessageReader.INBOX)
+            .awaitMessage(awaitAtMostOneMinute);
+    }
 }

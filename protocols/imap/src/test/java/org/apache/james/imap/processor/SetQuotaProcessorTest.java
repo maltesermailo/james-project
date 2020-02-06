@@ -19,55 +19,48 @@
 
 package org.apache.james.imap.processor;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionState;
-import org.apache.james.imap.api.ImapSessionUtils;
+import org.apache.james.core.Username;
 import org.apache.james.imap.api.message.response.ImapResponseMessage;
 import org.apache.james.imap.api.process.ImapProcessor;
-import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.encode.FakeImapSession;
 import org.apache.james.imap.message.request.SetQuotaRequest;
 import org.apache.james.imap.message.response.UnpooledStatusResponseFactory;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 public class SetQuotaProcessorTest {
     private SetQuotaProcessor testee;
-    private ImapSession mockedImapSession;
+    private FakeImapSession imapSession;
     private ImapProcessor.Responder mockedResponder;
-    private MailboxManager mockedMailboxManager;
-    private MailboxSession mailboxSession;
 
     @Before
     public void setUp() {
-        mailboxSession = MailboxSessionUtil.create("plop");
+        MailboxSession mailboxSession = MailboxSessionUtil.create(Username.of("plop"));
         UnpooledStatusResponseFactory statusResponseFactory = new UnpooledStatusResponseFactory();
-        mockedImapSession = mock(ImapSession.class);
+        imapSession = new FakeImapSession();
         mockedResponder = mock(ImapProcessor.Responder.class);
-        mockedMailboxManager = mock(MailboxManager.class);
-        testee = new SetQuotaProcessor(mock(ImapProcessor.class), mockedMailboxManager,
-            statusResponseFactory, new NoopMetricFactory());
+        testee = new SetQuotaProcessor(mock(ImapProcessor.class), mock(MailboxManager.class),
+            statusResponseFactory, new RecordingMetricFactory());
+        imapSession.authenticated();
+        imapSession.setMailboxSession(mailboxSession);
     }
 
     @Test
     public void processorShouldWorkOnNoRights() {
-        SetQuotaRequest setQuotaRequest = new SetQuotaRequest("A004", ImapCommand.anyStateCommand("Name"), "quotaRoot");
+        SetQuotaRequest setQuotaRequest = new SetQuotaRequest(TAG, "quotaRoot");
 
-        when(mockedImapSession.getState()).thenReturn(ImapSessionState.AUTHENTICATED);
-        when(mockedImapSession.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY))
-            .thenReturn(mailboxSession);
-
-        testee.doProcess(setQuotaRequest, mockedResponder, mockedImapSession);
+        testee.doProcess(setQuotaRequest, mockedResponder, imapSession);
 
         ArgumentCaptor<ImapResponseMessage> imapResponseMessageArgumentCaptor = ArgumentCaptor.forClass(ImapResponseMessage.class);
         verify(mockedResponder).respond(imapResponseMessageArgumentCaptor.capture());

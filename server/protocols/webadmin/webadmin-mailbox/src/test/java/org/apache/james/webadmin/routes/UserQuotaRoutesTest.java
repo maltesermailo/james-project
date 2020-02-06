@@ -34,9 +34,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import org.apache.james.core.Domain;
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
@@ -65,27 +65,27 @@ import io.restassured.path.json.JsonPath;
 class UserQuotaRoutesTest {
 
     private static final String QUOTA_USERS = "/quota/users";
-    private static final String PERDU_COM = "perdu.com";
-    private static final String STRANGE_ORG = "strange.org";
-    private static final User BOB = User.fromUsername("bob@" + PERDU_COM);
-    private static final User ESCAPED_BOB = User.fromUsername("bob%40" + PERDU_COM);
-    private static final User JOE = User.fromUsername("joe@" + PERDU_COM);
-    private static final User JACK = User.fromUsername("jack@" + PERDU_COM);
-    private static final User GUY_WITH_STRANGE_DOMAIN = User.fromUsername("guy@" + STRANGE_ORG);
+    private static final String LOST_LOCAL = "lost.local";
+    private static final String STRANGE_LOCAL = "strange.local";
+    private static final Username BOB = Username.of("bob@" + LOST_LOCAL);
+    private static final Username ESCAPED_BOB = Username.of("bob%40" + LOST_LOCAL);
+    private static final Username JOE = Username.of("joe@" + LOST_LOCAL);
+    private static final Username JACK = Username.of("jack@" + LOST_LOCAL);
+    private static final Username GUY_WITH_STRANGE_DOMAIN = Username.of("guy@" + STRANGE_LOCAL);
     private static final String PASSWORD = "secret";
     private static final String COUNT = "count";
     private static final String SIZE = "size";
 
     @BeforeEach
-    public void setUp(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
+    void setUp(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
         DomainList domainList = testSystem.getQuotaSearchTestSystem().getDomainList();
-        domainList.addDomain(Domain.of(PERDU_COM));
-        domainList.addDomain(Domain.of(STRANGE_ORG));
+        domainList.addDomain(Domain.of(LOST_LOCAL));
+        domainList.addDomain(Domain.of(STRANGE_LOCAL));
 
         UsersRepository usersRepository = testSystem.getQuotaSearchTestSystem().getUsersRepository();
-        usersRepository.addUser(BOB.asString(), PASSWORD);
-        usersRepository.addUser(JACK.asString(), PASSWORD);
-        usersRepository.addUser(GUY_WITH_STRANGE_DOMAIN.asString(), PASSWORD);
+        usersRepository.addUser(BOB, PASSWORD);
+        usersRepository.addUser(JACK, PASSWORD);
+        usersRepository.addUser(GUY_WITH_STRANGE_DOMAIN, PASSWORD);
 
         RestAssured.requestSpecification = testSystem.getRequestSpecification();
         RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
@@ -121,7 +121,7 @@ class UserQuotaRoutesTest {
             testSystem.getQuotaSearchTestSystem().await();
 
             given()
-                .param("domain", PERDU_COM)
+                .param("domain", LOST_LOCAL)
             .when()
                 .get("/quota/users")
             .then()
@@ -176,7 +176,7 @@ class UserQuotaRoutesTest {
         default void getUsersQuotaShouldFilterOnMinOccupationRatio(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
 
-            maxQuotaManager.setGlobalMaxStorage(QuotaSize.size(100));
+            maxQuotaManager.setGlobalMaxStorage(QuotaSizeLimit.size(100));
             appendMessage(testSystem.getQuotaSearchTestSystem(), BOB, withSize(49));
             appendMessage(testSystem.getQuotaSearchTestSystem(), JACK, withSize(50));
             appendMessage(testSystem.getQuotaSearchTestSystem(), GUY_WITH_STRANGE_DOMAIN, withSize(51));
@@ -199,7 +199,7 @@ class UserQuotaRoutesTest {
         default void getUsersQuotaShouldFilterOnMaxOccupationRatio(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
 
-            maxQuotaManager.setGlobalMaxStorage(QuotaSize.size(100));
+            maxQuotaManager.setGlobalMaxStorage(QuotaSizeLimit.size(100));
             appendMessage(testSystem.getQuotaSearchTestSystem(), BOB, withSize(49));
             appendMessage(testSystem.getQuotaSearchTestSystem(), JACK, withSize(50));
             appendMessage(testSystem.getQuotaSearchTestSystem(), GUY_WITH_STRANGE_DOMAIN, withSize(51));
@@ -222,7 +222,7 @@ class UserQuotaRoutesTest {
         default void getUsersQuotaShouldOrderByUsername(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
 
-            maxQuotaManager.setGlobalMaxStorage(QuotaSize.size(100));
+            maxQuotaManager.setGlobalMaxStorage(QuotaSizeLimit.size(100));
             appendMessage(testSystem.getQuotaSearchTestSystem(), GUY_WITH_STRANGE_DOMAIN, withSize(51));
             appendMessage(testSystem.getQuotaSearchTestSystem(), JACK, withSize(50));
             appendMessage(testSystem.getQuotaSearchTestSystem(), BOB, withSize(49));
@@ -386,7 +386,7 @@ class UserQuotaRoutesTest {
         default void getUsersQuotaShouldReturnUserDetails(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
 
-            maxQuotaManager.setGlobalMaxStorage(QuotaSize.size(100));
+            maxQuotaManager.setGlobalMaxStorage(QuotaSizeLimit.size(100));
             appendMessage(testSystem.getQuotaSearchTestSystem(), BOB, withSize(10));
             appendMessage(testSystem.getQuotaSearchTestSystem(), JACK, withSize(11));
             appendMessage(testSystem.getQuotaSearchTestSystem(), GUY_WITH_STRANGE_DOMAIN, withSize(50));
@@ -428,17 +428,17 @@ class UserQuotaRoutesTest {
                             "                }" +
                             "            }" +
                             "        }," +
-                            "        \"username\": \"guy@strange.org\"" +
+                            "        \"username\": \"guy@strange.local\"" +
                             "    }" +
                             "]");
         }
 
 
-        default void appendMessage(QuotaSearchTestSystem testSystem, User user, MessageManager.AppendCommand appendCommand) throws MailboxException {
+        default void appendMessage(QuotaSearchTestSystem testSystem, Username username, MessageManager.AppendCommand appendCommand) throws MailboxException {
             MailboxManager mailboxManager = testSystem.getMailboxManager();
-            MailboxSession session = mailboxManager.createSystemSession(user.asString());
+            MailboxSession session = mailboxManager.createSystemSession(username);
 
-            MailboxPath mailboxPath = MailboxPath.inbox(session);
+            MailboxPath mailboxPath = MailboxPath.inbox(username);
             mailboxManager.createMailbox(mailboxPath, session);
             mailboxManager.getMailbox(mailboxPath, session)
                 .appendMessage(appendCommand, session);
@@ -488,7 +488,7 @@ class UserQuotaRoutesTest {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
 
-            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCount.count(value));
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(value));
 
             Long actual =
                 given()
@@ -528,7 +528,7 @@ class UserQuotaRoutesTest {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
 
-            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSize.size(value));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(value));
 
 
             long quota =
@@ -598,7 +598,7 @@ class UserQuotaRoutesTest {
             .then()
                 .statusCode(HttpStatus.NO_CONTENT_204);
 
-            assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB))).contains(QuotaCount.unlimited());
+            assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB))).contains(QuotaCountLimit.unlimited());
         }
 
         @Test
@@ -631,7 +631,7 @@ class UserQuotaRoutesTest {
             .then()
                 .statusCode(HttpStatus.NO_CONTENT_204);
 
-            assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB))).contains(QuotaCount.count(42));
+            assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB))).contains(QuotaCountLimit.count(42));
         }
 
         @Test
@@ -705,7 +705,7 @@ class UserQuotaRoutesTest {
                 .statusCode(HttpStatus.NO_CONTENT_204);
 
             assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB)))
-                .contains(QuotaSize.unlimited());
+                .contains(QuotaSizeLimit.unlimited());
         }
 
         @Test
@@ -738,7 +738,7 @@ class UserQuotaRoutesTest {
             .then()
                 .statusCode(HttpStatus.NO_CONTENT_204);
 
-            assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB))).contains(QuotaSize.size(42));
+            assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB))).contains(QuotaSizeLimit.size(42));
         }
     }
 
@@ -758,7 +758,7 @@ class UserQuotaRoutesTest {
         void deleteCountShouldSetQuotaToEmpty(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
-            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCount.count(42));
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(42));
 
             with()
                 .delete(QUOTA_USERS + "/" + BOB.asString() + "/" + COUNT)
@@ -785,7 +785,7 @@ class UserQuotaRoutesTest {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
 
-            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSize.size(42));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(42));
 
             with()
                 .delete(QUOTA_USERS + "/" + BOB.asString() + "/" + SIZE)
@@ -812,12 +812,12 @@ class UserQuotaRoutesTest {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
 
-            maxQuotaManager.setGlobalMaxStorage(QuotaSize.size(1111));
-            maxQuotaManager.setGlobalMaxMessage(QuotaCount.count(22));
-            maxQuotaManager.setDomainMaxStorage(Domain.of(PERDU_COM), QuotaSize.size(34));
-            maxQuotaManager.setDomainMaxMessage(Domain.of(PERDU_COM), QuotaCount.count(23));
-            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSize.size(42));
-            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCount.count(52));
+            maxQuotaManager.setGlobalMaxStorage(QuotaSizeLimit.size(1111));
+            maxQuotaManager.setGlobalMaxMessage(QuotaCountLimit.count(22));
+            maxQuotaManager.setDomainMaxStorage(Domain.of(LOST_LOCAL), QuotaSizeLimit.size(34));
+            maxQuotaManager.setDomainMaxMessage(Domain.of(LOST_LOCAL), QuotaCountLimit.count(23));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(42));
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(52));
 
             JsonPath jsonPath =
                 when()
@@ -846,8 +846,8 @@ class UserQuotaRoutesTest {
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
             InMemoryCurrentQuotaManager currentQuotaManager = testSystem.getQuotaSearchTestSystem().getCurrentQuotaManager();
 
-            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSize.size(80));
-            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCount.count(100));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(80));
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(100));
             currentQuotaManager.increase(userQuotaRootResolver.forUser(BOB), 20, 40);
 
             JsonPath jsonPath =
@@ -874,8 +874,8 @@ class UserQuotaRoutesTest {
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
             InMemoryCurrentQuotaManager currentQuotaManager = testSystem.getQuotaSearchTestSystem().getCurrentQuotaManager();
 
-            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSize.unlimited());
-            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCount.unlimited());
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.unlimited());
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.unlimited());
             currentQuotaManager.increase(userQuotaRootResolver.forUser(BOB), 20, 40);
 
             JsonPath jsonPath =
@@ -901,9 +901,9 @@ class UserQuotaRoutesTest {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
 
-            maxQuotaManager.setGlobalMaxStorage(QuotaSize.size(1111));
-            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCount.count(18));
-            maxQuotaManager.setDomainMaxMessage(Domain.of(PERDU_COM), QuotaCount.count(52));
+            maxQuotaManager.setGlobalMaxStorage(QuotaSizeLimit.size(1111));
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(18));
+            maxQuotaManager.setDomainMaxMessage(Domain.of(LOST_LOCAL), QuotaCountLimit.count(52));
 
             JsonPath jsonPath =
                 when()
@@ -930,8 +930,8 @@ class UserQuotaRoutesTest {
         public void getQuotaShouldReturnGlobalValuesWhenNoUserValuesDefined(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
 
-            maxQuotaManager.setGlobalMaxStorage(QuotaSize.size(1111));
-            maxQuotaManager.setGlobalMaxMessage(QuotaCount.count(12));
+            maxQuotaManager.setGlobalMaxStorage(QuotaSizeLimit.size(1111));
+            maxQuotaManager.setGlobalMaxMessage(QuotaCountLimit.count(12));
 
             JsonPath jsonPath =
                 when()
@@ -959,8 +959,8 @@ class UserQuotaRoutesTest {
 
             int maxStorage = 42;
             int maxMessage = 52;
-            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSize.size(maxStorage));
-            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCount.count(maxMessage));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(maxStorage));
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(maxMessage));
 
             JsonPath jsonPath =
                 when()
@@ -1000,7 +1000,7 @@ class UserQuotaRoutesTest {
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
 
             int maxStorage = 42;
-            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSize.size(maxStorage));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(maxStorage));
 
             JsonPath jsonPath =
                 when()
@@ -1023,7 +1023,7 @@ class UserQuotaRoutesTest {
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
 
             int maxMessage = 42;
-            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCount.count(maxMessage));
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(maxMessage));
 
 
             JsonPath jsonPath =
@@ -1055,6 +1055,102 @@ class UserQuotaRoutesTest {
         }
 
         @Test
+        void putQuotaWithNegativeCountShouldFail(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
+            MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
+            UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
+
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(52));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(42));
+
+            Map<String, Object> errors = with()
+                .body("{\"count\":-2,\"size\":42}")
+                .put(QUOTA_USERS + "/" + BOB.asString())
+            .then()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .contentType(ContentType.JSON)
+            .extract()
+                .body()
+                .jsonPath()
+                .getMap(".");
+
+            assertThat(errors)
+                .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
+                .containsEntry("type", "InvalidArgument")
+                .containsEntry("message", "Invalid quota. Need to be an integer value greater or equal to -1");
+        }
+
+        @Test
+        void putQuotaWithNegativeCountShouldNotUpdatePreviousQuota(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
+            MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
+            UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
+
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(52));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(42));
+
+            with()
+                .body("{\"count\":-2,\"size\":42}")
+                .put(QUOTA_USERS + "/" + BOB.asString())
+            .then()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .contentType(ContentType.JSON);
+
+            SoftAssertions softly = new SoftAssertions();
+            softly.assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB)))
+                .contains(QuotaCountLimit.count(52));
+            softly.assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB)))
+                .contains(QuotaSizeLimit.size(42));
+            softly.assertAll();
+        }
+
+        @Test
+        void putQuotaWithNegativeSizeShouldFail(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
+            MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
+            UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
+
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(52));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(42));
+
+            Map<String, Object> errors = with()
+                .body("{\"count\":52,\"size\":-3}")
+                .put(QUOTA_USERS + "/" + BOB.asString())
+            .then()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .contentType(ContentType.JSON)
+            .extract()
+                .body()
+                .jsonPath()
+                .getMap(".");
+
+            assertThat(errors)
+                .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
+                .containsEntry("type", "InvalidArgument")
+                .containsEntry("message", "Invalid quota. Need to be an integer value greater or equal to -1");
+        }
+
+        @Test
+        void putQuotaWithNegativeSizeShouldNotUpdatePreviousQuota(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
+            MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
+            UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
+
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(52));
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(42));
+
+            with()
+                .body("{\"count\":52,\"size\":-3}")
+                .put(QUOTA_USERS + "/" + BOB.asString())
+            .then()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .contentType(ContentType.JSON);
+
+            SoftAssertions softly = new SoftAssertions();
+            softly.assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB)))
+                .contains(QuotaCountLimit.count(52));
+            softly.assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB)))
+                .contains(QuotaSizeLimit.size(42));
+            softly.assertAll();
+        }
+
+        @Test
         void putQuotaShouldUpdateBothQuota(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
             MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
             UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
@@ -1067,9 +1163,9 @@ class UserQuotaRoutesTest {
 
             SoftAssertions softly = new SoftAssertions();
             softly.assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB)))
-                .contains(QuotaCount.count(52));
+                .contains(QuotaCountLimit.count(52));
             softly.assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB)))
-                .contains(QuotaSize.size(42));
+                .contains(QuotaSizeLimit.size(42));
             softly.assertAll();
         }
 
@@ -1086,10 +1182,74 @@ class UserQuotaRoutesTest {
 
             SoftAssertions softly = new SoftAssertions();
             softly.assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB)))
-                .contains(QuotaCount.count(52));
+                .contains(QuotaCountLimit.count(52));
             softly.assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB)))
-                .contains(QuotaSize.size(42));
+                .contains(QuotaSizeLimit.size(42));
             softly.assertAll();
         }
+
+        @Test
+        void putQuotaShouldRemoveCount(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
+            MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
+            UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
+
+            maxQuotaManager.setMaxMessage(userQuotaRootResolver.forUser(BOB), QuotaCountLimit.count(52));
+
+            with()
+                .body("{\"count\":null,\"size\":42}")
+                .put(QUOTA_USERS + "/" + BOB.asString())
+            .then()
+                .statusCode(HttpStatus.NO_CONTENT_204);
+
+            SoftAssertions softly = new SoftAssertions();
+            softly.assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB)))
+                .isEmpty();
+            softly.assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB)))
+                .contains(QuotaSizeLimit.size(42));
+            softly.assertAll();
+        }
+
+        @Test
+        void putQuotaShouldRemoveSize(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
+            MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
+            UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
+
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(42));
+
+            with()
+                .body("{\"count\":52,\"size\":null}")
+                .put(QUOTA_USERS + "/" + BOB.asString())
+            .then()
+                .statusCode(HttpStatus.NO_CONTENT_204);
+
+            SoftAssertions softly = new SoftAssertions();
+            softly.assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB)))
+                .contains(QuotaCountLimit.count(52));
+            softly.assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB)))
+                .isEmpty();
+            softly.assertAll();
+        }
+
+        @Test
+        void putQuotaShouldRemoveBoth(WebAdminQuotaSearchTestSystem testSystem) throws Exception {
+            MaxQuotaManager maxQuotaManager = testSystem.getQuotaSearchTestSystem().getMaxQuotaManager();
+            UserQuotaRootResolver userQuotaRootResolver = testSystem.getQuotaSearchTestSystem().getQuotaRootResolver();
+
+            maxQuotaManager.setMaxStorage(userQuotaRootResolver.forUser(BOB), QuotaSizeLimit.size(42));
+
+            with()
+                .body("{\"count\":null,\"size\":null}")
+                .put(QUOTA_USERS + "/" + BOB.asString())
+            .then()
+                .statusCode(HttpStatus.NO_CONTENT_204);
+
+            SoftAssertions softly = new SoftAssertions();
+            softly.assertThat(maxQuotaManager.getMaxMessage(userQuotaRootResolver.forUser(BOB)))
+                .isEmpty();
+            softly.assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(BOB)))
+                .isEmpty();
+            softly.assertAll();
+        }
+
     }
 }

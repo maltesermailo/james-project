@@ -22,35 +22,37 @@ package org.apache.james.mailbox.quota.mailing.commands;
 import java.time.Instant;
 import java.util.Objects;
 
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.eventsourcing.Command;
 import org.apache.james.mailbox.model.Quota;
 
 public class DetectThresholdCrossing implements Command {
 
-    private final User user;
-    private final Quota<QuotaCount> countQuota;
-    private final Quota<QuotaSize> sizeQuota;
+    private final Username username;
+    private final Quota<QuotaCountLimit, QuotaCountUsage> countQuota;
+    private final Quota<QuotaSizeLimit, QuotaSizeUsage> sizeQuota;
     private final Instant instant;
 
-    public DetectThresholdCrossing(User user, Quota<QuotaCount> countQuota, Quota<QuotaSize> sizeQuota, Instant instant) {
-        this.user = user;
+    public DetectThresholdCrossing(Username username, Quota<QuotaCountLimit, QuotaCountUsage> countQuota, Quota<QuotaSizeLimit, QuotaSizeUsage> sizeQuota, Instant instant) {
+        this.username = username;
         this.countQuota = countQuota;
         this.sizeQuota = sizeQuota;
         this.instant = instant;
     }
 
-    public User getUser() {
-        return user;
+    public Username getUsername() {
+        return username;
     }
 
-    public Quota<QuotaCount> getCountQuota() {
+    public Quota<QuotaCountLimit, QuotaCountUsage> getCountQuota() {
         return countQuota;
     }
 
-    public Quota<QuotaSize> getSizeQuota() {
+    public Quota<QuotaSizeLimit, QuotaSizeUsage> getSizeQuota() {
         return sizeQuota;
     }
 
@@ -63,7 +65,7 @@ public class DetectThresholdCrossing implements Command {
         if (o instanceof DetectThresholdCrossing) {
             DetectThresholdCrossing that = (DetectThresholdCrossing) o;
 
-            return Objects.equals(this.user, that.user)
+            return Objects.equals(this.username, that.username)
                 && Objects.equals(this.countQuota, that.countQuota)
                 && Objects.equals(this.sizeQuota, that.sizeQuota);
         }
@@ -72,6 +74,6 @@ public class DetectThresholdCrossing implements Command {
 
     @Override
     public final int hashCode() {
-        return Objects.hash(user, countQuota, sizeQuota);
+        return Objects.hash(username, countQuota, sizeQuota);
     }
 }

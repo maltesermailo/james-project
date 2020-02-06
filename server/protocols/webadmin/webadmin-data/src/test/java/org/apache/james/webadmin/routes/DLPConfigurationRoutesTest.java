@@ -325,8 +325,8 @@ class DLPConfigurationRoutesTest {
                 .contentType(JSON_CONTENT_TYPE)
                 .body("statusCode", is(HttpStatus.BAD_REQUEST_400))
                 .body("type", is("InvalidArgument"))
-                .body("message", is("Invalid request for domain: dr@strange.com"))
-                .body("details", is("Domain can not be empty nor contain `@`"));
+                .body("message", is("Invalid arguments supplied in the user request"))
+                .body("details", is("Domain can not be empty nor contain `@` nor `/`"));
         }
 
         @Test
@@ -642,8 +642,8 @@ class DLPConfigurationRoutesTest {
                 .contentType(JSON_CONTENT_TYPE)
                 .body("statusCode", is(HttpStatus.BAD_REQUEST_400))
                 .body("type", is("InvalidArgument"))
-                .body("message", is("Invalid request for domain: dr@strange.com"))
-                .body("details", is("Domain can not be empty nor contain `@`"));
+                .body("message", is("Invalid arguments supplied in the user request"))
+                .body("details", is("Domain can not be empty nor contain `@` nor `/`"));
         }
     }
 
@@ -855,8 +855,8 @@ class DLPConfigurationRoutesTest {
                 .contentType(JSON_CONTENT_TYPE)
                 .body("statusCode", is(HttpStatus.BAD_REQUEST_400))
                 .body("type", is("InvalidArgument"))
-                .body("message", is("Invalid request for domain: dr@strange.com"))
-                .body("details", is("Domain can not be empty nor contain `@`"));
+                .body("message", is("Invalid arguments supplied in the user request"))
+                .body("details", is("Domain can not be empty nor contain `@` nor `/`"));
         }
     }
     

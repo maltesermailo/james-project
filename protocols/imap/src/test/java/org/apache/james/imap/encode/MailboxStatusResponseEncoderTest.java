@@ -20,9 +20,7 @@
 package org.apache.james.imap.encode;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
-import org.apache.james.imap.api.ImapMessage;
 import org.apache.james.imap.encode.base.ByteImapResponseWriter;
 import org.apache.james.imap.encode.base.ImapResponseComposerImpl;
 import org.apache.james.imap.message.response.MailboxStatusResponse;
@@ -34,36 +32,30 @@ public class MailboxStatusResponseEncoderTest  {
 
     MailboxStatusResponseEncoder encoder;
 
-    ImapEncoder mockNextEncoder;
-
     ByteImapResponseWriter writer = new ByteImapResponseWriter();
     ImapResponseComposer composer = new ImapResponseComposerImpl(writer);
 
     @Before
     public void setUp() throws Exception {
-        mockNextEncoder = mock(ImapEncoder.class);
-        encoder = new MailboxStatusResponseEncoder(mockNextEncoder);
+        encoder = new MailboxStatusResponseEncoder();
     }
 
     @Test
-    public void testIsAcceptable() {
-        assertThat(encoder.isAcceptable(new MailboxStatusResponse(null, null, null,
-                null, null, null, "mailbox"))).isTrue();
-        assertThat(encoder.isAcceptable(mock(ImapMessage.class))).isFalse();
-        assertThat(encoder.isAcceptable(null)).isFalse();
+    public void acceptableMessagesShouldReturnMailboxStatusResponseClass() {
+        assertThat(encoder.acceptableMessages()).isEqualTo(MailboxStatusResponse.class);
     }
 
     @Test
     public void testDoEncode() throws Exception {
-        final Long messages = new Long(2);
-        final Long recent = new Long(3);
+        final Long messages = 2L;
+        final Long recent = 3L;
         final MessageUid uidNext = MessageUid.of(5);
-        final Long uidValidity = new Long(7);
-        final Long unseen = new Long(11);
+        final Long uidValidity = 7L;
+        final Long unseen = 11L;
         final String mailbox = "A mailbox named desire";
 
         encoder.encode(new MailboxStatusResponse(messages, recent, uidNext,
-                null, uidValidity, unseen, mailbox), composer, new FakeImapSession());
+                null, uidValidity, unseen, mailbox), composer);
         assertThat(writer.getString()).isEqualTo("* STATUS \"A mailbox named desire\" (MESSAGES 2 RECENT 3 UIDNEXT 5 UIDVALIDITY 7 UNSEEN 11)\r\n");
     }
 }

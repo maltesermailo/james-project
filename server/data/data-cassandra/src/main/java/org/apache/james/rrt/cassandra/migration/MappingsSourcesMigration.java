@@ -19,6 +19,8 @@
 
 package org.apache.james.rrt.cassandra.migration;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -33,22 +35,50 @@ import org.apache.james.rrt.lib.Mapping;
 import org.apache.james.rrt.lib.MappingSource;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
+import org.apache.james.task.TaskType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import reactor.core.publisher.Mono;
 
 public class MappingsSourcesMigration implements Migration {
+
+    public static class MappingsSourcesMigrationTask implements Task {
+
+        private final MappingsSourcesMigration migration;
+
+        public MappingsSourcesMigrationTask(MappingsSourcesMigration migration) {
+            this.migration = migration;
+        }
+
+        @Override
+        public Result run() throws InterruptedException {
+            return migration.runTask();
+        }
+
+        @Override
+        public TaskType type() {
+            return TYPE;
+        }
+
+        @Override
+        public Optional<TaskExecutionDetails.AdditionalInformation> details() {
+            return Optional.of(migration.createAdditionalInformation());
+        }
+    }
+
     private static final Logger LOGGER = LoggerFactory.getLogger(MappingsSourcesMigration.class);
-    private static final String TYPE = "mappingsSourcesMigration";
+    public static final TaskType TYPE = TaskType.of("mappings-sources-migration");
 
     public static class AdditionalInformation implements TaskExecutionDetails.AdditionalInformation {
         private final long successfulMappingsCount;
         private final long errorMappingsCount;
+        private final Instant timestamp;
 
-        AdditionalInformation(long successfulMappingsCount, long errorMappingsCount) {
+        AdditionalInformation(long successfulMappingsCount, long errorMappingsCount, Instant timestamp) {
             this.successfulMappingsCount = successfulMappingsCount;
             this.errorMappingsCount = errorMappingsCount;
+            this.timestamp = timestamp;
         }
 
         public long getSuccessfulMappingsCount() {
@@ -57,6 +87,11 @@ public class MappingsSourcesMigration implements Migration {
 
         public long getErrorMappingsCount() {
             return errorMappingsCount;
+        }
+
+        @Override
+        public Instant timestamp() {
+            return timestamp;
         }
     }
 
@@ -93,7 +128,7 @@ public class MappingsSourcesMigration implements Migration {
             .then()
             .onErrorResume(t -> {
                 LOGGER.error("Error while performing migration of mapping source: {} with mapping: {}",
-                        mappingEntry.getLeft().asString(), mappingEntry.getRight().asString(), t);
+                    mappingEntry.getLeft().asString(), mappingEntry.getRight().asString(), t);
                 errorMappingsCount.incrementAndGet();
                 return Mono.empty();
             });
@@ -101,30 +136,13 @@ public class MappingsSourcesMigration implements Migration {
 
     @Override
     public Task asTask() {
-        return new Task() {
-
-            @Override
-            public Result run() throws InterruptedException {
-                return runTask();
-            }
-
-            @Override
-            public String type() {
-                return TYPE;
-            }
-
-            @Override
-            public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-                return Optional.of(createAdditionalInformation());
-            }
-        };
+        return new MappingsSourcesMigrationTask(this);
     }
-
-
 
     AdditionalInformation createAdditionalInformation() {
         return new AdditionalInformation(
             successfulMappingsCount.get(),
-            errorMappingsCount.get());
+            errorMappingsCount.get(),
+            Clock.systemUTC().instant());
     }
 }

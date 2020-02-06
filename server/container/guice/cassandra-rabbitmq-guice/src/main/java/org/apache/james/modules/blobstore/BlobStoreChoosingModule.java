@@ -32,8 +32,8 @@ import org.apache.james.blob.api.BlobStore;
 import org.apache.james.blob.api.MetricableBlobStore;
 import org.apache.james.blob.cassandra.CassandraBlobModule;
 import org.apache.james.blob.cassandra.CassandraBlobStore;
-import org.apache.james.blob.objectstorage.ObjectStorageBlobsDAO;
-import org.apache.james.blob.union.UnionBlobStore;
+import org.apache.james.blob.objectstorage.ObjectStorageBlobStore;
+import org.apache.james.blob.union.HybridBlobStore;
 import org.apache.james.modules.mailbox.ConfigurationComponent;
 import org.apache.james.modules.objectstorage.ObjectStorageDependenciesModule;
 import org.apache.james.utils.PropertiesProvider;
@@ -75,17 +75,19 @@ public class BlobStoreChoosingModule extends AbstractModule {
     @Singleton
     BlobStore provideBlobStore(BlobStoreChoosingConfiguration choosingConfiguration,
                                Provider<CassandraBlobStore> cassandraBlobStoreProvider,
-                               Provider<ObjectStorageBlobsDAO> swiftBlobStoreProvider) {
+                               Provider<ObjectStorageBlobStore> objectStorageBlobStoreProvider,
+                               HybridBlobStore.Configuration hybridBlobStoreConfiguration) {
 
         switch (choosingConfiguration.getImplementation()) {
             case OBJECTSTORAGE:
-                return swiftBlobStoreProvider.get();
+                return objectStorageBlobStoreProvider.get();
             case CASSANDRA:
                 return cassandraBlobStoreProvider.get();
-            case UNION:
-                return UnionBlobStore.builder()
-                    .current(swiftBlobStoreProvider.get())
-                    .legacy(cassandraBlobStoreProvider.get())
+            case HYBRID:
+                return HybridBlobStore.builder()
+                    .lowCost(objectStorageBlobStoreProvider.get())
+                    .highPerformance(cassandraBlobStoreProvider.get())
+                    .configuration(hybridBlobStoreConfiguration)
                     .build();
             default:
                 throw new RuntimeException(String.format("can not get the right blobstore provider with configuration %s",
@@ -93,4 +95,15 @@ public class BlobStoreChoosingModule extends AbstractModule {
         }
     }
 
+    @Provides
+    @Singleton
+    @VisibleForTesting
+    HybridBlobStore.Configuration providesHybridBlobStoreConfiguration(PropertiesProvider propertiesProvider) {
+        try {
+            Configuration configuration = propertiesProvider.getConfigurations(ConfigurationComponent.NAMES);
+            return HybridBlobStore.Configuration.from(configuration);
+        } catch (FileNotFoundException | ConfigurationException e) {
+            return HybridBlobStore.Configuration.DEFAULT;
+        }
+    }
 }

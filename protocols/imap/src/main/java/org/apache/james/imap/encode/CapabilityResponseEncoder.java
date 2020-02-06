@@ -22,9 +22,7 @@ import java.io.IOException;
 import java.util.Iterator;
 
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapMessage;
-import org.apache.james.imap.api.process.ImapSession;
-import org.apache.james.imap.encode.base.AbstractChainedImapEncoder;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.message.response.CapabilityResponse;
 
 /**
@@ -32,26 +30,20 @@ import org.apache.james.imap.message.response.CapabilityResponse;
  * href='http://james.apache.org/server/rfclist/imap4/rfc2060.txt'
  * rel='tag'>RFC2060</a>.
  */
-public class CapabilityResponseEncoder extends AbstractChainedImapEncoder {
-
-    public CapabilityResponseEncoder(ImapEncoder next) {
-        super(next);
+public class CapabilityResponseEncoder implements ImapResponseEncoder<CapabilityResponse> {
+    @Override
+    public Class<CapabilityResponse> acceptableMessages() {
+        return CapabilityResponse.class;
     }
 
     @Override
-    protected void doEncode(ImapMessage acceptableMessage, ImapResponseComposer composer, ImapSession session) throws IOException {
-        final CapabilityResponse response = (CapabilityResponse) acceptableMessage;
-        Iterator<String> capabilities = response.getCapabilities().iterator();
+    public void encode(CapabilityResponse response, ImapResponseComposer composer) throws IOException {
+        Iterator<Capability> capabilities = response.getCapabilities().iterator();
         composer.untagged();
-        composer.message(ImapConstants.CAPABILITY_COMMAND_NAME);
+        composer.message(ImapConstants.CAPABILITY_COMMAND.getName());
         while (capabilities.hasNext()) {
-            composer.message(capabilities.next());
+            composer.message(capabilities.next().asString());
         }
         composer.end();        
-    }
-
-    @Override
-    protected boolean isAcceptable(ImapMessage message) {
-        return (message instanceof CapabilityResponse);
     }
 }

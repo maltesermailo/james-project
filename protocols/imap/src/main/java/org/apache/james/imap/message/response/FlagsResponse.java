@@ -19,6 +19,8 @@
 
 package org.apache.james.imap.message.response;
 
+import java.util.Objects;
+
 import javax.mail.Flags;
 
 import org.apache.james.imap.api.message.response.ImapResponseMessage;
@@ -30,44 +32,30 @@ public class FlagsResponse implements ImapResponseMessage {
     private final Flags flags;
 
     public FlagsResponse(Flags flags) {
-        super();
         this.flags = flags;
-    }
-
-    public String toString() {
-        return "Flags: " + flags;
     }
 
     public Flags getFlags() {
         return flags;
     }
 
-    public int hashCode() {
-        final int PRIME = 31;
-        int result = 1;
-        result = PRIME * result + ((flags == null) ? 0 : flags.hashCode());
-        return result;
+    @Override
+    public final boolean equals(Object o) {
+        if (o instanceof FlagsResponse) {
+            FlagsResponse that = (FlagsResponse) o;
+
+            return Objects.equals(this.flags, that.flags);
+        }
+        return false;
     }
 
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final FlagsResponse other = (FlagsResponse) obj;
-        if (flags == null) {
-            if (other.flags != null) {
-                return false;
-            }
-        } else if (!flags.equals(other.flags)) {
-            return false;
-        }
-        return true;
+    @Override
+    public final int hashCode() {
+        return Objects.hash(flags);
     }
 
+    @Override
+    public String toString() {
+        return "Flags: " + flags;
+    }
 }

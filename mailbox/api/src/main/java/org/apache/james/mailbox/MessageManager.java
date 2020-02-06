@@ -38,6 +38,7 @@ import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.UnsupportedCriteriaException;
 import org.apache.james.mailbox.exception.UnsupportedRightException;
 import org.apache.james.mailbox.model.ComposedMessageId;
+import org.apache.james.mailbox.model.FetchGroup;
 import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxACL;
 import org.apache.james.mailbox.model.MailboxCounters;
@@ -45,7 +46,6 @@ import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.MessageRange;
 import org.apache.james.mailbox.model.MessageResult;
-import org.apache.james.mailbox.model.MessageResult.FetchGroup;
 import org.apache.james.mailbox.model.MessageResultIterator;
 import org.apache.james.mailbox.model.SearchQuery;
 import org.apache.james.mime4j.dom.Message;
@@ -134,7 +134,6 @@ public interface MessageManager {
      * @param set the range of messages
      * @param mailboxSession not null
      * @return new flags indexed by UID
-     * @throws MailboxException
      */
     Map<MessageUid, Flags> setFlags(Flags flags, FlagsUpdateMode flagsUpdateMode, MessageRange set, MailboxSession mailboxSession) throws MailboxException;
 
@@ -272,23 +271,17 @@ public interface MessageManager {
      * the-hood in batches so the caller should check if
      * {@link MessageResultIterator#getException()} returns <code>null</code>
      * after {@link MessageResultIterator#hasNext()} returns <code>false</code>.
-     * 
-     * 
-     * @param set
+     *
      * @param fetchGroup
      *            data to fetch
      * @param mailboxSession
      *            not null
      * @return MessageResult with the fields defined by FetchGroup
-     * @throws MailboxException
      */
     MessageResultIterator getMessages(MessageRange set, FetchGroup fetchGroup, MailboxSession mailboxSession) throws MailboxException;
 
     /**
      * Return the underlying {@link Mailbox}
-     *
-     * @return mailbox
-     * @throws MailboxException
      */
     Mailbox getMailboxEntity() throws MailboxException;
 
@@ -402,7 +395,7 @@ public interface MessageManager {
          * 
          * @return higestModSeq
          */
-        long getHighestModSeq();
+        ModSeq getHighestModSeq();
 
         /**
          * Gets the number of messages that this mailbox contains. This is an

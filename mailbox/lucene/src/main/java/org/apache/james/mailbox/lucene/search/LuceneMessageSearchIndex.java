@@ -30,7 +30,6 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -47,6 +46,7 @@ import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxManager.SearchCapabilities;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.SessionProvider;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.UnsupportedSearchException;
 import org.apache.james.mailbox.model.Mailbox;
@@ -69,7 +69,6 @@ import org.apache.james.mailbox.model.SearchQuery.UidCriterion;
 import org.apache.james.mailbox.model.SearchQuery.UidRange;
 import org.apache.james.mailbox.model.UpdatedFlags;
 import org.apache.james.mailbox.store.MailboxSessionMapperFactory;
-import org.apache.james.mailbox.store.SessionProvider;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
 import org.apache.james.mailbox.store.mail.model.impl.PropertyBuilder;
 import org.apache.james.mailbox.store.search.ListeningMessageSearchIndex;
@@ -126,10 +125,6 @@ import com.google.common.collect.ImmutableList;
 
 /**
  * Lucene based {@link ListeningMessageSearchIndex} which offers message searching via a Lucene index
- * 
- * 
-
- * @param 
  */
 public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     public static class LuceneMessageSearchIndexGroup extends org.apache.james.mailbox.events.Group {
@@ -139,7 +134,7 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     private static final Logger LOGGER = LoggerFactory.getLogger(LuceneMessageSearchIndex.class);
     private static final Date MAX_DATE;
     private static final Date MIN_DATE;
-    private static final org.apache.james.mailbox.events.Group GROUP = new LuceneMessageSearchIndexGroup();
+    public static final org.apache.james.mailbox.events.Group GROUP = new LuceneMessageSearchIndexGroup();
     
     static {
         Calendar cal = Calendar.getInstance();
@@ -417,8 +412,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Set the max count of results which will get returned from a query. The default is {@link #DEFAULT_MAX_QUERY_RESULTS}
-     * 
-     * @param maxQueryResults
      */
     public void setMaxQueryResults(int maxQueryResults) {
         this.maxQueryResults = maxQueryResults;
@@ -436,10 +429,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Create a {@link Analyzer} which is used to index the {@link MailboxMessage}'s
-     * 
-     * @param lenient 
-     * 
-     * @return analyzer
      */
     protected Analyzer createAnalyzer(boolean lenient) {
         if (lenient) {
@@ -455,9 +444,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
      * set this to true. 
      * 
      * The default is false for performance reasons
-     * 
-     * 
-     * @param suffixMatch
      */
     public void setEnableSuffixMatch(boolean suffixMatch) {
         this.suffixMatch = suffixMatch;
@@ -510,7 +496,7 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
             ScoreDoc[] sDocs = docs.scoreDocs;
             for (ScoreDoc sDoc : sDocs) {
                 Document doc = searcher.doc(sDoc.doc);
-                MessageUid uid = MessageUid.of(Long.valueOf(doc.get(UID_FIELD)));
+                MessageUid uid = MessageUid.of(Long.parseLong(doc.get(UID_FIELD)));
                 MailboxId mailboxId = mailboxIdFactory.fromString(doc.get(MAILBOX_ID_FIELD));
                 Optional<MessageId> messageId = toMessageId(Optional.ofNullable(doc.get(MESSAGE_ID_FIELD)));
                 results.add(new SearchResult(messageId, mailboxId, uid));
@@ -542,9 +528,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
      * Create a new {@link Document} for the given {@link MailboxMessage}. This Document does not contain any flags data. The {@link Flags} are stored in a seperate Document.
      * 
      * See {@link #createFlagsDocument(MailboxMessage)}
-     * 
-     * @param membership
-     * @return document
      */
     private Document createMessageDocument(final MailboxSession session, final MailboxMessage membership) throws IOException, MimeException {
         final Document doc = new Document();
@@ -585,16 +568,14 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
                 String firstCcMailbox = "";
                 String firstFromDisplay = "";
                 String firstToDisplay = "";
-                
-                Iterator<org.apache.james.mime4j.stream.Field> fields = header.iterator();
-                while (fields.hasNext()) {
-                    org.apache.james.mime4j.stream.Field f = fields.next();
+
+                for (org.apache.james.mime4j.stream.Field f : header) {
                     String headerName = f.getName().toUpperCase(Locale.US);
                     String headerValue = f.getBody().toUpperCase(Locale.US);
-                    String fullValue =  f.toString().toUpperCase(Locale.US);
+                    String fullValue = f.toString().toUpperCase(Locale.US);
                     doc.add(new Field(HEADERS_FIELD, fullValue, Store.NO, Index.ANALYZED));
                     doc.add(new Field(PREFIX_HEADER_FIELD + headerName, headerValue, Store.NO, Index.ANALYZED));
-                    
+
                     if (f instanceof DateTimeField) {
                         // We need to make sure we convert it to GMT
                         try (StringReader reader = new StringReader(f.getBody())) {
@@ -612,78 +593,78 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
                             sentDate = membership.getInternalDate();
                         }
 
-                    } 
-                        String field = null;
-                        if ("To".equalsIgnoreCase(headerName)) {
-                            field = TO_FIELD;
-                        } else if ("From".equalsIgnoreCase(headerName)) {
-                            field = FROM_FIELD;
-                        } else if ("Cc".equalsIgnoreCase(headerName)) {
-                            field = CC_FIELD;
-                        } else if ("Bcc".equalsIgnoreCase(headerName)) {
-                            field = BCC_FIELD;
-                        }
-                        
+                    }
+                    String field = null;
+                    if ("To".equalsIgnoreCase(headerName)) {
+                        field = TO_FIELD;
+                    } else if ("From".equalsIgnoreCase(headerName)) {
+                        field = FROM_FIELD;
+                    } else if ("Cc".equalsIgnoreCase(headerName)) {
+                        field = CC_FIELD;
+                    } else if ("Bcc".equalsIgnoreCase(headerName)) {
+                        field = BCC_FIELD;
+                    }
 
-                        // Check if we can index the the address in the right manner
-                        if (field != null) {
-                                // not sure if we really should reparse it. It maybe be better to check just for the right type.
-                                // But this impl was easier in the first place
-                                AddressList aList = LenientAddressParser.DEFAULT.parseAddressList(MimeUtil.unfold(f.getBody()));
-                                for (int i = 0; i < aList.size(); i++) {
-                                    Address address = aList.get(i);
-                                    if (address instanceof org.apache.james.mime4j.dom.address.Mailbox) {
-                                        org.apache.james.mime4j.dom.address.Mailbox mailbox = (org.apache.james.mime4j.dom.address.Mailbox) address;
-                                        String value = AddressFormatter.DEFAULT.encode(mailbox).toUpperCase(Locale.US);
-                                        doc.add(new Field(field, value, Store.NO, Index.ANALYZED));
-                                        if (i == 0) {
-                                            String mailboxAddress = SearchUtil.getMailboxAddress(mailbox);
-                                            String mailboxDisplay = SearchUtil.getDisplayAddress(mailbox);
 
-                                            if ("To".equalsIgnoreCase(headerName)) {
-                                                firstToMailbox = mailboxAddress;
-                                                firstToDisplay = mailboxDisplay;
-                                            } else if ("From".equalsIgnoreCase(headerName)) {
-                                                firstFromMailbox = mailboxAddress;
-                                                firstFromDisplay = mailboxDisplay;
-                                                
-                                            } else if ("Cc".equalsIgnoreCase(headerName)) {
-                                                firstCcMailbox = mailboxAddress;
-                                            }
-                                            
-                                        }
-                                    } else if (address instanceof Group) {
-                                        MailboxList mList = ((Group) address).getMailboxes();
-                                        for (int a = 0; a < mList.size(); a++) {
-                                            org.apache.james.mime4j.dom.address.Mailbox mailbox = mList.get(a);
-                                            String value = AddressFormatter.DEFAULT.encode(mailbox).toUpperCase(Locale.US);
-                                            doc.add(new Field(field, value, Store.NO, Index.ANALYZED));
+                    // Check if we can index the the address in the right manner
+                    if (field != null) {
+                        // not sure if we really should reparse it. It maybe be better to check just for the right type.
+                        // But this impl was easier in the first place
+                        AddressList aList = LenientAddressParser.DEFAULT.parseAddressList(MimeUtil.unfold(f.getBody()));
+                        for (int i = 0; i < aList.size(); i++) {
+                            Address address = aList.get(i);
+                            if (address instanceof org.apache.james.mime4j.dom.address.Mailbox) {
+                                org.apache.james.mime4j.dom.address.Mailbox mailbox = (org.apache.james.mime4j.dom.address.Mailbox) address;
+                                String value = AddressFormatter.DEFAULT.encode(mailbox).toUpperCase(Locale.US);
+                                doc.add(new Field(field, value, Store.NO, Index.ANALYZED));
+                                if (i == 0) {
+                                    String mailboxAddress = SearchUtil.getMailboxAddress(mailbox);
+                                    String mailboxDisplay = SearchUtil.getDisplayAddress(mailbox);
 
-                                            if (i == 0 && a == 0) {
-                                                String mailboxAddress = SearchUtil.getMailboxAddress(mailbox);
-                                                String mailboxDisplay = SearchUtil.getDisplayAddress(mailbox);
+                                    if ("To".equalsIgnoreCase(headerName)) {
+                                        firstToMailbox = mailboxAddress;
+                                        firstToDisplay = mailboxDisplay;
+                                    } else if ("From".equalsIgnoreCase(headerName)) {
+                                        firstFromMailbox = mailboxAddress;
+                                        firstFromDisplay = mailboxDisplay;
 
-                                                if ("To".equalsIgnoreCase(headerName)) {
-                                                    firstToMailbox = mailboxAddress;
-                                                    firstToDisplay = mailboxDisplay;
-                                                } else if ("From".equalsIgnoreCase(headerName)) {
-                                                    firstFromMailbox = mailboxAddress;
-                                                    firstFromDisplay = mailboxDisplay;
+                                    } else if ("Cc".equalsIgnoreCase(headerName)) {
+                                        firstCcMailbox = mailboxAddress;
+                                    }
 
-                                                } else if ("Cc".equalsIgnoreCase(headerName)) {
-                                                    firstCcMailbox = mailboxAddress;
-                                                }
-                                            }
+                                }
+                            } else if (address instanceof Group) {
+                                MailboxList mList = ((Group) address).getMailboxes();
+                                for (int a = 0; a < mList.size(); a++) {
+                                    org.apache.james.mime4j.dom.address.Mailbox mailbox = mList.get(a);
+                                    String value = AddressFormatter.DEFAULT.encode(mailbox).toUpperCase(Locale.US);
+                                    doc.add(new Field(field, value, Store.NO, Index.ANALYZED));
+
+                                    if (i == 0 && a == 0) {
+                                        String mailboxAddress = SearchUtil.getMailboxAddress(mailbox);
+                                        String mailboxDisplay = SearchUtil.getDisplayAddress(mailbox);
+
+                                        if ("To".equalsIgnoreCase(headerName)) {
+                                            firstToMailbox = mailboxAddress;
+                                            firstToDisplay = mailboxDisplay;
+                                        } else if ("From".equalsIgnoreCase(headerName)) {
+                                            firstFromMailbox = mailboxAddress;
+                                            firstFromDisplay = mailboxDisplay;
+
+                                        } else if ("Cc".equalsIgnoreCase(headerName)) {
+                                            firstCcMailbox = mailboxAddress;
                                         }
                                     }
                                 }
+                            }
+                        }
 
-                            
-                            doc.add(new Field(field, headerValue, Store.NO, Index.ANALYZED));
+
+                        doc.add(new Field(field, headerValue, Store.NO, Index.ANALYZED));
 
                     } else if (headerName.equalsIgnoreCase("Subject")) {
                         doc.add(new Field(BASE_SUBJECT_FIELD, SearchUtil.getBaseSubject(headerValue), Store.YES, Index.NOT_ANALYZED));
-                    } 
+                    }
                 }
                 if (sentDate == null) {
                     sentDate = membership.getInternalDate();
@@ -797,10 +778,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Return a {@link Query} which is build based on the given {@link SearchQuery.InternalDateCriterion}
-     * 
-     * @param crit
-     * @return query
-     * @throws UnsupportedSearchException
      */
     private Query createInternalDateQuery(SearchQuery.InternalDateCriterion crit) throws UnsupportedSearchException {
         DateOperator dop = crit.getOperator();
@@ -811,10 +788,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Return a {@link Query} which is build based on the given {@link SearchQuery.SizeCriterion}
-     * 
-     * @param crit
-     * @return query
-     * @throws UnsupportedSearchException
      */
     private Query createSizeQuery(SearchQuery.SizeCriterion crit) throws UnsupportedSearchException {
         NumericOperator op = crit.getOperator();
@@ -832,10 +805,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * This method will return the right {@link Query} depending if {@link #suffixMatch} is enabled
-     * 
-     * @param fieldName
-     * @param value
-     * @return query
      */
     private Query createTermQuery(String fieldName, String value) {
         if (suffixMatch) {
@@ -847,10 +816,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Return a {@link Query} which is build based on the given {@link SearchQuery.HeaderCriterion}
-     * 
-     * @param crit
-     * @return query
-     * @throws UnsupportedSearchException
      */
     private Query createHeaderQuery(SearchQuery.HeaderCriterion crit) throws UnsupportedSearchException {
         HeaderOperator op = crit.getOperator();
@@ -931,10 +896,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Return a {@link Query} which is build based on the given {@link SearchQuery.UidCriterion}
-     * 
-     * @param crit
-     * @return query
-     * @throws UnsupportedSearchException
      */
     private Query createModSeqQuery(SearchQuery.ModSeqCriterion crit) throws UnsupportedSearchException {
         NumericOperator op = crit.getOperator();
@@ -956,10 +917,7 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
 
     /**
      * Return a {@link Query} which is build based on the given {@link SearchQuery.FlagCriterion}. This is kind of a hack
-     * as it will do a search for the flags in this method and 
-     *
-     * @return query
-     * @throws MailboxException
+     * as it will do a search for the flags in this method and
      */
     private Query createFlagQuery(String flag, boolean isSet, Query inMailboxes, Collection<MessageUid> recentUids) throws MailboxException {
         BooleanQuery query = new BooleanQuery();
@@ -984,7 +942,7 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
             TopDocs docs = searcher.search(query, null, maxQueryResults, new Sort(UID_SORT));
             ScoreDoc[] sDocs = docs.scoreDocs;
             for (ScoreDoc sDoc : sDocs) {
-                MessageUid uid = MessageUid.of(Long.valueOf(searcher.doc(sDoc.doc).get(UID_FIELD)));
+                MessageUid uid = MessageUid.of(Long.parseLong(searcher.doc(sDoc.doc).get(UID_FIELD)));
                 uids.add(uid);
             }
             
@@ -1093,9 +1051,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
 
     /**
      * Convert the given {@link Flag} to a String
-     * 
-     * @param flag
-     * @return flagString
      */
     private String toString(Flag flag) {
         if (Flag.ANSWERED.equals(flag)) {
@@ -1117,10 +1072,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Return a {@link Query} which is build based on the given {@link SearchQuery.TextCriterion}
-     * 
-     * @param crit
-     * @return query
-     * @throws UnsupportedSearchException
      */
     private Query createTextQuery(SearchQuery.TextCriterion crit) throws UnsupportedSearchException {
         String value = crit.getOperator().getValue().toUpperCase(Locale.US);
@@ -1139,10 +1090,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Return a {@link Query} which is build based on the given {@link SearchQuery.AllCriterion}
-     * 
-     * @param crit
-     * @return query
-     * @throws UnsupportedSearchException
      */
     private Query createAllQuery(SearchQuery.AllCriterion crit) throws UnsupportedSearchException {
         BooleanQuery query = new BooleanQuery();
@@ -1155,10 +1102,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Return a {@link Query} which is build based on the given {@link SearchQuery.ConjunctionCriterion}
-     * 
-     * @param crit
-     * @return query
-     * @throws UnsupportedSearchException
      */
     private Query createConjunctionQuery(SearchQuery.ConjunctionCriterion crit, Query inMailboxes, Collection<MessageUid> recentUids) throws UnsupportedSearchException, MailboxException {
         List<Criterion> crits = crit.getCriteria();
@@ -1191,10 +1134,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Return a {@link Query} which is builded based on the given {@link Criterion}
-     * 
-     * @param criterion
-     * @return query
-     * @throws UnsupportedSearchException
      */
     private Query createQuery(Criterion criterion, Query inMailboxes, Collection<MessageUid> recentUids) throws MailboxException {
         if (criterion instanceof SearchQuery.InternalDateCriterion) {
@@ -1289,9 +1228,6 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     
     /**
      * Add the given {@link Flags} to the {@link Document}
-     * 
-     * @param doc
-     * @param f
      */
     private void indexFlags(Document doc, Flags f) {
         List<String> fString = new ArrayList<>();
@@ -1332,18 +1268,18 @@ public class LuceneMessageSearchIndex extends ListeningMessageSearchIndex {
     public void delete(MailboxSession session, Mailbox mailbox, Collection<MessageUid> expungedUids) throws IOException {
         Collection<MessageRange> messageRanges = MessageRange.toRanges(expungedUids);
         for (MessageRange messageRange : messageRanges) {
-            delete(mailbox, messageRange);
+            delete(mailbox.getMailboxId(), messageRange);
         }
     }
 
     @Override
-    public void deleteAll(MailboxSession session, Mailbox mailbox) throws IOException {
-        delete(mailbox, MessageRange.all());
+    public void deleteAll(MailboxSession session, MailboxId mailboxId) throws IOException {
+        delete(mailboxId, MessageRange.all());
     }
 
-    public void delete(Mailbox mailbox, MessageRange range) throws IOException {
+    public void delete(MailboxId mailboxId, MessageRange range) throws IOException {
         BooleanQuery query = new BooleanQuery();
-        query.add(new TermQuery(new Term(MAILBOX_ID_FIELD, mailbox.getMailboxId().serialize())), BooleanClause.Occur.MUST);
+        query.add(new TermQuery(new Term(MAILBOX_ID_FIELD, mailboxId.serialize())), BooleanClause.Occur.MUST);
         query.add(createQuery(range), BooleanClause.Occur.MUST);
 
         writer.deleteDocuments(query);

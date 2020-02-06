@@ -23,22 +23,22 @@ package org.apache.james.mailbox.acl;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.apache.james.core.Username;
+
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
-
 
 /**
  * In memory {@link GroupMembershipResolver} implementation. There is no
  * persistence. You will get only what you add.
- * 
  */
 public class SimpleGroupMembershipResolver implements GroupMembershipResolver {
 
     public static class Membership {
         private final String group;
-        private final String user;
+        private final Username user;
 
-        public Membership(String user, String group) {
+        public Membership(Username user, String group) {
             this.group = group;
             this.user = user;
         }
@@ -70,12 +70,12 @@ public class SimpleGroupMembershipResolver implements GroupMembershipResolver {
 
     private final Set<Membership> memberships = new HashSet<>(32);
 
-    public void addMembership(String group, String user) {
+    public void addMembership(String group, Username user) {
         memberships.add(new Membership(user, group));
     }
 
     @Override
-    public boolean isMember(String user, String group) {
+    public boolean isMember(Username user, String group) {
         return memberships.contains(new Membership(user, group));
     }
 

@@ -18,13 +18,13 @@
  ****************************************************************/
 package org.apache.james.imap.processor;
 
+import static org.apache.james.imap.api.ImapConstants.SUPPORTS_UNSELECT;
+
 import java.io.Closeable;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
@@ -33,14 +33,15 @@ import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.metrics.api.MetricFactory;
 import org.apache.james.util.MDCBuilder;
 
+import com.google.common.collect.ImmutableList;
+
 /**
  * Processor which implements the UNSELECT extension.
  * 
  * See RFC3691
  */
 public class UnselectProcessor extends AbstractMailboxProcessor<UnselectRequest> implements CapabilityImplementingProcessor {
-
-    private static final List<String> UNSELECT = Collections.unmodifiableList(Arrays.asList("UNSELECT"));
+    private static final List<Capability> UNSELECT = ImmutableList.of(SUPPORTS_UNSELECT);
 
     public UnselectProcessor(ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
             MetricFactory metricFactory) {
@@ -48,23 +49,23 @@ public class UnselectProcessor extends AbstractMailboxProcessor<UnselectRequest>
     }
 
     @Override
-    protected void doProcess(UnselectRequest message, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void processRequest(UnselectRequest request, ImapSession session, Responder responder) {
         if (session.getSelected() != null) {
             session.deselect();
-            okComplete(command, tag, responder);
+            okComplete(request, responder);
         } else {
-            taggedBad(command, tag, responder, HumanReadableText.UNSELECT);
+            taggedBad(request, responder, HumanReadableText.UNSELECT);
         }
 
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         return UNSELECT;
     }
 
     @Override
-    protected Closeable addContextToMDC(UnselectRequest message) {
+    protected Closeable addContextToMDC(UnselectRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "UNSELECT")
             .build();

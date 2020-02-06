@@ -28,6 +28,7 @@ import javax.persistence.PersistenceException;
 import javax.persistence.RollbackException;
 import javax.persistence.TypedQuery;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.acl.ACLDiff;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.MailboxExistsException;
@@ -40,6 +41,8 @@ import org.apache.james.mailbox.model.MailboxACL;
 import org.apache.james.mailbox.model.MailboxACL.Right;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxPath;
+import org.apache.james.mailbox.model.search.MailboxQuery;
+import org.apache.james.mailbox.store.MailboxExpressionBackwardCompatibility;
 import org.apache.james.mailbox.store.mail.MailboxMapper;
 
 import com.github.steveash.guavate.Guavate;
@@ -105,7 +108,7 @@ public class JPAMailboxMapper extends JPATransactionalMapper implements MailboxM
         try {
             JPAMailbox result = loadJpaMailbox(mailbox.getMailboxId());
             result.setNamespace(mailbox.getNamespace());
-            result.setUser(mailbox.getUser());
+            result.setUser(mailbox.getUser().asString());
             result.setName(mailbox.getName());
             return result;
         } catch (MailboxNotFoundException e) {
@@ -125,20 +128,12 @@ public class JPAMailboxMapper extends JPATransactionalMapper implements MailboxM
     @Override
     public Mailbox findMailboxByPath(MailboxPath mailboxPath) throws MailboxException, MailboxNotFoundException {
         try {
-            if (mailboxPath.getUser() == null) {
-                return getEntityManager().createNamedQuery("findMailboxByName", JPAMailbox.class)
-                    .setParameter("nameParam", mailboxPath.getName())
-                    .setParameter("namespaceParam", mailboxPath.getNamespace())
-                    .getSingleResult()
-                    .toMailbox();
-            } else {
-                return getEntityManager().createNamedQuery("findMailboxByNameWithUser", JPAMailbox.class)
-                    .setParameter("nameParam", mailboxPath.getName())
-                    .setParameter("namespaceParam", mailboxPath.getNamespace())
-                    .setParameter("userParam", mailboxPath.getUser())
-                    .getSingleResult()
-                    .toMailbox();
-            }
+            return getEntityManager().createNamedQuery("findMailboxByNameWithUser", JPAMailbox.class)
+                .setParameter("nameParam", mailboxPath.getName())
+                .setParameter("namespaceParam", mailboxPath.getNamespace())
+                .setParameter("userParam", mailboxPath.getUser().asString())
+                .getSingleResult()
+                .toMailbox();
         } catch (NoResultException e) {
             throw new MailboxNotFoundException(mailboxPath);
         } catch (PersistenceException e) {
@@ -167,15 +162,6 @@ public class JPAMailboxMapper extends JPATransactionalMapper implements MailboxM
         }
     }
 
-    public boolean exists(MailboxId id) throws MailboxException, MailboxNotFoundException {
-        try {
-            loadJpaMailbox(id);
-            return true;
-        } catch (MailboxNotFoundException e) {
-            return false;
-        }
-    }
-
     @Override
     public void delete(Mailbox mailbox) throws MailboxException {
         try {  
@@ -189,56 +175,39 @@ public class JPAMailboxMapper extends JPATransactionalMapper implements MailboxM
     }
 
     @Override
-    public List<Mailbox> findMailboxWithPathLike(MailboxPath path) throws MailboxException {
+    public List<Mailbox> findMailboxWithPathLike(MailboxQuery.UserBound query) throws MailboxException {
         try {
-            return findMailboxWithPathLikeTypedQuery(path)
+            String pathLike = MailboxExpressionBackwardCompatibility.getPathLike(query);
+            return findMailboxWithPathLikeTypedQuery(query.getFixedNamespace(), query.getFixedUser(), pathLike)
                 .getResultList()
                 .stream()
                 .map(JPAMailbox::toMailbox)
+                .filter(query::matches)
                 .collect(Guavate.toImmutableList());
         } catch (PersistenceException e) {
-            throw new MailboxException("Search of mailbox " + path + " failed", e);
+            throw new MailboxException("Search of mailbox " + query + " failed", e);
         }
     }
 
-    private TypedQuery<JPAMailbox> findMailboxWithPathLikeTypedQuery(MailboxPath path) {
-        if (path.getUser() == null) {
-            return getEntityManager().createNamedQuery("findMailboxWithNameLike", JPAMailbox.class)
-                .setParameter("nameParam", path.getName())
-                .setParameter("namespaceParam", path.getNamespace());
-        } else {
-            return getEntityManager().createNamedQuery("findMailboxWithNameLikeWithUser", JPAMailbox.class)
-                .setParameter("nameParam", path.getName())
-                .setParameter("namespaceParam", path.getNamespace())
-                .setParameter("userParam", path.getUser());
-        }
-    }
-
-    public void deleteAllMemberships() throws MailboxException {
-        try {
-            getEntityManager().createNamedQuery("deleteAllMemberships").executeUpdate();
-        } catch (PersistenceException e) {
-            throw new MailboxException("Delete of mailboxes failed", e);
-        } 
-    }
-    
-    public void deleteAllMailboxes() throws MailboxException {
-        try {
-            getEntityManager().createNamedQuery("deleteAllMailboxes").executeUpdate();
-        } catch (PersistenceException e) {
-            throw new MailboxException("Delete of mailboxes failed", e);
-        } 
+    private TypedQuery<JPAMailbox> findMailboxWithPathLikeTypedQuery(String namespace, Username username, String pathLike) {
+        return getEntityManager().createNamedQuery("findMailboxWithNameLikeWithUser", JPAMailbox.class)
+            .setParameter("nameParam", pathLike)
+            .setParameter("namespaceParam", namespace)
+            .setParameter("userParam", username.asString());
     }
     
     @Override
     public boolean hasChildren(Mailbox mailbox, char delimiter) throws MailboxException, MailboxNotFoundException {
         final String name = mailbox.getName() + delimiter + SQL_WILDCARD_CHAR; 
         final Long numberOfChildMailboxes;
-        if (mailbox.getUser() == null) {
-            numberOfChildMailboxes = (Long) getEntityManager().createNamedQuery("countMailboxesWithNameLike").setParameter("nameParam", name).setParameter("namespaceParam", mailbox.getNamespace()).getSingleResult();
-        } else {
-            numberOfChildMailboxes = (Long) getEntityManager().createNamedQuery("countMailboxesWithNameLikeWithUser").setParameter("nameParam", name).setParameter("namespaceParam", mailbox.getNamespace()).setParameter("userParam", mailbox.getUser()).getSingleResult();
-        }
+
+        numberOfChildMailboxes = (Long) getEntityManager()
+            .createNamedQuery("countMailboxesWithNameLikeWithUser")
+            .setParameter("nameParam", name)
+            .setParameter("namespaceParam", mailbox.getNamespace())
+            .setParameter("userParam", mailbox.getUser().asString())
+            .getSingleResult();
+
         return numberOfChildMailboxes != null && numberOfChildMailboxes > 0;
     }
 
@@ -270,7 +239,7 @@ public class JPAMailboxMapper extends JPATransactionalMapper implements MailboxM
     }
 
     @Override
-    public List<Mailbox> findNonPersonalMailboxes(String userName, Right right) throws MailboxException {
+    public List<Mailbox> findNonPersonalMailboxes(Username userName, Right right) throws MailboxException {
         return ImmutableList.of();
     }
 }

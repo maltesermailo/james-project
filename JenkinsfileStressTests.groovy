@@ -41,7 +41,7 @@ pipeline {
                             sh "cp -r server/container/guice/cassandra-rabbitmq-guice/target/james-server-cassandra-rabbitmq-guice.lib dockerfiles/run/guice/cassandra-rabbitmq/destination"
                             sh "cp server/container/cli/target/james-server-cli.jar dockerfiles/run/guice/cassandra-rabbitmq/destination"
                             sh "cp -r server/container/cli/target/james-server-cli.lib dockerfiles/run/guice/cassandra-rabbitmq/destination"
-                            sh 'cp server/protocols/jmap-integration-testing/rabbitmq-jmap-integration-testing/src/test/resources/keystore dockerfiles/run/guice/cassandra-rabbitmq/destination/conf'
+                            sh 'cp server/protocols/jmap-draft-integration-testing/rabbitmq-jmap-draft-integration-testing/src/test/resources/keystore dockerfiles/run/guice/cassandra-rabbitmq/destination/conf'
                             sh 'wget -O dockerfiles/run/guice/cassandra-rabbitmq/destination/glowroot.zip https://github.com/glowroot/glowroot/releases/download/v0.13.4/glowroot-0.13.4-dist.zip && unzip -u dockerfiles/run/guice/cassandra-rabbitmq/destination/glowroot.zip -d dockerfiles/run/guice/cassandra-rabbitmq/destination'
                             sh 'docker build -t james_run dockerfiles/run/guice/cassandra-rabbitmq'
                         }
@@ -57,9 +57,9 @@ pipeline {
                             sh "cd /srv && sudo btrfs subvolume snapshot bench-snapshot bench-running-docker"
                             sh 'docker run -d --name=cassandra -p 9042:9042 -v /srv/bench-running-docker/cassandra:/var/lib/cassandra cassandra:3.11.3'
                             sh 'docker run -d --name=elasticsearch -p 9200:9200 -v /srv/bench-running-docker/elasticsearch:/usr/share/elasticsearch/data/elasticsearch  --env "discovery.type=single-node" docker.elastic.co/elasticsearch/elasticsearch:6.3.2'
-                            sh 'docker run -d --name=tika logicalspark/docker-tikaserver:1.19.1'
+                            sh 'docker run -d --name=tika apache/tika:1.22'
                             sh 'docker run -d --name=swift -p 8080:8080 -v /srv/bench-running-docker/swift:/srv/1/node/sdb1 jeantil/openstack-keystone-swift:pike'
-                            sh 'docker run -d --name=rabbitmq -p 15672:15672 -p 5672:5672 rabbitmq:3.7.7-management'
+                            sh 'docker run -d --name=rabbitmq -p 15672:15672 -p 5672:5672 rabbitmq:3.8.1-management'
 
                             sh 'docker run -d --hostname HOSTNAME -p 25:25 -p 1080:80 -p 8000:8000 -p 110:110 -p 143:143 -p 465:465 -p 587:587 -p 993:993 --link cassandra:cassandra --link rabbitmq:rabbitmq --link elasticsearch:elasticsearch --link tika:tika --link swift:swift --name james_run -t james_run'
                             timeout(time: 20, unit: 'MINUTES') {

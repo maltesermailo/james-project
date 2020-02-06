@@ -46,7 +46,7 @@ import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionFactory;
 import org.junit.jupiter.api.Test;
 
-import reactor.core.publisher.WorkQueueProcessor;
+import reactor.core.publisher.UnicastProcessor;
 
 class JamesMailSpoolerTest {
     private static final ConditionFactory CALMLY_AWAIT = Awaitility
@@ -59,10 +59,11 @@ class JamesMailSpoolerTest {
     void thrownExceptionShouldAckTheItem() throws MessagingException {
         MetricFactory metricFactory = mock(MetricFactory.class);
         when(metricFactory.timer(JamesMailSpooler.SPOOL_PROCESSING)).thenAnswer(ignored -> mock(TimeMetric.class));
-        JamesMailSpooler spooler = new JamesMailSpooler(metricFactory);
         MailQueueFactory<?> queueFactory = mock(MailQueueFactory.class);
+        MailProcessor mailProcessor = mock(MailProcessor.class);
+        JamesMailSpooler spooler = new JamesMailSpooler(metricFactory, mailProcessor, queueFactory);
 
-        WorkQueueProcessor<MockedMailQueueItem> workQueue = WorkQueueProcessor.create("fakeMQ", 1);
+        UnicastProcessor<MockedMailQueueItem> workQueue = UnicastProcessor.create();
         MockedMailQueueItem item = new MockedMailQueueItem();
         item.addCallback(isDone -> {
             if (!isDone) {
@@ -73,13 +74,10 @@ class JamesMailSpoolerTest {
         workQueue.onNext(item);
         when(queue.deQueue()).thenAnswer(any -> workQueue.limitRate(1).filter(MockedMailQueueItem::isNotDone));
         when(queueFactory.createQueue(MailQueueFactory.SPOOL)).thenAnswer(any -> queue);
-        spooler.setMailQueueFactory(queueFactory);
 
-        MailProcessor mailProcessor = mock(MailProcessor.class);
         doThrow(new RuntimeException("Arbitrary failure"))
             .doNothing()
             .when(mailProcessor).service(any());
-        spooler.setMailProcessor(mailProcessor);
 
         PropertyListConfiguration configuration = new PropertyListConfiguration();
         configuration.addProperty("threads", 2);
@@ -95,10 +93,11 @@ class JamesMailSpoolerTest {
     void threadSuicideShouldAckTheItem() throws MessagingException {
         MetricFactory metricFactory = mock(MetricFactory.class);
         when(metricFactory.timer(JamesMailSpooler.SPOOL_PROCESSING)).thenAnswer(ignored -> mock(TimeMetric.class));
-        JamesMailSpooler spooler = new JamesMailSpooler(metricFactory);
         MailQueueFactory<?> queueFactory = mock(MailQueueFactory.class);
+        MailProcessor mailProcessor = mock(MailProcessor.class);
+        JamesMailSpooler spooler = new JamesMailSpooler(metricFactory, mailProcessor, queueFactory);
 
-        WorkQueueProcessor<MockedMailQueueItem> workQueue = WorkQueueProcessor.create("fakeMQ", 1);
+        UnicastProcessor<MockedMailQueueItem> workQueue = UnicastProcessor.create();
         MockedMailQueueItem item = new MockedMailQueueItem();
         item.addCallback(isDone -> {
             if (!isDone) {
@@ -109,14 +108,11 @@ class JamesMailSpoolerTest {
         workQueue.onNext(item);
         when(queue.deQueue()).thenAnswer(any -> workQueue.limitRate(1).filter(MockedMailQueueItem::isNotDone));
         when(queueFactory.createQueue(MailQueueFactory.SPOOL)).thenAnswer(any -> queue);
-        spooler.setMailQueueFactory(queueFactory);
 
-        MailProcessor mailProcessor = mock(MailProcessor.class);
         doAnswer(ignored -> {
             Thread.currentThread().interrupt();
             return null;
         }).doNothing().when(mailProcessor).service(any());
-        spooler.setMailProcessor(mailProcessor);
 
         PropertyListConfiguration configuration = new PropertyListConfiguration();
         configuration.addProperty("threads", 2);

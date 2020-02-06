@@ -26,8 +26,6 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.james.core.MailAddress;
 import org.apache.james.core.MaybeSender;
 import org.apache.james.protocols.smtp.SMTPSession;
@@ -50,16 +48,6 @@ public class SpamTrapHandler implements RcptHook {
     
     /** Default blocktime 12 hours */
     protected long blockTime = 4320000;
-
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
-    }
 
     public void setSpamTrapRecipients(Collection<String> spamTrapRecips) {
         this.spamTrapRecips = spamTrapRecips;
@@ -98,7 +86,7 @@ public class SpamTrapHandler implements RcptHook {
         Long rawTime = blockedIps.get(ip);
     
         if (rawTime != null) {
-            long blockTime = rawTime.longValue();
+            long blockTime = rawTime;
            
             if (blockTime > System.currentTimeMillis()) {
                 LOGGER.debug("BlockList contain Ip {}", ip);
@@ -126,7 +114,7 @@ public class SpamTrapHandler implements RcptHook {
         LOGGER.debug("Add ip {} for {} to blockList", ip, bTime);
     
         synchronized (blockedIps) {
-            blockedIps.put(ip, Long.valueOf(bTime));
+            blockedIps.put(ip, bTime);
         }
     
     }

@@ -23,9 +23,6 @@ package org.apache.james.webadmin.dto;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
-
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import com.google.common.base.MoreObjects;
@@ -39,20 +36,20 @@ public class QuotaDTO {
 
     @JsonPOJOBuilder(withPrefix = "")
     public static class Builder {
-        private Optional<QuotaCount> count;
-        private Optional<QuotaSize> size;
+        private Optional<Long> count;
+        private Optional<Long> size;
 
         private Builder() {
             count = Optional.empty();
             size = Optional.empty();
         }
 
-        public Builder count(Optional<QuotaCount> count) {
+        public Builder count(Optional<Long> count) {
             this.count = count;
             return this;
         }
 
-        public Builder size(Optional<QuotaSize> size) {
+        public Builder size(Optional<Long> size) {
             this.size = size;
             return this;
         }
@@ -62,19 +59,19 @@ public class QuotaDTO {
         }
     }
 
-    private final Optional<QuotaCount> count;
-    private final Optional<QuotaSize> size;
+    private final Optional<Long> count;
+    private final Optional<Long> size;
 
-    private QuotaDTO(Optional<QuotaCount> count, Optional<QuotaSize> size) {
+    private QuotaDTO(Optional<Long> count, Optional<Long> size) {
         this.count = count;
         this.size = size;
     }
 
-    public Optional<QuotaCount> getCount() {
+    public Optional<Long> getCount() {
         return count;
     }
 
-    public Optional<QuotaSize> getSize() {
+    public Optional<Long> getSize() {
         return size;
     }
 

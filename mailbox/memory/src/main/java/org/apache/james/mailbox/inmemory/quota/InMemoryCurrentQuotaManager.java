@@ -24,11 +24,12 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import javax.inject.Inject;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeUsage;
+import org.apache.james.mailbox.SessionProvider;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.QuotaRoot;
-import org.apache.james.mailbox.store.SessionProvider;
 import org.apache.james.mailbox.store.quota.CurrentQuotaCalculator;
 import org.apache.james.mailbox.store.quota.StoreCurrentQuotaManager;
 
@@ -46,7 +47,7 @@ public class InMemoryCurrentQuotaManager implements StoreCurrentQuotaManager {
         this.quotaCache = CacheBuilder.newBuilder().build(new CacheLoader<QuotaRoot, Entry>() {
             @Override
             public Entry load(QuotaRoot quotaRoot) throws Exception {
-                return new Entry(quotaCalculator.recalculateCurrentQuotas(quotaRoot, sessionProvider.createSystemSession(quotaRoot.getValue())));
+                return new Entry(quotaCalculator.recalculateCurrentQuotas(quotaRoot, sessionProvider.createSystemSession(Username.of(quotaRoot.getValue()))));
             }
         });
     }
@@ -64,18 +65,18 @@ public class InMemoryCurrentQuotaManager implements StoreCurrentQuotaManager {
     }
 
     @Override
-    public QuotaCount getCurrentMessageCount(QuotaRoot quotaRoot) throws MailboxException {
+    public QuotaCountUsage getCurrentMessageCount(QuotaRoot quotaRoot) throws MailboxException {
         try {
-            return QuotaCount.count(quotaCache.get(quotaRoot).getCount().get());
+            return QuotaCountUsage.count(quotaCache.get(quotaRoot).getCount().get());
         } catch (ExecutionException e) {
             throw new MailboxException("Exception caught", e);
         }
     }
 
     @Override
-    public QuotaSize getCurrentStorage(QuotaRoot quotaRoot) throws MailboxException {
+    public QuotaSizeUsage getCurrentStorage(QuotaRoot quotaRoot) throws MailboxException {
         try {
-            return QuotaSize.size(quotaCache.get(quotaRoot).getSize().get());
+            return QuotaSizeUsage.size(quotaCache.get(quotaRoot).getSize().get());
         } catch (ExecutionException e) {
             throw new MailboxException("Exception caught", e);
         }
@@ -97,7 +98,7 @@ public class InMemoryCurrentQuotaManager implements StoreCurrentQuotaManager {
         Preconditions.checkArgument(size > 0, "Size should be positive");
     }
 
-    class Entry {
+    static class Entry {
         private final AtomicLong count;
         private final AtomicLong size;
 

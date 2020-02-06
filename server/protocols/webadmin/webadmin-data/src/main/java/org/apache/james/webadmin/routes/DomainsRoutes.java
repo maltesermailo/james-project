@@ -21,6 +21,9 @@ package org.apache.james.webadmin.routes;
 
 import static org.apache.james.webadmin.Constants.SEPARATOR;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,6 +35,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 
 import org.apache.james.core.Domain;
+import org.apache.james.domainlist.api.AutoDetectedDomainRemovalException;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.domainlist.api.DomainListException;
 import org.apache.james.rrt.api.RecipientRewriteTableException;
@@ -47,7 +51,6 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 
 import io.swagger.annotations.Api;
@@ -75,7 +78,6 @@ public class DomainsRoutes implements Routes {
     private static final String ALIASES = "aliases";
     private static final String DOMAIN_ALIASES = SPECIFIC_DOMAIN + SEPARATOR + ALIASES;
     private static final String SPECIFIC_ALIAS = DOMAINS + SEPARATOR + DESTINATION_DOMAIN + SEPARATOR + ALIASES + SEPARATOR + SOURCE_DOMAIN;
-    private static final int MAXIMUM_DOMAIN_SIZE = 256;
 
     private final DomainList domainList;
     private final DomainAliasService domainAliasService;
@@ -227,6 +229,13 @@ public class DomainsRoutes implements Routes {
             domainList.removeDomain(domain);
 
             domainAliasService.removeCorrespondingDomainAliases(domain);
+        } catch (AutoDetectedDomainRemovalException e) {
+            throw ErrorResponder.builder()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .type(ErrorType.INVALID_ARGUMENT)
+                .message("Can not remove domain")
+                .cause(e)
+                .haltError();
         } catch (DomainListException e) {
             LOGGER.info("{} did not exists", request.params(DOMAIN_NAME));
         }
@@ -236,14 +245,14 @@ public class DomainsRoutes implements Routes {
     private String addDomain(Request request, Response response) {
         Domain domain = checkValidDomain(request.params(DOMAIN_NAME));
         try {
-            addDomain(domain);
+            domainList.addDomain(domain);
             return Responses.returnNoContent(response);
         } catch (DomainListException e) {
             LOGGER.info("{} already exists", domain);
             throw ErrorResponder.builder()
                 .statusCode(HttpStatus.NO_CONTENT_204)
                 .type(ErrorType.INVALID_ARGUMENT)
-                .message(domain.name() + " already exists")
+                .message("%s already exists", domain.name())
                 .cause(e)
                 .haltError();
         } catch (IllegalArgumentException e) {
@@ -251,29 +260,37 @@ public class DomainsRoutes implements Routes {
             throw ErrorResponder.builder()
                 .statusCode(HttpStatus.BAD_REQUEST_400)
                 .type(ErrorType.INVALID_ARGUMENT)
-                .message("Invalid request for domain creation " + domain.name())
+                .message("Invalid request for domain creation %s", domain.name())
                 .cause(e)
                 .haltError();
         }
     }
 
     private Domain checkValidDomain(String domainName) {
+        String urlDecodedDomainName = urlDecodeDomain(domainName);
         try {
-            return Domain.of(domainName);
+            return Domain.of(urlDecodedDomainName);
         } catch (IllegalArgumentException e) {
             throw ErrorResponder.builder()
                 .statusCode(HttpStatus.BAD_REQUEST_400)
                 .type(ErrorType.INVALID_ARGUMENT)
-                .message("Invalid request for domain creation " + domainName)
+                .message("Invalid request for domain creation %s", urlDecodedDomainName)
                 .cause(e)
                 .haltError();
         }
     }
 
-    private void addDomain(Domain domain) throws DomainListException {
-        Preconditions.checkArgument(domain.name().length() < MAXIMUM_DOMAIN_SIZE,
-            "Domain name length should not exceed " + (MAXIMUM_DOMAIN_SIZE - 1) + " characters");
-        domainList.addDomain(domain);
+    private String urlDecodeDomain(String domainName) {
+        try {
+            return URLDecoder.decode(domainName, StandardCharsets.UTF_8.toString());
+        } catch (IllegalArgumentException | UnsupportedEncodingException e) {
+            throw ErrorResponder.builder()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .type(ErrorType.INVALID_ARGUMENT)
+                .message("Invalid request for domain creation %s unable to url decode some characters", domainName)
+                .cause(e)
+                .haltError();
+        }
     }
 
     private String exists(Request request, Response response) throws DomainListException {
@@ -328,7 +345,7 @@ public class DomainsRoutes implements Routes {
         return ErrorResponder.builder()
             .statusCode(HttpStatus.NOT_FOUND_404)
             .type(ErrorType.INVALID_ARGUMENT)
-            .message("The domain list does not contain: " + domain.name())
+            .message("The domain list does not contain: %s", domain.name())
             .haltError();
     }
 
@@ -336,7 +353,7 @@ public class DomainsRoutes implements Routes {
         return ErrorResponder.builder()
             .statusCode(HttpStatus.NOT_FOUND_404)
             .type(ErrorType.INVALID_ARGUMENT)
-            .message("The following domain is not in the domain list and has no registered local aliases: " + domain.name())
+            .message("The following domain is not in the domain list and has no registered local aliases: %s", domain.name())
             .haltError();
     }
 
@@ -344,7 +361,7 @@ public class DomainsRoutes implements Routes {
         return ErrorResponder.builder()
             .statusCode(HttpStatus.BAD_REQUEST_400)
             .type(ErrorType.INVALID_ARGUMENT)
-            .message("Source domain and destination domain can not have same value(" + sameDomain.name() + ")")
+            .message("Source domain and destination domain can not have same value(%s)", sameDomain.name())
             .haltError();
     }
 }

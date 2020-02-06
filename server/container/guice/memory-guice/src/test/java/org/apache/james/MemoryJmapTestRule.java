@@ -21,8 +21,6 @@ package org.apache.james;
 
 import java.io.IOException;
 
-import org.apache.activemq.store.PersistenceAdapter;
-import org.apache.activemq.store.memory.MemoryPersistenceAdapter;
 import org.apache.james.mailbox.extractor.TextExtractor;
 import org.apache.james.mailbox.store.search.MessageSearchIndex;
 import org.apache.james.mailbox.store.search.PDFTextExtractor;
@@ -38,8 +36,6 @@ import com.google.inject.Module;
 
 public class MemoryJmapTestRule implements TestRule {
 
-    private static final int LIMIT_TO_10_MESSAGES = 10;
-    
     public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     public GuiceJamesServer jmapServer(Module... modules) throws IOException {
@@ -49,8 +45,7 @@ public class MemoryJmapTestRule implements TestRule {
             .build();
         return GuiceJamesServer.forConfiguration(configuration)
             .combineWith(MemoryJamesServerMain.IN_MEMORY_SERVER_AGGREGATE_MODULE)
-            .overrideWith(new TestJMAPServerModule(LIMIT_TO_10_MESSAGES))
-            .overrideWith(binder -> binder.bind(PersistenceAdapter.class).to(MemoryPersistenceAdapter.class))
+            .overrideWith(TestJMAPServerModule.limitToTenMessages())
             .overrideWith(binder -> binder.bind(TextExtractor.class).to(PDFTextExtractor.class))
             .overrideWith(binder -> binder.bind(MessageSearchIndex.class).to(SimpleMessageSearchIndex.class))
             .overrideWith(modules);

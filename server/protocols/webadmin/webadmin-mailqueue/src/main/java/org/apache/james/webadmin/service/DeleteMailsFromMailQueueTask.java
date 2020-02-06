@@ -19,21 +19,17 @@
 
 package org.apache.james.webadmin.service;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
 import org.apache.james.core.MailAddress;
-import org.apache.james.json.DTOModule;
 import org.apache.james.queue.api.MailQueue;
-import org.apache.james.queue.api.MailQueueFactory;
 import org.apache.james.queue.api.ManageableMailQueue;
-import org.apache.james.server.task.json.dto.TaskDTO;
-import org.apache.james.server.task.json.dto.TaskDTOModule;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
+import org.apache.james.task.TaskType;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.fge.lambdas.Throwing;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Booleans;
@@ -42,23 +38,25 @@ public class DeleteMailsFromMailQueueTask implements Task {
 
     public static class AdditionalInformation implements TaskExecutionDetails.AdditionalInformation {
         private final String mailQueueName;
-        private final Supplier<Long> countSupplier;
+        private final long remainingCount;
         private final long initialCount;
 
         private final Optional<String> sender;
         private final Optional<String> name;
         private final Optional<String> recipient;
+        private final Instant timestamp;
 
-        public AdditionalInformation(String mailQueueName, Supplier<Long> countSupplier,
+        public AdditionalInformation(String mailQueueName, long initialCount, long remainingCount,
                                      Optional<MailAddress> maybeSender, Optional<String> maybeName,
-                                     Optional<MailAddress> maybeRecipient) {
+                                     Optional<MailAddress> maybeRecipient, Instant timestamp) {
             this.mailQueueName = mailQueueName;
-            this.initialCount = countSupplier.get();
-            this.countSupplier = countSupplier;
+            this.initialCount = initialCount;
+            this.remainingCount = remainingCount;
 
             sender = maybeSender.map(MailAddress::asString);
             name = maybeName;
             recipient = maybeRecipient.map(MailAddress::asString);
+            this.timestamp = timestamp;
         }
 
         public String getMailQueueName() {
@@ -66,7 +64,7 @@ public class DeleteMailsFromMailQueueTask implements Task {
         }
 
         public long getRemainingCount() {
-            return countSupplier.get();
+            return remainingCount;
         }
 
         public long getInitialCount() {
@@ -84,6 +82,11 @@ public class DeleteMailsFromMailQueueTask implements Task {
         public Optional<String> getRecipient() {
             return recipient;
         }
+
+        @Override
+        public Instant timestamp() {
+            return timestamp;
+        }
     }
 
     public static class UnknownSerializedQueue extends RuntimeException {
@@ -92,118 +95,67 @@ public class DeleteMailsFromMailQueueTask implements Task {
         }
     }
 
-    private static class DeleteMailsFromMailQueueTaskDTO implements TaskDTO {
-
-        public static DeleteMailsFromMailQueueTaskDTO toDTO(DeleteMailsFromMailQueueTask domainObject, String typeName) {
-            return new DeleteMailsFromMailQueueTaskDTO(
-                typeName,
-                domainObject.queue.getName(),
-                domainObject.maybeSender.map(MailAddress::asString),
-                domainObject.maybeName,
-                domainObject.maybeRecipient.map(MailAddress::asString)
-            );
-        }
-
-        private final String type;
-        private final String queue;
-        private final Optional<String> sender;
-        private final Optional<String> name;
-        private final Optional<String> recipient;
-
-        public DeleteMailsFromMailQueueTaskDTO(@JsonProperty("type") String type,
-                                               @JsonProperty("queue") String queue,
-                                               @JsonProperty("sender") Optional<String> sender,
-                                               @JsonProperty("name") Optional<String> name,
-                                               @JsonProperty("recipient") Optional<String> recipient) {
-            this.type = type;
-            this.queue = queue;
-            this.sender = sender;
-            this.name = name;
-            this.recipient = recipient;
-        }
-
-        public DeleteMailsFromMailQueueTask fromDTO(MailQueueFactory<ManageableMailQueue> mailQueueFactory) {
-            return new DeleteMailsFromMailQueueTask(
-                    mailQueueFactory.getQueue(queue).orElseThrow(() -> new UnknownSerializedQueue(queue)),
-                    sender.map(Throwing.<String, MailAddress>function(MailAddress::new).sneakyThrow()),
-                    name,
-                    recipient.map(Throwing.<String, MailAddress>function(MailAddress::new).sneakyThrow())
-            );
-        }
-
-        @Override
-        public String getType() {
-            return type;
-        }
-
-        public String getQueue() {
-            return queue;
-        }
-
-        public Optional<String> getSender() {
-            return sender;
-        }
-
-        public Optional<String> getName() {
-            return name;
-        }
-
-        public Optional<String> getRecipient() {
-            return recipient;
-        }
-    }
-
-    public static final String TYPE = "delete-mails-from-mail-queue";
-    public static final Function<MailQueueFactory<ManageableMailQueue>, TaskDTOModule<DeleteMailsFromMailQueueTask,DeleteMailsFromMailQueueTaskDTO>> MODULE = (mailQueueFactory) ->
-        DTOModule
-            .forDomainObject(DeleteMailsFromMailQueueTask.class)
-            .convertToDTO(DeleteMailsFromMailQueueTaskDTO.class)
-            .toDomainObjectConverter(dto -> dto.fromDTO(mailQueueFactory))
-            .toDTOConverter(DeleteMailsFromMailQueueTaskDTO::toDTO)
-            .typeName(TYPE)
-            .withFactory(TaskDTOModule::new);
+    public static final TaskType TYPE = TaskType.of("delete-mails-from-mail-queue");
 
     private final ManageableMailQueue queue;
     private final Optional<MailAddress> maybeSender;
     private final Optional<String> maybeName;
     private final Optional<MailAddress> maybeRecipient;
-    private final AdditionalInformation additionalInformation;
+
+    private final long initialCount;
 
     public DeleteMailsFromMailQueueTask(ManageableMailQueue queue, Optional<MailAddress> maybeSender,
                                         Optional<String> maybeName, Optional<MailAddress> maybeRecipient) {
         Preconditions.checkArgument(
-                Booleans.countTrue(maybeSender.isPresent(), maybeName.isPresent(), maybeRecipient.isPresent()) == 1,
-                "You should provide one and only one of the query parameters 'sender', 'name' or 'recipient'.");
+            Booleans.countTrue(maybeSender.isPresent(), maybeName.isPresent(), maybeRecipient.isPresent()) == 1,
+            "You should provide one and only one of the query parameters 'sender', 'name' or 'recipient'.");
 
         this.queue = queue;
         this.maybeSender = maybeSender;
         this.maybeName = maybeName;
         this.maybeRecipient = maybeRecipient;
-
-        additionalInformation = new AdditionalInformation(queue.getName(), this::getRemainingSize, maybeSender,
-                maybeName, maybeRecipient);
+        this.initialCount = getRemainingSize();
     }
 
     @Override
     public Result run() {
         maybeSender.ifPresent(Throwing.consumer(
-                (MailAddress sender) -> queue.remove(ManageableMailQueue.Type.Sender, sender.asString())));
+            (MailAddress sender) -> queue.remove(ManageableMailQueue.Type.Sender, sender.asString())));
         maybeName.ifPresent(Throwing.consumer(
-                (String name) -> queue.remove(ManageableMailQueue.Type.Name, name)));
+            (String name) -> queue.remove(ManageableMailQueue.Type.Name, name)));
         maybeRecipient.ifPresent(Throwing.consumer(
-                (MailAddress recipient) -> queue.remove(ManageableMailQueue.Type.Recipient, recipient.asString())));
+            (MailAddress recipient) -> queue.remove(ManageableMailQueue.Type.Recipient, recipient.asString())));
 
         return Result.COMPLETED;
     }
 
     @Override
-    public String type() {
+    public TaskType type() {
         return TYPE;
+    }
+
+    ManageableMailQueue getQueue() {
+        return queue;
+    }
+
+    Optional<String> getMaybeName() {
+        return maybeName;
+    }
+
+    Optional<MailAddress> getMaybeRecipient() {
+        return maybeRecipient;
+    }
+
+    Optional<MailAddress> getMaybeSender() {
+        return maybeSender;
     }
 
     @Override
     public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-        return Optional.of(additionalInformation);
+        return Optional.of(new AdditionalInformation(queue.getName(),
+            initialCount,
+            getRemainingSize(), maybeSender,
+            maybeName, maybeRecipient, Clock.systemUTC().instant()));
     }
 
     public long getRemainingSize() {

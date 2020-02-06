@@ -76,7 +76,7 @@ public class CassandraBlobStore implements BlobStore {
     }
 
     @Override
-    public Mono<BlobId> save(BucketName bucketName, byte[] data) {
+    public Mono<BlobId> save(BucketName bucketName, byte[] data, StoragePolicy storagePolicy) {
         Preconditions.checkNotNull(data);
 
         return saveAsMono(bucketName, data);
@@ -96,7 +96,7 @@ public class CassandraBlobStore implements BlobStore {
             .flatMap(pair -> writePart(bucketName, blobId, pair.getKey(), pair.getValue())
                 .then(Mono.just(getChunkNum(pair))))
             .collect(Collectors.maxBy(Comparator.comparingInt(x -> x)))
-            .flatMap(Mono::justOrEmpty)
+            .<Integer>handle((t, sink) -> t.ifPresent(sink::next))
             .map(this::numToCount)
             .defaultIfEmpty(0);
     }
@@ -128,13 +128,12 @@ public class CassandraBlobStore implements BlobStore {
     }
 
     private Flux<ByteBuffer> readBlobParts(BucketName bucketName, BlobId blobId) {
-        Integer rowCount = selectRowCount(bucketName, blobId)
+        return selectRowCount(bucketName, blobId)
             .publishOn(Schedulers.elastic())
             .single()
             .onErrorResume(NoSuchElementException.class, e -> Mono.error(
                 new ObjectNotFoundException(String.format("Could not retrieve blob metadata for %s", blobId))))
-            .block();
-        return Flux.range(0, rowCount)
+            .flatMapMany(rowCount -> Flux.range(0, rowCount))
             .publishOn(Schedulers.elastic(), PREFETCH)
             .flatMapSequential(partIndex -> readPart(bucketName, blobId, partIndex)
                 .single()
@@ -144,7 +143,7 @@ public class CassandraBlobStore implements BlobStore {
     }
 
     @Override
-    public Mono<BlobId> save(BucketName bucketName, InputStream data) {
+    public Mono<BlobId> save(BucketName bucketName, InputStream data, StoragePolicy storagePolicy) {
         Preconditions.checkNotNull(data);
         return Mono.fromCallable(() -> IOUtils.toByteArray(data))
             .flatMap(bytes -> saveAsMono(bucketName, bytes));

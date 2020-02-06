@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.james</groupId>
         <artifactId>apache-james-mpt-imapmailbox</artifactId>
-        <version>3.4.0</version>
+        <version>3.5.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>apache-james-mpt-imapmailbox-elasticsearch</artifactId>
@@ -82,13 +82,13 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
+            <groupId>${james.groupId}</groupId>
+            <artifactId>metrics-tests</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.assertj</groupId>
-            <artifactId>assertj-core</artifactId>
+            <groupId>${james.groupId}</groupId>
+            <artifactId>testing-base</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -22,46 +22,43 @@ package org.apache.james.imap.encode;
 import java.io.IOException;
 
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapMessage;
-import org.apache.james.imap.api.process.ImapSession;
-import org.apache.james.imap.encode.base.AbstractChainedImapEncoder;
 import org.apache.james.imap.message.response.MailboxStatusResponse;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 
 /**
  * Encodes <code>STATUS</code> responses.
  */
-public class MailboxStatusResponseEncoder extends AbstractChainedImapEncoder implements ImapConstants {
-
-    public MailboxStatusResponseEncoder(ImapEncoder next) {
-        super(next);
+public class MailboxStatusResponseEncoder implements ImapConstants, ImapResponseEncoder<MailboxStatusResponse> {
+    @Override
+    public Class<MailboxStatusResponse> acceptableMessages() {
+        return MailboxStatusResponse.class;
     }
 
     @Override
-    protected void doEncode(ImapMessage acceptableMessage, ImapResponseComposer composer, ImapSession session) throws IOException {
-        MailboxStatusResponse response = (MailboxStatusResponse) acceptableMessage;
+    public void encode(MailboxStatusResponse response, ImapResponseComposer composer) throws IOException {
         Long messages = response.getMessages();
         Long recent = response.getRecent();
         MessageUid uidNext = response.getUidNext();
-        Long highestModSeq = response.getHighestModSeq();
+        ModSeq highestModSeq = response.getHighestModSeq();
         Long uidValidity = response.getUidValidity();
         Long unseen = response.getUnseen();
         String mailboxName = response.getMailbox();
 
         composer.untagged();
-        composer.message(STATUS_COMMAND_NAME);
+        composer.message(STATUS_COMMAND.getName());
         composer.quote(mailboxName);
         composer.openParen();
 
         if (messages != null) {
             composer.message(STATUS_MESSAGES);
-            final long messagesValue = messages.longValue();
+            final long messagesValue = messages;
             composer.message(messagesValue);
         }
 
         if (recent != null) {
             composer.message(STATUS_RECENT);
-            final long recentValue = recent.longValue();
+            final long recentValue = recent;
             composer.message(recentValue);
         }
 
@@ -73,28 +70,22 @@ public class MailboxStatusResponseEncoder extends AbstractChainedImapEncoder imp
         
         if (highestModSeq != null) {
             composer.message(STATUS_HIGHESTMODSEQ);
-            composer.message(highestModSeq);
+            composer.message(highestModSeq.asLong());
         }
 
         if (uidValidity != null) {
             composer.message(STATUS_UIDVALIDITY);
-            final long uidValidityValue = uidValidity.longValue();
+            final long uidValidityValue = uidValidity;
             composer.message(uidValidityValue);
         }
 
         if (unseen != null) {
             composer.message(STATUS_UNSEEN);
-            final long unseenValue = unseen.longValue();
+            final long unseenValue = unseen;
             composer.message(unseenValue);
         }
 
         composer.closeParen();
         composer.end();
     }
-
-    @Override
-    protected boolean isAcceptable(ImapMessage message) {
-        return message != null && message instanceof MailboxStatusResponse;
-    }
-
 }

@@ -18,28 +18,29 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.CheckRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * Parses CHECK commands
  */
 public class CheckCommandParser extends AbstractImapCommandParser {
 
-    public CheckCommandParser() {
-        super(ImapCommand.selectedStateCommand(ImapConstants.CHECK_COMMAND_NAME));
+    public CheckCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.CHECK_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
         request.eol();
-        return new CheckRequest(command, tag);
+        return new CheckRequest(tag);
     }
 
 }

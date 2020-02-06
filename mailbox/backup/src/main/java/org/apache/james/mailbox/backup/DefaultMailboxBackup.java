@@ -24,13 +24,13 @@ import java.io.OutputStream;
 import java.util.List;
 import java.util.stream.Stream;
 
-import org.apache.james.core.User;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.exception.BadCredentialsException;
 import org.apache.james.mailbox.exception.MailboxException;
-import org.apache.james.mailbox.model.FetchGroupImpl;
+import org.apache.james.mailbox.model.FetchGroup;
 import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxAnnotation;
 import org.apache.james.mailbox.model.MailboxMetaData;
@@ -46,6 +46,7 @@ import org.slf4j.LoggerFactory;
 import com.github.fge.lambdas.Throwing;
 import com.github.steveash.guavate.Guavate;
 import com.google.common.annotations.VisibleForTesting;
+
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -83,8 +84,8 @@ public class DefaultMailboxBackup implements MailboxBackup {
     }
 
     @Override
-    public void backupAccount(User user, OutputStream destination) throws IOException, MailboxException {
-        MailboxSession session = mailboxManager.createSystemSession(user.asString());
+    public void backupAccount(Username username, OutputStream destination) throws IOException, MailboxException {
+        MailboxSession session = mailboxManager.createSystemSession(username);
         List<MailAccountContent> accountContents = getAccountContentForUser(session);
         List<MailboxWithAnnotations> mailboxes = accountContents.stream()
             .map(MailAccountContent::getMailboxWithAnnotations)
@@ -94,8 +95,8 @@ public class DefaultMailboxBackup implements MailboxBackup {
         archive(mailboxes, messages, destination);
     }
 
-    private boolean isAccountNonEmpty(User user) throws BadCredentialsException, MailboxException, IOException {
-        MailboxSession session = mailboxManager.createSystemSession(user.asString());
+    private boolean isAccountNonEmpty(Username username) throws BadCredentialsException, MailboxException, IOException {
+        MailboxSession session = mailboxManager.createSystemSession(username);
         return getAccountContentForUser(session)
             .stream()
             .findFirst()
@@ -103,19 +104,19 @@ public class DefaultMailboxBackup implements MailboxBackup {
     }
 
     @Override
-    public Publisher<BackupStatus> restore(User user, InputStream source) {
+    public Publisher<BackupStatus> restore(Username username, InputStream source) {
         try {
-            if (isAccountNonEmpty(user)) {
+            if (isAccountNonEmpty(username)) {
                 return Mono.just(BackupStatus.NON_EMPTY_RECEIVER_ACCOUNT);
             }
         } catch (Exception e) {
-            LOGGER.error("Error during account restoration for user : " + user, e);
+            LOGGER.error("Error during account restoration for user : " + username.asString(), e);
             return Mono.just(BackupStatus.FAILED);
         }
 
-        return Mono.fromRunnable(Throwing.runnable(() -> archiveRestorer.restore(user, source)).sneakyThrow())
+        return Mono.fromRunnable(Throwing.runnable(() -> archiveRestorer.restore(username, source)).sneakyThrow())
             .subscribeOn(Schedulers.elastic())
-            .doOnError(e -> LOGGER.error("Error during account restoration for user : " + user, e))
+            .doOnError(e -> LOGGER.error("Error during account restoration for user : " + username.asString(), e))
             .doOnTerminate(Throwing.runnable(source::close).sneakyThrow())
             .thenReturn(BackupStatus.DONE)
             .onErrorReturn(BackupStatus.FAILED);
@@ -127,7 +128,7 @@ public class DefaultMailboxBackup implements MailboxBackup {
             Mailbox mailbox = messageManager.getMailboxEntity();
             List<MailboxAnnotation> annotations = mailboxManager.getAllAnnotations(path, session);
             MailboxWithAnnotations mailboxWithAnnotations = new MailboxWithAnnotations(mailbox, annotations);
-            Stream<MessageResult> messages = Iterators.toStream(messageManager.getMessages(MessageRange.all(), FetchGroupImpl.FULL_CONTENT, session));
+            Stream<MessageResult> messages = Iterators.toStream(messageManager.getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session));
             return Stream.of(new MailAccountContent(mailboxWithAnnotations, messages));
         } catch (MailboxException e) {
             LOGGER.error("Error while fetching Mailbox during backup", e);
@@ -138,6 +139,7 @@ public class DefaultMailboxBackup implements MailboxBackup {
     @VisibleForTesting
     List<MailAccountContent> getAccountContentForUser(MailboxSession session) throws MailboxException {
         MailboxQuery queryUser = MailboxQuery.builder()
+            .privateNamespace()
             .user(session.getUser())
             .build();
         Stream<MailboxPath> paths = mailboxManager.search(queryUser, session)

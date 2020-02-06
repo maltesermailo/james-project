@@ -22,8 +22,9 @@ import java.net.InetSocketAddress;
 import java.util.function.Supplier;
 
 import org.apache.commons.lang3.NotImplementedException;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mpt.api.ImapFeatures;
 import org.apache.james.mpt.api.ImapFeatures.Feature;
@@ -53,7 +54,7 @@ public class ExternalJamesImapHostSystem extends ExternalHostSystem {
     }
     
     @Override
-    public boolean addUser(String user, String password) throws Exception {
+    public boolean addUser(Username user, String password) throws Exception {
         return super.addUser(user, password);
     }
     
@@ -73,7 +74,7 @@ public class ExternalJamesImapHostSystem extends ExternalHostSystem {
     }
 
     @Override
-    public void setQuotaLimits(QuotaCount maxMessageQuota, QuotaSize maxStorageQuota) throws Exception {
+    public void setQuotaLimits(QuotaCountLimit maxMessageQuota, QuotaSizeLimit maxStorageQuota) throws Exception {
         throw new NotImplementedException("Not implemented");
     }
     

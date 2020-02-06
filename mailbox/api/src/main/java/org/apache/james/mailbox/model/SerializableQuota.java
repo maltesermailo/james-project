@@ -23,29 +23,30 @@ import java.io.Serializable;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.apache.james.core.quota.QuotaValue;
+import org.apache.james.core.quota.QuotaLimitValue;
+import org.apache.james.core.quota.QuotaUsageValue;
 
 import com.google.common.base.MoreObjects;
 
-public class SerializableQuota<T extends QuotaValue<T>> implements Serializable {
+public class SerializableQuota<T extends QuotaLimitValue<T>, U extends QuotaUsageValue<U, T>> implements Serializable {
 
     public static final long UNLIMITED = -1;
 
-    public static <U extends QuotaValue<U>> SerializableQuota<U> newInstance(Quota<U> quota) {
+    public static <T extends QuotaLimitValue<T>, U extends QuotaUsageValue<U, T>> SerializableQuota<T, U> newInstance(Quota<T, U> quota) {
         return newInstance(quota.getUsed(), quota.getLimit());
     }
 
-    public static <U extends QuotaValue<U>> SerializableQuota<U> newInstance(U used, U max) {
+    public static <T extends QuotaLimitValue<T>, U extends QuotaUsageValue<U, T>> SerializableQuota<T, U> newInstance(U used, T max) {
         return new SerializableQuota<>(
-            new SerializableQuotaValue<>(used),
-            new SerializableQuotaValue<>(max)
+            new SerializableQuotaUsageValue<>(used),
+            new SerializableQuotaLimitValue<>(max)
         );
     }
 
-    private final SerializableQuotaValue<T> max;
-    private final SerializableQuotaValue<T> used;
+    private final SerializableQuotaLimitValue<T> max;
+    private final SerializableQuotaUsageValue<T, U> used;
 
-    private SerializableQuota(SerializableQuotaValue<T> used, SerializableQuotaValue<T> max) {
+    private SerializableQuota(SerializableQuotaUsageValue<T, U> used, SerializableQuotaLimitValue<T> max) {
         this.max = max;
         this.used = used;
     }
@@ -55,13 +56,13 @@ public class SerializableQuota<T extends QuotaValue<T>> implements Serializable 
     }
 
     public Long getUsed() {
-        return Optional.ofNullable(used).map(SerializableQuotaValue::encodeAsLong).orElse(null);
+        return Optional.ofNullable(used).map(SerializableQuotaUsageValue::encodeAsLong).orElse(null);
     }
 
     @Override
     public boolean equals(Object o) {
-        if (o instanceof SerializableQuota<?>) {
-            SerializableQuota<?> that = (SerializableQuota<?>) o;
+        if (o instanceof SerializableQuota<?, ?>) {
+            SerializableQuota<?, ?> that = (SerializableQuota<?,?>) o;
             return Objects.equals(max, that.max) &&
                 Objects.equals(used, that.used);
         }

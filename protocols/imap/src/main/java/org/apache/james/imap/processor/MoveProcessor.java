@@ -23,6 +23,7 @@ import java.io.Closeable;
 import java.util.List;
 
 import org.apache.james.imap.api.ImapConstants;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
@@ -51,9 +52,8 @@ public class MoveProcessor extends AbstractMessageRangeProcessor<MoveRequest> im
 
     @Override
     protected List<MessageRange> process(MailboxPath targetMailbox, SelectedMailbox currentMailbox,
-                                         MailboxSession mailboxSession,
-                                         MailboxManager mailboxManager, MessageRange messageSet) throws MailboxException {
-        return mailboxManager.moveMessages(messageSet, currentMailbox.getPath(), targetMailbox, mailboxSession);
+                                         MailboxSession mailboxSession, MessageRange messageSet) throws MailboxException {
+        return getMailboxManager().moveMessages(messageSet, currentMailbox.getPath(), targetMailbox, mailboxSession);
     }
 
     @Override
@@ -62,21 +62,21 @@ public class MoveProcessor extends AbstractMessageRangeProcessor<MoveRequest> im
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         if (moveCapabilitySupported) {
-            return ImmutableList.of(ImapConstants.MOVE_COMMAND_NAME);
+            return ImmutableList.of(ImapConstants.SUPPORTS_MOVE);
         } else {
             return ImmutableList.of();
         }
     }
 
     @Override
-    protected Closeable addContextToMDC(MoveRequest message) {
+    protected Closeable addContextToMDC(MoveRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "MOVE")
-            .addContext("targetMailbox", message.getMailboxName())
-            .addContext("uidEnabled", message.isUseUids())
-            .addContext("idSet", IdRange.toString(message.getIdSet()))
+            .addContext("targetMailbox", request.getMailboxName())
+            .addContext("uidEnabled", request.isUseUids())
+            .addContext("idSet", IdRange.toString(request.getIdSet()))
             .build();
     }
 

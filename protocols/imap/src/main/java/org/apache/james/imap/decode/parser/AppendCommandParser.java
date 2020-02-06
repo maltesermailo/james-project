@@ -18,26 +18,28 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Date;
 
 import javax.mail.Flags;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.AppendRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * Parses APPEND command
  */
 public class AppendCommandParser extends AbstractImapCommandParser {
-
-    public AppendCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.APPEND_COMMAND_NAME));
+    public AppendCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.APPEND_COMMAND, statusResponseFactory);
     }
 
     /**
@@ -58,7 +60,7 @@ public class AppendCommandParser extends AbstractImapCommandParser {
      * If the next character in the request is a '"', tries to read a DateTime
      * argument. If not, returns null.
      */
-    public Date optionalDateTime(ImapRequestLineReader request) throws DecodingException {
+    public LocalDateTime optionalDateTime(ImapRequestLineReader request) throws DecodingException {
         char next = request.nextWordChar();
         if (next == '"') {
             return request.dateTime();
@@ -68,18 +70,18 @@ public class AppendCommandParser extends AbstractImapCommandParser {
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
         String mailboxName = request.mailbox();
         Flags flags = optionalAppendFlags(request);
         if (flags == null) {
             flags = new Flags();
         }
-        Date datetime = optionalDateTime(request);
+        LocalDateTime datetime = optionalDateTime(request);
         if (datetime == null) {
-            datetime = new Date();
+            datetime = LocalDateTime.now();
         }
         request.nextWordChar();
 
-        return new AppendRequest(command, mailboxName, flags, datetime, request.consumeLiteral(true), tag);
+        return new AppendRequest(mailboxName, flags, Date.from(datetime.atZone(ZoneId.systemDefault()).toInstant()), request.consumeLiteral(true), tag);
     }
 }

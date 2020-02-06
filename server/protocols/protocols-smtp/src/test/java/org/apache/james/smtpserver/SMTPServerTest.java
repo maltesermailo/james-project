@@ -18,6 +18,7 @@
  ****************************************************************/
 package org.apache.james.smtpserver;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Fail.fail;
 import static org.mockito.Mockito.mock;
@@ -34,6 +35,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
 
@@ -46,6 +48,7 @@ import org.apache.commons.net.smtp.SMTPClient;
 import org.apache.commons.net.smtp.SMTPReply;
 import org.apache.james.core.Domain;
 import org.apache.james.core.MailAddress;
+import org.apache.james.core.Username;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.domainlist.memory.MemoryDomainList;
@@ -54,10 +57,12 @@ import org.apache.james.mailrepository.api.MailRepositoryStore;
 import org.apache.james.mailrepository.api.Protocol;
 import org.apache.james.mailrepository.memory.MailRepositoryStoreConfiguration;
 import org.apache.james.mailrepository.memory.MemoryMailRepository;
-import org.apache.james.mailrepository.memory.MemoryMailRepositoryProvider;
 import org.apache.james.mailrepository.memory.MemoryMailRepositoryStore;
 import org.apache.james.mailrepository.memory.MemoryMailRepositoryUrlStore;
+import org.apache.james.mailrepository.memory.TestingMailRepositoryLoader;
 import org.apache.james.metrics.api.Metric;
+import org.apache.james.metrics.api.MetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.apache.james.protocols.api.utils.ProtocolServerUtils;
 import org.apache.james.protocols.lib.mock.MockProtocolHandlerLoader;
 import org.apache.james.protocols.netty.AbstractChannelPipelineFactory;
@@ -82,7 +87,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
+import com.google.inject.TypeLiteral;
 
 public class SMTPServerTest {
 
@@ -169,11 +174,12 @@ public class SMTPServerTest {
 
     private static final long HALF_SECOND = 500;
     private static final int MAX_ITERATIONS = 10;
+    private static final DomainList NO_DOMAIN_LIST = null;
     private static final Logger LOGGER = LoggerFactory.getLogger(SMTPServerTest.class);
 
     protected SMTPTestConfiguration smtpConfiguration;
     protected HashedWheelTimer hashedWheelTimer;
-    protected final MemoryUsersRepository usersRepository = MemoryUsersRepository.withoutVirtualHosting();
+    protected final MemoryUsersRepository usersRepository = MemoryUsersRepository.withoutVirtualHosting(NO_DOMAIN_LIST);
     protected AlterableDNSServer dnsServer;
     protected MemoryMailRepositoryStore mailRepositoryStore;
     protected FileSystemImpl fileSystem;
@@ -210,7 +216,7 @@ public class SMTPServerTest {
                 MemoryMailRepository.class.getName(),
                 new BaseHierarchicalConfiguration()));
 
-        mailRepositoryStore = new MemoryMailRepositoryStore(urlStore, Sets.newHashSet(new MemoryMailRepositoryProvider()), configuration);
+        mailRepositoryStore = new MemoryMailRepositoryStore(urlStore, new TestingMailRepositoryLoader(), configuration);
         mailRepositoryStore.init();
     }
 
@@ -241,28 +247,23 @@ public class SMTPServerTest {
     }
 
     protected void setUpFakeLoader() throws Exception {
-
-        chain = new MockProtocolHandlerLoader();
-    
-        chain.put("usersrepository", UsersRepository.class, usersRepository);
-    
         dnsServer = new AlterableDNSServer();
-        chain.put("dnsservice", DNSService.class, dnsServer);
-    
-        chain.put("mailStore", MailRepositoryStore.class, mailRepositoryStore);
-
-        chain.put("fileSystem", FileSystem.class, fileSystem);
-
         MemoryRecipientRewriteTable rewriteTable = new MemoryRecipientRewriteTable();
-        chain.put("recipientrewritetable", RecipientRewriteTable.class, rewriteTable);
-
         queueFactory = new MemoryMailQueueFactory(new RawMailQueueItemDecoratorFactory());
         queue = queueFactory.createQueue(MailQueueFactory.SPOOL);
-        chain.put("mailqueuefactory", MailQueueFactory.class, queueFactory);
         MemoryDomainList domainList = new MemoryDomainList(mock(DNSService.class));
         domainList.addDomain(Domain.LOCALHOST);
-        chain.put("domainlist", DomainList.class, domainList);
-        
+
+        chain = MockProtocolHandlerLoader.builder()
+            .put(binder -> binder.bind(DomainList.class).toInstance(domainList))
+            .put(binder -> binder.bind(new TypeLiteral<MailQueueFactory<?>>() {}).toInstance(queueFactory))
+            .put(binder -> binder.bind(RecipientRewriteTable.class).toInstance(rewriteTable))
+            .put(binder -> binder.bind(FileSystem.class).toInstance(fileSystem))
+            .put(binder -> binder.bind(MailRepositoryStore.class).toInstance(mailRepositoryStore))
+            .put(binder -> binder.bind(DNSService.class).toInstance(dnsServer))
+            .put(binder -> binder.bind(UsersRepository.class).toInstance(usersRepository))
+            .put(binder -> binder.bind(MetricFactory.class).to(RecordingMetricFactory.class))
+            .build();
     }
 
     @Test
@@ -384,7 +385,7 @@ public class SMTPServerTest {
         // no message there, yet
         assertThat(queue.getLastMail())
             .as("no mail received by mail server")
-            .isNull();;
+            .isNull();
 
         smtpProtocol.sendCommand("EHLO " + InetAddress.getLocalHost());
         String[] capabilityRes = smtpProtocol.getReplyStrings();
@@ -500,7 +501,7 @@ public class SMTPServerTest {
         // no message there, yet
         assertThat(queue.getLastMail())
             .as("no mail received by mail server")
-            .isNull();;
+            .isNull();
 
         smtpProtocol.sendCommand("EHLO " + InetAddress.getLocalHost());
         String[] capabilityRes = smtpProtocol.getReplyStrings();
@@ -534,7 +535,7 @@ public class SMTPServerTest {
         // no message there, yet
         assertThat(queue.getLastMail())
             .as("no mail received by mail server")
-            .isNull();;
+            .isNull();
 
         smtpProtocol.sendCommand("EHLO " + InetAddress.getLocalHost());
         smtpProtocol.sendCommand("STARTTLS");
@@ -555,7 +556,7 @@ public class SMTPServerTest {
         // no message there, yet
         assertThat(queue.getLastMail())
             .as("no mail received by mail server")
-            .isNull();;
+            .isNull();
 
         smtpProtocol.sendCommand("EHLO " + InetAddress.getLocalHost());
         smtpProtocol.sendCommand("STARTTLS\r\nAUTH PLAIN");
@@ -594,7 +595,7 @@ public class SMTPServerTest {
         // no message there, yet
         assertThat(queue.getLastMail())
             .as("no mail received by mail server")
-            .isNull();;
+            .isNull();
 
         smtp.helo(InetAddress.getLocalHost().toString());
         smtp.setSender("mail@localhost");
@@ -620,7 +621,7 @@ public class SMTPServerTest {
         // no message there, yet
         assertThat(queue.getLastMail())
             .as("no mail received by mail server")
-            .isNull();;
+            .isNull();
 
         smtp.helo(InetAddress.getLocalHost().toString());
         smtp.setSender("mail@localhost");
@@ -1280,27 +1281,27 @@ public class SMTPServerTest {
             .as("expected 530 error")
             .isEqualTo(530);
 
-        assertThat(usersRepository.contains(noexistUserName))
+        assertThat(usersRepository.contains(Username.of(noexistUserName)))
             .as("user not existing")
             .isFalse();
 
         smtpProtocol.sendCommand("AUTH PLAIN");
-        smtpProtocol.sendCommand(Base64.encodeAsString("\0" + noexistUserName + "\0pwd\0"));
+        smtpProtocol.sendCommand(Base64.getEncoder().encodeToString(("\0" + noexistUserName + "\0pwd\0").getBytes(UTF_8)));
         // smtpProtocol.sendCommand(noexistUserName+"pwd".toCharArray());
         assertThat(smtpProtocol.getReplyCode())
             .as("expected error")
             .isEqualTo(535);
 
-        usersRepository.addUser(userName, "pwd");
+        usersRepository.addUser(Username.of(userName), "pwd");
 
         smtpProtocol.sendCommand("AUTH PLAIN");
-        smtpProtocol.sendCommand(Base64.encodeAsString("\0" + userName + "\0wrongpwd\0"));
+        smtpProtocol.sendCommand(Base64.getEncoder().encodeToString(("\0" + userName + "\0wrongpwd\0").getBytes(UTF_8)));
         assertThat(smtpProtocol.getReplyCode())
             .as("expected error")
             .isEqualTo(535);
 
         smtpProtocol.sendCommand("AUTH PLAIN");
-        smtpProtocol.sendCommand(Base64.encodeAsString("\0" + userName + "\0pwd\0"));
+        smtpProtocol.sendCommand(Base64.getEncoder().encodeToString(("\0" + userName + "\0pwd\0").getBytes(UTF_8)));
         assertThat(smtpProtocol.getReplyCode())
             .as("authenticated")
             .isEqualTo(235);
@@ -1334,12 +1335,12 @@ public class SMTPServerTest {
         smtpProtocol.sendCommand("ehlo " + InetAddress.getLocalHost());
 
         String userName = "test_user_smtp";
-        usersRepository.addUser(userName, "pwd");
+        usersRepository.addUser(Username.of(userName), "pwd");
 
         smtpProtocol.setSender("");
 
         smtpProtocol.sendCommand("AUTH PLAIN");
-        smtpProtocol.sendCommand(Base64.encodeAsString("\0" + userName + "\0pwd\0"));
+        smtpProtocol.sendCommand(Base64.getEncoder().encodeToString(("\0" + userName + "\0pwd\0").getBytes(UTF_8)));
         assertThat(smtpProtocol.getReplyCode())
             .as("authenticated")
             .isEqualTo(235);
@@ -1555,10 +1556,10 @@ public class SMTPServerTest {
 
         smtpProtocol.setSender(sender);
 
-        usersRepository.addUser(userName, "pwd");
+        usersRepository.addUser(Username.of(userName), "pwd");
 
         smtpProtocol.sendCommand("AUTH PLAIN");
-        smtpProtocol.sendCommand(Base64.encodeAsString("\0" + userName + "\0pwd\0"));
+        smtpProtocol.sendCommand(Base64.getEncoder().encodeToString(("\0" + userName + "\0pwd\0").getBytes(UTF_8)));
         assertThat(smtpProtocol.getReplyCode())
             .as("authenticated")
             .isEqualTo(235);

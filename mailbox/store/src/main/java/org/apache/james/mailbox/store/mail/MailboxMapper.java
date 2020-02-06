@@ -20,6 +20,7 @@ package org.apache.james.mailbox.store.mail;
 
 import java.util.List;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.acl.ACLDiff;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.MailboxNotFoundException;
@@ -28,6 +29,7 @@ import org.apache.james.mailbox.model.MailboxACL;
 import org.apache.james.mailbox.model.MailboxACL.Right;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxPath;
+import org.apache.james.mailbox.model.search.MailboxQuery;
 import org.apache.james.mailbox.store.transaction.Mapper;
 
 /**
@@ -39,60 +41,36 @@ public interface MailboxMapper extends Mapper {
     
     /**
      * Save the give {@link Mailbox} to the underlying storage
-     * 
-     * @param mailbox
-     * @throws MailboxException
      */
     MailboxId save(Mailbox mailbox) throws MailboxException;
     
     /**
      * Delete the given {@link Mailbox} from the underlying storage
-     * 
-     * @param mailbox
-     * @throws MailboxException
      */
     void delete(Mailbox mailbox) throws MailboxException;
 
   
     /**
      * Return the {@link Mailbox} for the given name
-     * 
-     * @param mailboxName 
-     * @return mailbox
-     * @throws MailboxException
-     * @throws MailboxNotFoundException
      */
     Mailbox findMailboxByPath(MailboxPath mailboxName)
             throws MailboxException, MailboxNotFoundException;
 
     /**
      * Return the {@link Mailbox} for the given name
-     * 
-     * @param mailboxId
-     * @return mailbox
-     * @throws MailboxException
-     * @throws MailboxNotFoundException
      */
     Mailbox findMailboxById(MailboxId mailboxId)
             throws MailboxException, MailboxNotFoundException;
 
     /**
      * Return a List of {@link Mailbox} for the given userName and matching the right
-     * 
-     * @param userName
-     * @return right
-     * @throws MailboxException
      */
-    List<Mailbox> findNonPersonalMailboxes(String userName, Right right) throws MailboxException;
+    List<Mailbox> findNonPersonalMailboxes(Username userName, Right right) throws MailboxException;
 
     /**
      * Return a List of {@link Mailbox} which name is like the given name
-     * 
-     * @param mailboxPath
-     * @return mailboxList
-     * @throws MailboxException
      */
-    List<Mailbox> findMailboxWithPathLike(MailboxPath mailboxPath)
+    List<Mailbox> findMailboxWithPathLike(MailboxQuery.UserBound query)
             throws MailboxException;
 
     /**
@@ -101,8 +79,6 @@ public interface MailboxMapper extends Mapper {
      * @param mailbox not null
      * @param delimiter path delimiter
      * @return true when the mailbox has children, false otherwise
-     * @throws MailboxException
-     * @throws MailboxNotFoundException
      */
     boolean hasChildren(Mailbox mailbox, char delimiter)
             throws MailboxException, MailboxNotFoundException;
@@ -124,10 +100,7 @@ public interface MailboxMapper extends Mapper {
     ACLDiff setACL(Mailbox mailbox, MailboxACL mailboxACL) throws MailboxException;
 
     /**
-     * Return a unmodifable {@link List} of all {@link Mailbox} 
-     * 
-     * @return mailboxList
-     * @throws MailboxException 
+     * Return a unmodifable {@link List} of all {@link Mailbox}
      */
     List<Mailbox> list() throws MailboxException;
 }

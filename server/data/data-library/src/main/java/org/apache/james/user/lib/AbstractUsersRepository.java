@@ -25,29 +25,39 @@ import javax.inject.Inject;
 
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.core.Domain;
 import org.apache.james.core.MailAddress;
-import org.apache.james.core.User;
+import org.apache.james.core.Username;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.domainlist.api.DomainListException;
 import org.apache.james.lifecycle.api.Configurable;
 import org.apache.james.user.api.AlreadyExistInUsersRepositoryException;
+import org.apache.james.user.api.InvalidUsernameException;
 import org.apache.james.user.api.UsersRepository;
 import org.apache.james.user.api.UsersRepositoryException;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.CharMatcher;
 
 public abstract class AbstractUsersRepository implements UsersRepository, Configurable {
+    private static String ILLEGAL_USERNAME_CHARACTERS = "\"(),:; <>@[\\]";
 
-    private DomainList domainList;
+    private final DomainList domainList;
     private boolean virtualHosting;
-    private Optional<String> administratorId;
+    private Optional<Username> administratorId;
+
+    @Inject
+    protected AbstractUsersRepository(DomainList domainList) {
+        this.domainList = domainList;
+    }
 
     @Override
-    public void configure(HierarchicalConfiguration configuration) throws ConfigurationException {
+    public void configure(HierarchicalConfiguration<ImmutableNode> configuration) throws ConfigurationException {
 
         virtualHosting = configuration.getBoolean("enableVirtualHosting", getDefaultVirtualHostingValue());
-        administratorId = Optional.ofNullable(configuration.getString("administratorId"));
+        administratorId = Optional.ofNullable(configuration.getString("administratorId"))
+            .map(Username::of);
 
         doConfigure(configuration);
     }
@@ -56,29 +66,24 @@ public abstract class AbstractUsersRepository implements UsersRepository, Config
         return false;
     }
 
-    protected void doConfigure(HierarchicalConfiguration config) throws ConfigurationException {
+    protected void doConfigure(HierarchicalConfiguration<ImmutableNode> config) throws ConfigurationException {
     }
 
     public void setEnableVirtualHosting(boolean virtualHosting) {
         this.virtualHosting = virtualHosting;
     }
 
-    @Inject
-    public void setDomainList(DomainList domainList) {
-        this.domainList = domainList;
-    }
-
-    protected void isValidUsername(String username) throws UsersRepositoryException {
-        User user = User.fromUsername(username);
+    @Override
+    public void assertValid(Username username) throws UsersRepositoryException {
         if (supportVirtualHosting()) {
             // need a @ in the username
-            if (!user.hasDomainPart()) {
-                throw new UsersRepositoryException("Given Username needs to contain a @domainpart");
+            if (!username.hasDomainPart()) {
+                throw new InvalidUsernameException("Given Username needs to contain a @domainpart");
             } else {
-                Domain domain = user.getDomainPart().get();
+                Domain domain = username.getDomainPart().get();
                 try {
                     if (!domainList.containsDomain(domain)) {
-                        throw new UsersRepositoryException("Domain does not exist in DomainList");
+                        throw new InvalidUsernameException("Domain does not exist in DomainList");
                     }
                 } catch (DomainListException e) {
                     throw new UsersRepositoryException("Unable to query DomainList", e);
@@ -86,17 +91,22 @@ public abstract class AbstractUsersRepository implements UsersRepository, Config
             }
         } else {
             // @ only allowed when virtualhosting is supported
-            if (user.hasDomainPart()) {
-                throw new UsersRepositoryException("Given Username contains a @domainpart but virtualhosting support is disabled");
+            if (username.hasDomainPart()) {
+                throw new InvalidUsernameException("Given Username contains a @domainpart but virtualhosting support is disabled");
             }
+        }
+
+        if (!isLocalPartValid(username)) {
+            throw new InvalidUsernameException(String.format("Given Username '%s' should not contain any of those characters: %s",
+                username.asString(), ILLEGAL_USERNAME_CHARACTERS));
         }
     }
 
     @Override
-    public void addUser(String username, String password) throws UsersRepositoryException {
+    public void addUser(Username username, String password) throws UsersRepositoryException {
 
         if (!contains(username)) {
-            isValidUsername(username);
+            assertValid(username);
             doAddUser(username, password);
         } else {
             throw new AlreadyExistInUsersRepositoryException("User with username " + username + " already exists!");
@@ -117,27 +127,16 @@ public abstract class AbstractUsersRepository implements UsersRepository, Config
      * @throws UsersRepositoryException
      *           If an error occurred
      */
-    protected abstract void doAddUser(String username, String password) throws UsersRepositoryException;
+    protected abstract void doAddUser(Username username, String password) throws UsersRepositoryException;
 
-    @Override
-    public String getUser(MailAddress mailAddress) throws UsersRepositoryException {
-        if (supportVirtualHosting()) {
-            return mailAddress.asString();
-        } else {
-            return mailAddress.getLocalPart();
-        }
-    }
-
-    @VisibleForTesting void setAdministratorId(Optional<String> username) {
+    @VisibleForTesting void setAdministratorId(Optional<Username> username) {
         this.administratorId = username;
     }
 
     @Override
-    public boolean isAdministrator(String username) throws UsersRepositoryException {
-        if (administratorId.isPresent()) {
-            return administratorId.get().equals(username);
-        }
-        return false;
+    public boolean isAdministrator(Username username) throws UsersRepositoryException {
+        return administratorId.map(id -> id.equals(username))
+            .orElse(false);
     }
 
     @Override
@@ -146,14 +145,19 @@ public abstract class AbstractUsersRepository implements UsersRepository, Config
     }
 
     @Override
-    public MailAddress getMailAddressFor(User user) throws UsersRepositoryException {
+    public MailAddress getMailAddressFor(Username username) throws UsersRepositoryException {
         try {
             if (supportVirtualHosting()) {
-                return new MailAddress(user.asString());
+                return new MailAddress(username.asString());
             }
-            return new MailAddress(user.getLocalPart(), domainList.getDefaultDomain());
+            return new MailAddress(username.getLocalPart(), domainList.getDefaultDomain());
         } catch (Exception e) {
             throw new UsersRepositoryException("Failed to compute mail address associated with the user", e);
         }
+    }
+
+    private boolean isLocalPartValid(Username username) {
+        return CharMatcher.anyOf(ILLEGAL_USERNAME_CHARACTERS)
+            .matchesNoneOf(username.getLocalPart());
     }
 }

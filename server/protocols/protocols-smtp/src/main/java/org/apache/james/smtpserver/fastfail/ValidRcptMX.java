@@ -50,32 +50,15 @@ import com.github.steveash.guavate.Guavate;
  * authorized user or an authorized network.
  */
 public class ValidRcptMX implements RcptHook, ProtocolHandler {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(ValidRcptMX.class);
 
-    private DNSService dnsService = null;
-
+    private  final DNSService dnsService;
     private NetMatcher bNetwork = null;
 
-    /**
-     * Gets the DNS service.
-     *
-     * @return the dnsService
-     */
-    public final DNSService getDNSService() {
-        return dnsService;
-    }
-
-    /**
-     * Sets the DNS service.
-     *
-     * @param dnsService the dnsService to set
-     */
     @Inject
-    public final void setDNSService(DNSService dnsService) {
+    public ValidRcptMX(DNSService dnsService) {
         this.dnsService = dnsService;
     }
-
 
     /**
      * Set the banned networks
@@ -144,10 +127,5 @@ public class ValidRcptMX implements RcptHook, ProtocolHandler {
         } else {
             throw new ConfigurationException("Please configure at least on invalid MX network");
         }
-    }
-
-    @Override
-    public void destroy() {
-        // nothing to-do
     }
 }

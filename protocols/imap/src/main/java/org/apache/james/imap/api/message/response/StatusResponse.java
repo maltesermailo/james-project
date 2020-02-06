@@ -19,18 +19,25 @@
 
 package org.apache.james.imap.api.message.response;
 
+import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Set;
+import java.util.stream.Stream;
 
 import javax.mail.Flags;
 
 import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.MessageFlags;
 import org.apache.james.imap.api.message.UidRange;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
+
+import com.github.steveash.guavate.Guavate;
 
 /**
  * <p>
@@ -42,6 +49,15 @@ import org.apache.james.mailbox.MessageUid;
  * </p>
  */
 public interface StatusResponse extends ImapResponseMessage {
+
+    Set<String> AVAILABLE_CHARSET_NAMES =
+        Charset.availableCharsets()
+            .values()
+            .stream()
+            .flatMap(charset -> Stream.concat(
+                Stream.of(charset.name()),
+                charset.aliases().stream()))
+            .collect(Guavate.toImmutableSet());
 
     /**
      * Gets the server response type of this status message.
@@ -56,7 +72,7 @@ public interface StatusResponse extends ImapResponseMessage {
      * 
      * @return if tagged response, the tag. Otherwise null.
      */
-    String getTag();
+    Tag getTag();
 
     /**
      * Gets the command.
@@ -211,12 +227,10 @@ public interface StatusResponse extends ImapResponseMessage {
         /**
          * Creates a RFC2060 <code>BADCHARSET</code> response code.
          * 
-         * @param charsetNames
-         *            <code>Collection<String></code> containing charset names
          * @return <code>ResponseCode</code>, not null
          */
-        public static ResponseCode badCharset(Collection<String> charsetNames) {
-            return new ResponseCode("BADCHARSET", charsetNames);
+        public static ResponseCode badCharset() {
+            return new ResponseCode("BADCHARSET", AVAILABLE_CHARSET_NAMES);
         }
 
         /**
@@ -306,8 +320,8 @@ public interface StatusResponse extends ImapResponseMessage {
          * @param modSeq positive non-zero long
          * @return <code>ResponseCode</code>
          */
-        public static ResponseCode highestModSeq(long modSeq) {
-            return new ResponseCode("HIGHESTMODSEQ", modSeq);
+        public static ResponseCode highestModSeq(ModSeq modSeq) {
+            return new ResponseCode("HIGHESTMODSEQ", modSeq.asLong());
         }
         
         /**
@@ -339,12 +353,12 @@ public interface StatusResponse extends ImapResponseMessage {
          * @return <code>ResponseCode</code>, not null
          */
         public static ResponseCode createExtension(String name) {
-            StringBuffer buffer = new StringBuffer(name.length() + 2);
+            StringBuilder builder = new StringBuilder(name.length() + 2);
             if (!name.startsWith("X")) {
-                buffer.append('X');
+                builder.append('X');
             }
-            buffer.append(name);
-            return new ResponseCode(buffer.toString());
+            builder.append(name);
+            return new ResponseCode(builder.toString());
         }
 
         public static final int NO_NUMBER = -1;
@@ -357,14 +371,12 @@ public interface StatusResponse extends ImapResponseMessage {
 
         private final boolean useParens;
 
-        @SuppressWarnings("unchecked")
         private ResponseCode(String code) {
-            this(code, Collections.EMPTY_LIST, NO_NUMBER, true);
+            this(code, Collections.<String>emptyList(), NO_NUMBER, true);
         }
 
-        @SuppressWarnings("unchecked")
         private ResponseCode(String code, long number) {
-            this(code, Collections.EMPTY_LIST, number, true);
+            this(code, Collections.<String>emptyList(), number, true);
         }
 
         private ResponseCode(String code, Collection<String> parameters) {

@@ -24,9 +24,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.DefaultMailboxes;
 import org.apache.james.mailbox.MailboxSession;
+import org.apache.james.mailbox.exception.HasEmptyMailboxNameInHierarchyException;
+import org.apache.james.mailbox.exception.MailboxNameException;
+import org.apache.james.mailbox.exception.TooLongMailboxNameException;
 
+import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableList;
 
 /**
@@ -36,26 +41,32 @@ public class MailboxPath {
     /**
      * Return a {@link MailboxPath} which represent the INBOX of the given
      * session
-     *
-     * @param session
-     * @return inbox
      */
     public static MailboxPath inbox(MailboxSession session) {
-        return MailboxPath.forUser(session.getUser().asString(), MailboxConstants.INBOX);
+        return MailboxPath.inbox(session.getUser());
+    }
+
+    public static MailboxPath inbox(Username username) {
+        return MailboxPath.forUser(username, MailboxConstants.INBOX);
     }
 
     /**
      * Create a {@link MailboxPath} in the prive namespace of the specified user
      */
-    public static MailboxPath forUser(String username, String mailboxName) {
+    public static MailboxPath forUser(Username username, String mailboxName) {
         return new MailboxPath(MailboxConstants.USER_NAMESPACE, username, mailboxName);
     }
 
+    private static final String INVALID_CHARS = "%*&#";
+    private static final CharMatcher INVALID_CHARS_MATCHER = CharMatcher.anyOf(INVALID_CHARS);
+    // This is the size that all mailbox backend should support
+    public  static final int MAX_MAILBOX_NAME_LENGTH = 200;
+
     private final String namespace;
-    private final String user;
+    private final Username user;
     private final String name;
     
-    public MailboxPath(String namespace, String user, String name) {
+    public MailboxPath(String namespace, Username user, String name) {
         this.namespace = Optional.ofNullable(namespace)
             .filter(s -> !s.isEmpty())
             .orElse(MailboxConstants.USER_NAMESPACE);
@@ -73,35 +84,28 @@ public class MailboxPath {
 
     /**
      * Get the namespace this mailbox is in
-     * 
-     * @return The namespace
      */
     public String getNamespace() {
         return namespace;
     }
 
     /**
-     * Get the name of the user who owns the mailbox. This can be null e.g. for
-     * shared mailboxes.
-     * 
-     * @return The username
+     * Get the name of the user who owns the mailbox.
      */
-    public String getUser() {
+    public Username getUser() {
         return user;
     }
 
     /**
      * Get the name of the mailbox. This is the pure name without user or
      * namespace, so this is what a user would see in his client.
-     * 
-     * @return The name string
      */
     public String getName() {
         return name;
     }
 
     public boolean belongsTo(MailboxSession mailboxSession) {
-        return user.equalsIgnoreCase(mailboxSession.getUser().asString());
+        return user.equals(mailboxSession.getUser());
     }
 
     /**
@@ -113,8 +117,7 @@ public class MailboxPath {
      * INBOX.main
      * INBOX.main.sub
      * </pre>
-     * 
-     * @param delimiter
+     *
      * @return list of hierarchy levels
      */
     public List<MailboxPath> getHierarchyLevels(char delimiter) {
@@ -147,6 +150,33 @@ public class MailboxPath {
         return this;
     }
 
+    public void assertAcceptable(char pathDelimiter) throws MailboxNameException {
+        if (hasEmptyNameInHierarchy(pathDelimiter)) {
+            throw new HasEmptyMailboxNameInHierarchyException(asString());
+        }
+        if (nameContainsForbiddenCharacters()) {
+            throw new MailboxNameException(asString() + " contains one of the forbidden characters " + INVALID_CHARS);
+        }
+        if (isMailboxNameTooLong()) {
+            throw new TooLongMailboxNameException("Mailbox name exceeds maximum size of " + MAX_MAILBOX_NAME_LENGTH + " characters");
+        }
+    }
+
+    private boolean nameContainsForbiddenCharacters() {
+        return INVALID_CHARS_MATCHER.matchesAnyOf(name);
+    }
+
+    private boolean isMailboxNameTooLong() {
+        return name.length() > MAX_MAILBOX_NAME_LENGTH;
+    }
+
+    boolean hasEmptyNameInHierarchy(char pathDelimiter) {
+        String delimiterString = String.valueOf(pathDelimiter);
+        return this.name.isEmpty()
+            || this.name.contains(delimiterString + delimiterString)
+            || this.name.startsWith(delimiterString)
+            || this.name.endsWith(delimiterString);
+    }
 
     public String asString() {
         return namespace + ":" + user + ":" + name;
@@ -180,9 +210,7 @@ public class MailboxPath {
 
     /**
      * Return the full name of the {@link MailboxPath}, which is constructed via the {@link #namespace} and {@link #name}
-     * 
-     * @param delimiter
-     * @return fullName
+     *
      * @deprecated Use {@link MailboxPath#asString()} instead.
      */
     @Deprecated

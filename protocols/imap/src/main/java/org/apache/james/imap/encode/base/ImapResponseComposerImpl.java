@@ -26,13 +26,14 @@ import javax.mail.Flags;
 
 import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.display.CharsetUtil;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.display.ModifiedUtf7;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
 import org.apache.james.imap.encode.ImapResponseComposer;
 import org.apache.james.imap.encode.ImapResponseWriter;
 import org.apache.james.imap.message.response.Literal;
-import org.apache.james.protocols.imap.utils.FastByteArrayOutputStream;
+import org.apache.james.imap.utils.FastByteArrayOutputStream;
 
 /**
  * Class providing methods to send response messages from the server to the
@@ -83,25 +84,6 @@ public class ImapResponseComposerImpl implements ImapConstants, ImapResponseComp
         return this;
     }
 
-
-
-    @Override
-    public ImapResponseComposer commandResponse(ImapCommand command, String message) throws IOException {
-        untagged();
-        commandName(command.getName());
-        message(message);
-        end();
-        return this;
-    }
-
-    @Override
-    public ImapResponseComposer taggedResponse(String message, String tag) throws IOException {
-        tag(tag);
-        message(message);
-        end();
-        return this;
-    }
-
     @Override
     public ImapResponseComposer untaggedResponse(String message) throws IOException {
         untagged();
@@ -147,8 +129,8 @@ public class ImapResponseComposerImpl implements ImapConstants, ImapResponseComp
     }
 
     @Override
-    public ImapResponseComposer tag(String tag) throws IOException {
-        writeASCII(tag);
+    public ImapResponseComposer tag(Tag tag) throws IOException {
+        writeASCII(tag.asString());
         return this;
     }
 
@@ -204,16 +186,6 @@ public class ImapResponseComposerImpl implements ImapConstants, ImapResponseComp
     }
 
     @Override
-    public ImapResponseComposer upperCaseAscii(String message) throws IOException {
-        if (message == null) {
-            nil();
-        } else {
-            upperCaseAscii(message, false);
-        }
-        return this;
-    }
-
-    @Override
     public ImapResponseComposer quoteUpperCaseAscii(String message) throws IOException {
         if (message == null) {
             nil();
@@ -237,15 +209,13 @@ public class ImapResponseComposerImpl implements ImapConstants, ImapResponseComp
     
     @Override
     public ImapResponseComposer mailbox(String mailboxName) throws IOException {
-        quote(CharsetUtil.encodeModifiedUTF7(mailboxName));
+        quote(ModifiedUtf7.encodeModifiedUTF7(mailboxName));
         return this;
     }
 
     @Override
-    public ImapResponseComposer commandName(String commandName) throws IOException {
-        space();
-        writeASCII(commandName);
-        return this;
+    public ImapResponseComposer commandName(ImapCommand command) throws IOException {
+        return message(command.getName());
     }
 
     @Override

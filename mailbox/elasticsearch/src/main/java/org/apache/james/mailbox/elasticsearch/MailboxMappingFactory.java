@@ -26,22 +26,25 @@ import static org.apache.james.backends.es.NodeMappingFactory.ANALYZER;
 import static org.apache.james.backends.es.NodeMappingFactory.BOOLEAN;
 import static org.apache.james.backends.es.NodeMappingFactory.FIELDS;
 import static org.apache.james.backends.es.NodeMappingFactory.FORMAT;
-import static org.apache.james.backends.es.NodeMappingFactory.IGNORE_ABOVE;
 import static org.apache.james.backends.es.NodeMappingFactory.KEYWORD;
 import static org.apache.james.backends.es.NodeMappingFactory.LONG;
 import static org.apache.james.backends.es.NodeMappingFactory.NESTED;
 import static org.apache.james.backends.es.NodeMappingFactory.NORMALIZER;
 import static org.apache.james.backends.es.NodeMappingFactory.PROPERTIES;
 import static org.apache.james.backends.es.NodeMappingFactory.RAW;
+import static org.apache.james.backends.es.NodeMappingFactory.REQUIRED;
+import static org.apache.james.backends.es.NodeMappingFactory.ROUTING;
 import static org.apache.james.backends.es.NodeMappingFactory.SEARCH_ANALYZER;
 import static org.apache.james.backends.es.NodeMappingFactory.SNOWBALL;
 import static org.apache.james.backends.es.NodeMappingFactory.SPLIT_EMAIL;
 import static org.apache.james.backends.es.NodeMappingFactory.TYPE;
+import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.ATTACHMENTS;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.BCC;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.CC;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.DATE;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.FROM;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.HAS_ATTACHMENT;
+import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.HEADERS;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.HTML_BODY;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.IS_ANSWERED;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.IS_DELETED;
@@ -62,14 +65,15 @@ import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.T
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.TEXT_BODY;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.TO;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.UID;
-import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.USERS;
 import static org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.USER_FLAGS;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 
 import java.io.IOException;
 
 import org.apache.james.backends.es.NodeMappingFactory;
+import org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.Attachment;
 import org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.EMailer;
+import org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants.HEADER;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 
 public class MailboxMappingFactory {
@@ -82,6 +86,12 @@ public class MailboxMappingFactory {
         try {
             return jsonBuilder()
                 .startObject()
+
+                    .field("dynamic", "strict")
+
+                    .startObject(ROUTING)
+                        .field(REQUIRED, true)
+                    .endObject()
 
                     .startObject(PROPERTIES)
 
@@ -137,15 +147,15 @@ public class MailboxMappingFactory {
                             .field(FORMAT, "yyyy-MM-dd'T'HH:mm:ssZ")
                         .endObject()
 
+                        .startObject(USER_FLAGS)
+                            .field(TYPE, KEYWORD)
+                        .endObject()
+
                         .startObject(MEDIA_TYPE)
                             .field(TYPE, KEYWORD)
                         .endObject()
 
                         .startObject(SUBTYPE)
-                            .field(TYPE, KEYWORD)
-                        .endObject()
-
-                        .startObject(USER_FLAGS)
                             .field(TYPE, KEYWORD)
                         .endObject()
 
@@ -172,6 +182,20 @@ public class MailboxMappingFactory {
                                             .field(NORMALIZER, CASE_INSENSITIVE)
                                         .endObject()
                                     .endObject()
+                                .endObject()
+                            .endObject()
+                        .endObject()
+
+                        .startObject(HEADERS)
+                            .field(TYPE, NESTED)
+                            .startObject(PROPERTIES)
+                                .startObject(HEADER.NAME)
+                                    .field(TYPE, TEXT)
+                                    .field(ANALYZER, KEYWORD)
+                                .endObject()
+                                .startObject(HEADER.VALUE)
+                                    .field(TYPE, TEXT)
+                                    .field(ANALYZER, KEEP_MAIL_AND_URL)
                                 .endObject()
                             .endObject()
                         .endObject()
@@ -277,10 +301,6 @@ public class MailboxMappingFactory {
                             .field(TYPE, KEYWORD)
                         .endObject()
 
-                        .startObject(USERS)
-                            .field(TYPE, KEYWORD)
-                        .endObject()
-
                         .startObject(TEXT_BODY)
                             .field(TYPE, TEXT)
                             .field(ANALYZER, KEEP_MAIL_AND_URL)
@@ -289,11 +309,6 @@ public class MailboxMappingFactory {
                                     .field(TYPE, TEXT)
                                     .field(ANALYZER, STANDARD)
                                     .field(SEARCH_ANALYZER, KEEP_MAIL_AND_URL)
-                                .endObject()
-                                .startObject(RAW)
-                                    .field(TYPE, KEYWORD)
-                                    .field(NORMALIZER, CASE_INSENSITIVE)
-                                    .field(IGNORE_ABOVE, MAXIMUM_TERM_LENGTH)
                                 .endObject()
                             .endObject()
                         .endObject()
@@ -306,11 +321,6 @@ public class MailboxMappingFactory {
                                     .field(TYPE, TEXT)
                                     .field(ANALYZER, STANDARD)
                                     .field(SEARCH_ANALYZER, KEEP_MAIL_AND_URL)
-                                .endObject()
-                                .startObject(RAW)
-                                    .field(TYPE, KEYWORD)
-                                    .field(NORMALIZER, CASE_INSENSITIVE)
-                                    .field(IGNORE_ABOVE, MAXIMUM_TERM_LENGTH)
                                 .endObject()
                             .endObject()
                         .endObject()
@@ -330,6 +340,32 @@ public class MailboxMappingFactory {
                                 .endObject()
                             .endObject()
                         .endObject()
+
+                        .startObject(ATTACHMENTS)
+                            .startObject(PROPERTIES)
+                                .startObject(Attachment.FILENAME)
+                                    .field(TYPE, TEXT)
+                                    .field(ANALYZER, STANDARD)
+                                .endObject()
+                                .startObject(Attachment.TEXT_CONTENT)
+                                    .field(TYPE, TEXT)
+                                    .field(ANALYZER, STANDARD)
+                                .endObject()
+                                .startObject(Attachment.MEDIA_TYPE)
+                                    .field(TYPE, KEYWORD)
+                                .endObject()
+                                .startObject(Attachment.SUBTYPE)
+                                    .field(TYPE, KEYWORD)
+                                .endObject()
+                                .startObject(Attachment.FILE_EXTENSION)
+                                    .field(TYPE, KEYWORD)
+                                .endObject()
+                                .startObject(Attachment.CONTENT_DISPOSITION)
+                                    .field(TYPE, KEYWORD)
+                                .endObject()
+                            .endObject()
+                        .endObject()
+
                     .endObject()
                 .endObject();
         } catch (IOException e) {

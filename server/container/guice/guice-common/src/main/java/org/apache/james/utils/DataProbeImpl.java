@@ -24,21 +24,19 @@ import java.util.Map;
 
 import javax.inject.Inject;
 
-import org.apache.commons.lang3.NotImplementedException;
 import org.apache.james.core.Domain;
+import org.apache.james.core.Username;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.probe.DataProbe;
 import org.apache.james.rrt.api.RecipientRewriteTable;
 import org.apache.james.rrt.lib.MappingSource;
 import org.apache.james.rrt.lib.Mappings;
 import org.apache.james.user.api.UsersRepository;
+import org.apache.james.util.streams.Iterators;
 
 import com.github.steveash.guavate.Guavate;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 
 public class DataProbeImpl implements GuiceProbe, DataProbe {
-    
     private final DomainList domainList;
     private final UsersRepository usersRepository;
     private final RecipientRewriteTable recipientRewriteTable;
@@ -55,22 +53,19 @@ public class DataProbeImpl implements GuiceProbe, DataProbe {
 
     @Override
     public void addUser(String userName, String password) throws Exception {
-        usersRepository.addUser(userName, password);
+        usersRepository.addUser(Username.of(userName), password);
     }
 
     @Override
     public void removeUser(String username) throws Exception {
-        usersRepository.removeUser(username);
-    }
-
-    @Override
-    public void setPassword(String userName, String password) {
-        throw new NotImplementedException("not implemented");
+        usersRepository.removeUser(Username.of(username));
     }
 
     @Override
     public String[] listUsers() throws Exception {
-        return Iterables.toArray(ImmutableList.copyOf(usersRepository.list()), String.class);
+        return Iterators.toStream(usersRepository.list())
+            .map(Username::asString)
+            .toArray(String[]::new);
     }
 
     @Override
@@ -111,33 +106,9 @@ public class DataProbeImpl implements GuiceProbe, DataProbe {
     }
 
     @Override
-    public Mappings listUserDomainMappings(String user, String domain) {
-        throw new NotImplementedException("not implemented");
-    }
-
-    @Override
     public void addAddressMapping(String fromUser, String fromDomain, String toAddress) throws Exception {
         MappingSource source = MappingSource.fromUser(fromUser, fromDomain);
         recipientRewriteTable.addAddressMapping(source, toAddress);
-    }
-
-    @Override
-    public void removeAddressMapping(String fromUser, String fromDomain, String toAddress) throws Exception {
-        MappingSource source = MappingSource.fromUser(fromUser, fromDomain);
-        recipientRewriteTable.removeAddressMapping(source, toAddress);
-    }
-
-    @Override
-    public void addRegexMapping(String user, String domain, String regex) throws Exception {
-        MappingSource source = MappingSource.fromUser(user, domain);
-        recipientRewriteTable.addRegexMapping(source, regex);
-    }
-
-
-    @Override
-    public void removeRegexMapping(String user, String domain, String regex) throws Exception {
-        MappingSource source = MappingSource.fromUser(user, domain);
-        recipientRewriteTable.removeRegexMapping(source, regex);
     }
 
     @Override

@@ -19,9 +19,8 @@
 
 package org.apache.james.mailbox.model;
 
+import java.util.Comparator;
 import java.util.Objects;
-
-import org.apache.james.mailbox.StandardMailboxMetaDataComparator;
 
 import com.google.common.base.MoreObjects;
 
@@ -62,23 +61,43 @@ public class MailboxMetaData implements Comparable<MailboxMetaData> {
     }
 
     public static MailboxMetaData unselectableMailbox(MailboxPath path, MailboxId mailboxId, char delimiter) {
-        return new MailboxMetaData(path, mailboxId, delimiter, Children.CHILDREN_ALLOWED_BUT_UNKNOWN, Selectability.NONE);
+        return new MailboxMetaData(path, mailboxId, delimiter, Children.CHILDREN_ALLOWED_BUT_UNKNOWN, Selectability.NONE, new MailboxACL(),
+            MailboxCounters.builder()
+                .mailboxId(mailboxId)
+                .count(0)
+                .unseen(0)
+                .build());
     }
+
+    public static  final Comparator<MailboxMetaData> COMPARATOR = Comparator
+        .<MailboxMetaData, Boolean>comparing(metadata -> metadata.getPath().isInbox()).reversed()
+        .thenComparing(metadata -> metadata.getPath().getName());
 
     private final MailboxPath path;
     private final char delimiter;
     private final Children inferiors;
     private final Selectability selectability;
     private final MailboxId mailboxId;
+    private final MailboxACL resolvedAcls;
+    private final MailboxCounters counters;
 
-    public MailboxMetaData(MailboxPath path, MailboxId mailboxId, char delimiter, Children inferiors, Selectability selectability) {
+    public MailboxMetaData(MailboxPath path, MailboxId mailboxId, char delimiter, Children inferiors, Selectability selectability, MailboxACL resolvedAcls, MailboxCounters counters) {
         this.path = path;
         this.mailboxId = mailboxId;
         this.delimiter = delimiter;
         this.inferiors = inferiors;
         this.selectability = selectability;
+        this.resolvedAcls = resolvedAcls;
+        this.counters = counters;
     }
 
+    public MailboxCounters getCounters() {
+        return counters;
+    }
+
+    public MailboxACL getResolvedAcls() {
+        return resolvedAcls;
+    }
 
     /**
      * Gets the inferiors status of this mailbox.
@@ -100,8 +119,6 @@ public class MailboxMetaData implements Comparable<MailboxMetaData> {
 
     /**
      * Return the delimiter
-     * 
-     * @return delimiter
      */
     public char getHierarchyDelimiter() {
         return delimiter;
@@ -110,8 +127,6 @@ public class MailboxMetaData implements Comparable<MailboxMetaData> {
 
     /**
      * Return the MailboxPath
-     * 
-     * @return path
      */
     public MailboxPath getPath() {
         return path;
@@ -145,6 +160,6 @@ public class MailboxMetaData implements Comparable<MailboxMetaData> {
 
     @Override
     public int compareTo(MailboxMetaData o) {
-        return StandardMailboxMetaDataComparator.order(this, o);
+        return COMPARATOR.compare(this, o);
     }
 }

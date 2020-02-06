@@ -19,6 +19,7 @@
 
 package org.apache.james.imap.processor;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
@@ -38,9 +39,8 @@ import java.util.stream.Stream;
 import javax.mail.Flags;
 import javax.mail.Flags.Flag;
 
-import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.core.Username;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
@@ -50,8 +50,8 @@ import org.apache.james.imap.api.message.request.SearchOperation;
 import org.apache.james.imap.api.message.response.StatusResponse;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
-import org.apache.james.imap.api.process.ImapSession;
 import org.apache.james.imap.api.process.SelectedMailbox;
+import org.apache.james.imap.encode.FakeImapSession;
 import org.apache.james.imap.message.request.SearchRequest;
 import org.apache.james.imap.message.response.SearchResponse;
 import org.apache.james.mailbox.MailboxManager;
@@ -66,7 +66,7 @@ import org.apache.james.mailbox.model.SearchQuery.AddressType;
 import org.apache.james.mailbox.model.SearchQuery.Criterion;
 import org.apache.james.mailbox.model.SearchQuery.DateResolution;
 import org.apache.james.mailbox.model.TestId;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -87,8 +87,6 @@ public class SearchProcessorTest {
 
     private static final long[] EMPTY = {};
 
-    private static final String TAG = "TAG";
-
     private static final String ADDRESS = "John Smith <john@example.org>";
 
     private static final String SUBJECT = "Myriad Harbour";
@@ -101,15 +99,15 @@ public class SearchProcessorTest {
     private static final SearchQuery.UidRange[] RANGES = {
             new SearchQuery.UidRange(MessageUid.of(1)),
             new SearchQuery.UidRange(MessageUid.of(42), MessageUid.of(1048)) };
-    
-    private static final MailboxPath mailboxPath = new MailboxPath("namespace", "user", "name");
+
+    private static final Username USER = Username.of("user");
+    private static final MailboxPath mailboxPath = new MailboxPath("namespace", USER, "name");
     private static final MailboxId mailboxId = TestId.of(18);
 
     SearchProcessor processor;
     ImapProcessor next;
     ImapProcessor.Responder responder;
-    ImapSession session;
-    ImapCommand command;
+    FakeImapSession session;
     StatusResponseFactory serverResponseFactory;
     StatusResponse statusResponse;
     MessageManager mailbox;
@@ -120,18 +118,17 @@ public class SearchProcessorTest {
     @Before
     public void setUp() throws Exception {
         serverResponseFactory = mock(StatusResponseFactory.class);
-        session = mock(ImapSession.class);
-        command = ImapCommand.anyStateCommand("Command");
+        session = new FakeImapSession();
         next = mock(ImapProcessor.class);
         responder = mock(ImapProcessor.Responder.class);
         statusResponse = mock(StatusResponse.class);
         mailbox = mock(MessageManager.class);
         mailboxManager = mock(MailboxManager.class);
-        mailboxSession = MailboxSessionUtil.create("user");
+        mailboxSession = MailboxSessionUtil.create(USER);
         selectedMailbox = mock(SelectedMailbox.class);
         when(selectedMailbox.getMailboxId()).thenReturn(mailboxId);
         
-        processor = new SearchProcessor(next,  mailboxManager, serverResponseFactory, new NoopMetricFactory());
+        processor = new SearchProcessor(next,  mailboxManager, serverResponseFactory, new RecordingMetricFactory());
         expectOk();
     }
 
@@ -141,8 +138,7 @@ public class SearchProcessorTest {
     }
 
     private void allowUnsolicitedResponses() {
-        when(session.getAttribute(ImapSessionUtils.MAILBOX_USER_ATTRIBUTE_SESSION_KEY)).thenReturn("user");
-        when(session.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY)).thenReturn(mailboxSession);
+        session.setMailboxSession(mailboxSession);
     }
 
     @Test
@@ -195,14 +191,13 @@ public class SearchProcessorTest {
         check(SearchKey.buildAll(), SearchQuery.all());
     }
 
-    @SuppressWarnings("unchecked")
     private void expectsGetSelectedMailbox() throws Exception {
         when(mailboxManager.getMailbox(mailboxId, mailboxSession)).thenReturn(mailbox, mailbox);
-        when(session.getSelected()).thenReturn(selectedMailbox);
+        session.selected(selectedMailbox);
         when(selectedMailbox.isRecentUidRemoved()).thenReturn(false);
         when(selectedMailbox.isSizeChanged()).thenReturn(false);
         when(selectedMailbox.getPath()).thenReturn(mailboxPath);
-        when(selectedMailbox.flagUpdateUids()).thenReturn(Collections.EMPTY_LIST);
+        when(selectedMailbox.flagUpdateUids()).thenReturn(Collections.<MessageUid>emptyList());
         when(selectedMailbox.getRecent()).thenReturn(new ArrayList<>());
     }
 
@@ -468,26 +463,24 @@ public class SearchProcessorTest {
     }
 
     private void check(SearchKey key, final SearchQuery query) throws Exception {
-        when(session.getAttribute(SearchProcessor.SEARCH_MODSEQ)).thenReturn(null);
-        when(session.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY)).thenReturn(mailboxSession);
+        session.setMailboxSession(mailboxSession);
         when(mailbox.search(query, mailboxSession)).thenReturn(Stream.empty());
         when(selectedMailbox.getApplicableFlags()).thenReturn(new Flags());
         when(selectedMailbox.hasNewApplicableFlags()).thenReturn(false);
 
-        SearchRequest message = new SearchRequest(command, new SearchOperation(key, new ArrayList<>()), false, TAG);
-        processor.doProcess(message, session, TAG, command, responder);
+        SearchRequest message = new SearchRequest(new SearchOperation(key, new ArrayList<>()), false, TAG);
+        processor.processRequest(message, session, responder);
     }
 
     private void expectOk() {
         when(serverResponseFactory
-                .taggedOk(eq(TAG), same(command), eq(HumanReadableText.COMPLETED)))
+                .taggedOk(eq(TAG), same(ImapConstants.SEARCH_COMMAND), eq(HumanReadableText.COMPLETED)))
             .thenReturn(statusResponse);
     }
 
     private void verifyCalls() {
         verify(selectedMailbox).resetEvents();
 
-        verify(session).setAttribute(SearchProcessor.SEARCH_MODSEQ, null);
         verify(responder).respond(new SearchResponse(EMPTY, null));
 
         verify(responder).respond(same(statusResponse));

@@ -18,6 +18,8 @@
  ****************************************************************/
 package org.apache.james.mailbox.store;
 
+import static org.apache.james.mailbox.store.mail.FetchGroupConverter.getFetchType;
+
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -27,8 +29,11 @@ import java.util.Objects;
 import javax.mail.Flags;
 
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.Content;
+import org.apache.james.mailbox.model.FetchGroup;
+import org.apache.james.mailbox.model.Header;
 import org.apache.james.mailbox.model.Headers;
 import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxId;
@@ -38,9 +43,9 @@ import org.apache.james.mailbox.model.MessageMetaData;
 import org.apache.james.mailbox.model.MessageRange;
 import org.apache.james.mailbox.model.MessageRange.Type;
 import org.apache.james.mailbox.model.MessageResult;
-import org.apache.james.mailbox.model.MessageResult.FetchGroup;
 import org.apache.james.mailbox.model.MessageResultIterator;
 import org.apache.james.mailbox.model.MimeDescriptor;
+import org.apache.james.mailbox.model.MimePath;
 import org.apache.james.mailbox.store.mail.MessageMapper;
 import org.apache.james.mailbox.store.mail.MessageMapper.FetchType;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
@@ -62,7 +67,7 @@ public class StoreMessageResultIterator implements MessageResultIterator {
     private final MessageMapper mapper;
     private final FetchType ftype;
 
-    public StoreMessageResultIterator(MessageMapper mapper, Mailbox mailbox, MessageRange range, BatchSizes batchSizes, org.apache.james.mailbox.model.MessageResult.FetchGroup group) {
+    public StoreMessageResultIterator(MessageMapper mapper, Mailbox mailbox, MessageRange range, BatchSizes batchSizes, FetchGroup group) {
         this.mailbox = mailbox;
         this.group = group;
         this.mapper = mapper;
@@ -73,54 +78,6 @@ public class StoreMessageResultIterator implements MessageResultIterator {
         this.type = range.getType();
         this.ftype = getFetchType(group);
         LOGGER.debug("batchSizes used: {}", batchSizes);
-    }
-
-    /**
-     * Use the passed {@link FetchGroup} and calculate the right
-     * {@link FetchType} for it
-     * 
-     * @param group
-     * @return fetchType
-     */
-    private static FetchType getFetchType(FetchGroup group) {
-        int content = group.content();
-        boolean headers = false;
-        boolean body = false;
-        boolean full = false;
-
-        if ((content & FetchGroup.HEADERS) > 0) {
-            headers = true;
-            content -= FetchGroup.HEADERS;
-        }
-        if (group.getPartContentDescriptors().size() > 0) {
-            full = true;
-        }
-        if ((content & FetchGroup.BODY_CONTENT) > 0) {
-            body = true;
-            content -= FetchGroup.BODY_CONTENT;
-        }
-
-        if ((content & FetchGroup.FULL_CONTENT) > 0) {
-            full = true;
-            content -= FetchGroup.FULL_CONTENT;
-        }
-
-        if ((content & FetchGroup.MIME_DESCRIPTOR) > 0) {
-            // If we need the mimedescriptor we MAY need the full content later
-            // too.
-            // This gives us no other choice then request it
-            full = true;
-            content -= FetchGroup.MIME_DESCRIPTOR;
-        }
-        if (full || (body && headers)) {
-            return FetchType.Full;
-        } else if (body) {
-            return FetchType.Body;
-        } else if (headers) {
-            return FetchType.Headers;
-        } else {
-            return FetchType.Metadata;
-        }
     }
 
     @Override
@@ -245,7 +202,7 @@ public class StoreMessageResultIterator implements MessageResultIterator {
         }
 
         @Override
-        public long getModSeq() {
+        public ModSeq getModSeq() {
             return messageMetaData().getModSeq();
         }
 
@@ -268,7 +225,12 @@ public class StoreMessageResultIterator implements MessageResultIterator {
         public Content getBody() throws MailboxException {
             throw exception;
         }
-        
+
+        @Override
+        public boolean hasAttachments() throws MailboxException {
+            throw exception;
+        }
+
         @Override
         public int compareTo(MessageResult that) {
             return getUid().compareTo(that.getUid());
@@ -331,7 +293,7 @@ public class StoreMessageResultIterator implements MessageResultIterator {
         }
 
         @Override
-        public List<MessageAttachment> getAttachments() throws MailboxException {
+        public List<MessageAttachment> getLoadedAttachments() throws MailboxException {
             throw exception;
         }
 

@@ -22,10 +22,9 @@ package org.apache.james.imap.processor;
 import java.io.Closeable;
 import java.util.List;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.response.StatusResponse;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
@@ -54,40 +53,39 @@ public class SetAnnotationProcessor extends AbstractMailboxProcessor<SetAnnotati
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         return ImmutableList.of(ImapConstants.SUPPORTS_ANNOTATION);
     }
 
     @Override
-    protected void doProcess(SetAnnotationRequest message, ImapSession session, String tag, ImapCommand command,
-                             Responder responder) {
+    protected void processRequest(SetAnnotationRequest request, ImapSession session, Responder responder) {
         final MailboxManager mailboxManager = getMailboxManager();
-        final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
-        final String mailboxName = message.getMailboxName();
+        final MailboxSession mailboxSession = session.getMailboxSession();
+        final String mailboxName = request.getMailboxName();
         try {
             MailboxPath mailboxPath = PathConverter.forSession(session).buildFullPath(mailboxName);
 
-            mailboxManager.updateAnnotations(mailboxPath, mailboxSession, message.getMailboxAnnotations());
+            mailboxManager.updateAnnotations(mailboxPath, mailboxSession, request.getMailboxAnnotations());
 
-            okComplete(command, tag, responder);
+            okComplete(request, responder);
         } catch (MailboxNotFoundException e) {
-            LOGGER.info("{} failed for mailbox {}", command.getName(), mailboxName, e);
-            no(command, tag, responder, HumanReadableText.FAILURE_NO_SUCH_MAILBOX, StatusResponse.ResponseCode.tryCreate());
+            LOGGER.info("{} failed for mailbox {}", request.getCommand().getName(), mailboxName, e);
+            no(request, responder, HumanReadableText.FAILURE_NO_SUCH_MAILBOX, StatusResponse.ResponseCode.tryCreate());
         } catch (AnnotationException e) {
-            LOGGER.info("{} failed for mailbox {}", command.getName(), mailboxName, e);
-            no(command, tag, responder, new HumanReadableText(HumanReadableText.MAILBOX_ANNOTATION_KEY, e.getMessage()));
+            LOGGER.info("{} failed for mailbox {}", request.getCommand().getName(), mailboxName, e);
+            no(request, responder, new HumanReadableText(HumanReadableText.MAILBOX_ANNOTATION_KEY, e.getMessage()));
         } catch (MailboxException e) {
-            LOGGER.error("{} failed for mailbox {}", command.getName(), mailboxName, e);
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+            LOGGER.error("{} failed for mailbox {}", request.getCommand().getName(), mailboxName, e);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
         }
     }
 
     @Override
-    protected Closeable addContextToMDC(SetAnnotationRequest message) {
+    protected Closeable addContextToMDC(SetAnnotationRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "SET_ANNOTATION")
-            .addContext("mailbox", message.getMailboxName())
-            .addContext("annotations", message.getMailboxAnnotations())
+            .addContext("mailbox", request.getMailboxName())
+            .addContext("annotations", request.getMailboxAnnotations())
             .build();
     }
 }

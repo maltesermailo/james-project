@@ -60,6 +60,7 @@ public class DeliveryRunnable implements Disposable {
     private final MailDelivrer mailDelivrer;
     private final Supplier<Date> dateSupplier;
     private Disposable disposable;
+    private Scheduler remoteDeliveryScheduler;
 
     public DeliveryRunnable(MailQueue queue, RemoteDeliveryConfiguration configuration, DNSService dnsServer, MetricFactory metricFactory,
                             MailetContext mailetContext, Bouncer bouncer) {
@@ -81,10 +82,9 @@ public class DeliveryRunnable implements Disposable {
     }
 
     public void start() {
-        Scheduler remoteDeliveryScheduler = Schedulers.newElastic("RemoteDelivery");
+        remoteDeliveryScheduler = Schedulers.newBoundedElastic(Schedulers.DEFAULT_BOUNDED_ELASTIC_SIZE, Schedulers.DEFAULT_BOUNDED_ELASTIC_QUEUESIZE, "RemoteDelivery");
         disposable = Flux.from(queue.deQueue())
-            .publishOn(remoteDeliveryScheduler)
-            .flatMap(this::runStep)
+            .flatMap(queueItem -> runStep(queueItem).subscribeOn(remoteDeliveryScheduler))
             .onErrorContinue(((throwable, nothing) -> LOGGER.error("Exception caught in RemoteDelivery", throwable)))
             .subscribeOn(remoteDeliveryScheduler)
             .subscribe();
@@ -93,11 +93,10 @@ public class DeliveryRunnable implements Disposable {
     private Mono<Void> runStep(MailQueue.MailQueueItem queueItem) {
         TimeMetric timeMetric = metricFactory.timer(REMOTE_DELIVERY_TRIAL);
         try {
-            return processMail(queueItem);
+            return processMail(queueItem)
+                .doOnSuccess(any -> timeMetric.stopAndPublish());
         } catch (Throwable e) {
             return Mono.error(e);
-        } finally {
-            timeMetric.stopAndPublish();
         }
     }
 
@@ -177,5 +176,6 @@ public class DeliveryRunnable implements Disposable {
     @Override
     public void dispose() {
         disposable.dispose();
+        remoteDeliveryScheduler.dispose();
     }
 }

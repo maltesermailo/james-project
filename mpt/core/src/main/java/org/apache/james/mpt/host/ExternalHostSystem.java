@@ -20,8 +20,9 @@
 package org.apache.james.mpt.host;
 
 import org.apache.commons.lang3.NotImplementedException;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.mailbox.model.MailboxACL;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mpt.api.ImapFeatures;
@@ -82,7 +83,7 @@ public class ExternalHostSystem extends ExternalSessionFactory implements ImapHo
     }
     
     @Override
-    public boolean addUser(String user, String password) throws Exception {
+    public boolean addUser(Username user, String password) throws Exception {
         if (userAdder == null) {
             monitor.note("Please ensure user '" + user + "' with password '" + password + "' exists.");
             return false;
@@ -117,12 +118,12 @@ public class ExternalHostSystem extends ExternalSessionFactory implements ImapHo
     }
 
     @Override
-    public void setQuotaLimits(QuotaCount maxMessageQuota, QuotaSize maxStorageQuota) throws Exception {
+    public void setQuotaLimits(QuotaCountLimit maxMessageQuota, QuotaSizeLimit maxStorageQuota) throws Exception {
         throw new NotImplementedException("Not implemented");
     }
 
     @Override
-    public void grantRights(MailboxPath mailboxPath, String userName, MailboxACL.Rfc4314Rights rights) throws Exception {
+    public void grantRights(MailboxPath mailboxPath, Username userName, MailboxACL.Rfc4314Rights rights) throws Exception {
         throw new NotImplementedException("Not implemented");
     }
 }

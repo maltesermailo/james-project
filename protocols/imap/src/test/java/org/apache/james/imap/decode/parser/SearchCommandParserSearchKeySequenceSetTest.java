@@ -20,15 +20,17 @@
 package org.apache.james.imap.decode.parser;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
 import org.apache.james.imap.api.message.request.SearchKey;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.ImapRequestStreamLineReader;
 import org.apache.james.mailbox.MessageUid;
@@ -36,14 +38,11 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class SearchCommandParserSearchKeySequenceSetTest {
-
     SearchCommandParser parser;
-    ImapCommand command;
 
     @Before
     public void setUp() throws Exception {
-        parser = new SearchCommandParser();
-        command = ImapCommand.anyStateCommand("Command");
+        parser = new SearchCommandParser(mock(StatusResponseFactory.class));
     }
     
     @Test
@@ -130,7 +129,7 @@ public class SearchCommandParserSearchKeySequenceSetTest {
     private void checkValid(String input, SearchKey key) throws Exception {
         input = input + "\r\n";
         ImapRequestLineReader reader = new ImapRequestStreamLineReader(
-                new ByteArrayInputStream(input.getBytes("US-ASCII")),
+                new ByteArrayInputStream(input.getBytes(StandardCharsets.US_ASCII)),
                 new ByteArrayOutputStream());
 
         final SearchKey searchKey = parser.searchKey(null, reader, null, false);

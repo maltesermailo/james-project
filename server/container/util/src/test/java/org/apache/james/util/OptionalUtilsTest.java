@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
-public class OptionalUtilsTest {
+class OptionalUtilsTest {
 
     @Test
     void ifEmptyShouldPreserveValueOfEmptyOptionals() {
@@ -210,22 +210,22 @@ public class OptionalUtilsTest {
     }
 
     @Test
-    void containsDifferentShouldReturnTrueWhenNullStoreValue() throws Exception {
+    void containsDifferentShouldReturnTrueWhenNullStoreValue() {
         assertThat(OptionalUtils.containsDifferent(Optional.of("any"), null)).isTrue();
     }
 
     @Test
-    void containsDifferentShouldReturnFalseWhenEmpty() throws Exception {
+    void containsDifferentShouldReturnFalseWhenEmpty() {
         assertThat(OptionalUtils.containsDifferent(Optional.empty(), "any")).isFalse();
     }
 
     @Test
-    void containsDifferentShouldReturnFalseWhenSameValue() throws Exception {
+    void containsDifferentShouldReturnFalseWhenSameValue() {
         assertThat(OptionalUtils.containsDifferent(Optional.of("any"), "any")).isFalse();
     }
 
     @Test
-    void containsDifferentShouldReturnTrueWhenDifferentValue() throws Exception {
+    void containsDifferentShouldReturnTrueWhenDifferentValue() {
         assertThat(OptionalUtils.containsDifferent(Optional.of("any"), "other")).isTrue();
     }
 

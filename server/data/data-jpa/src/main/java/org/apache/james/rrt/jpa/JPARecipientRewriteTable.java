@@ -29,6 +29,7 @@ import javax.persistence.EntityTransaction;
 import javax.persistence.PersistenceException;
 import javax.persistence.PersistenceUnit;
 
+import org.apache.james.backends.jpa.EntityManagerUtils;
 import org.apache.james.core.Domain;
 import org.apache.james.rrt.api.RecipientRewriteTableException;
 import org.apache.james.rrt.jpa.model.JPARecipientRewrite;
@@ -88,52 +89,40 @@ public class JPARecipientRewriteTable extends AbstractRecipientRewriteTable {
     @Override
     public Mappings getStoredMappings(MappingSource source) throws RecipientRewriteTableException {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
-        final EntityTransaction transaction = entityManager.getTransaction();
         try {
-            transaction.begin();
             @SuppressWarnings("unchecked")
             List<JPARecipientRewrite> virtualUsers = entityManager.createNamedQuery("selectUserDomainMapping")
                 .setParameter("user", source.getFixedUser())
                 .setParameter("domain", source.getFixedDomain())
                 .getResultList();
-            transaction.commit();
             if (virtualUsers.size() > 0) {
                 return MappingsImpl.fromRawString(virtualUsers.get(0).getTargetAddress());
             }
             return MappingsImpl.empty();
         } catch (PersistenceException e) {
             LOGGER.debug("Failed to get user domain mappings", e);
-            if (transaction.isActive()) {
-                transaction.rollback();
-            }
             throw new RecipientRewriteTableException("Error while retrieve mappings", e);
         } finally {
-            entityManager.close();
+            EntityManagerUtils.safelyClose(entityManager);
         }
     }
 
     @Override
     public Map<MappingSource, Mappings> getAllMappings() throws RecipientRewriteTableException {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
-        final EntityTransaction transaction = entityManager.getTransaction();
         Map<MappingSource, Mappings> mapping = new HashMap<>();
         try {
-            transaction.begin();
             @SuppressWarnings("unchecked")
             List<JPARecipientRewrite> virtualUsers = entityManager.createNamedQuery("selectAllMappings").getResultList();
-            transaction.commit();
             for (JPARecipientRewrite virtualUser : virtualUsers) {
                 mapping.put(MappingSource.fromUser(virtualUser.getUser(), virtualUser.getDomain()), MappingsImpl.fromRawString(virtualUser.getTargetAddress()));
             }
             return mapping;
         } catch (PersistenceException e) {
             LOGGER.debug("Failed to get all mappings", e);
-            if (transaction.isActive()) {
-                transaction.rollback();
-            }
             throw new RecipientRewriteTableException("Error while retrieve mappings", e);
         } finally {
-            entityManager.close();
+            EntityManagerUtils.safelyClose(entityManager);
         }
     }
 
@@ -175,7 +164,7 @@ public class JPARecipientRewriteTable extends AbstractRecipientRewriteTable {
             }
             throw new RecipientRewriteTableException("Unable to update mapping", e);
         } finally {
-            entityManager.close();
+            EntityManagerUtils.safelyClose(entityManager);
         }
         return false;
     }
@@ -203,7 +192,7 @@ public class JPARecipientRewriteTable extends AbstractRecipientRewriteTable {
             throw new RecipientRewriteTableException("Unable to remove mapping", e);
 
         } finally {
-            entityManager.close();
+            EntityManagerUtils.safelyClose(entityManager);
         }
     }
 
@@ -225,7 +214,7 @@ public class JPARecipientRewriteTable extends AbstractRecipientRewriteTable {
             }
             throw new RecipientRewriteTableException("Unable to add mapping", e);
         } finally {
-            entityManager.close();
+            EntityManagerUtils.safelyClose(entityManager);
         }
     }
 

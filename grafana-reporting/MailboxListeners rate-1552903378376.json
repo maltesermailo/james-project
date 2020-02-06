@@ -1,4 +1,14 @@
 {
+  "__inputs": [
+    {
+      "name": "DS_JAMES_ES",
+      "label": "james es",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "elasticsearch",
+      "pluginName": "Elasticsearch"
+    }
+  ],
   "annotations": {
     "list": [
       {
@@ -23,7 +33,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Elasticsearch",
+      "datasource": "${DS_JAMES_ES}",
       "fill": 1,
       "gridPos": {
         "h": 11,
@@ -99,7 +109,7 @@
               "type": "avg"
             }
           ],
-          "query": "name:mailbox-listener-ElasticSearchListeningMessageSearchIndex",
+          "query": "name:\"mailbox-listener-ElasticSearchListeningMessageSearchIndex\"",
           "refId": "A",
           "timeField": "@timestamp"
         }
@@ -150,7 +160,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Elasticsearch",
+      "datasource": "${DS_JAMES_ES}",
       "fill": 1,
       "gridPos": {
         "h": 11,
@@ -226,7 +236,7 @@
               "type": "avg"
             }
           ],
-          "query": "name:mailbox-listener-ElasticSearchQuotaMailboxListener",
+          "query": "name:\"mailbox-listener-ElasticSearchQuotaMailboxListener\"",
           "refId": "A",
           "timeField": "@timestamp"
         }
@@ -277,7 +287,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Elasticsearch",
+      "datasource": "${DS_JAMES_ES}",
       "fill": 1,
       "gridPos": {
         "h": 11,
@@ -353,7 +363,7 @@
               "type": "avg"
             }
           ],
-          "query": "name:mailbox-listener-SpamAssassinListener",
+          "query": "name:\"mailbox-listener-SpamAssassinListener\"",
           "refId": "A",
           "timeField": "@timestamp"
         }
@@ -404,7 +414,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Elasticsearch",
+      "datasource": "${DS_JAMES_ES}",
       "fill": 1,
       "gridPos": {
         "h": 11,
@@ -480,7 +490,7 @@
               "type": "avg"
             }
           ],
-          "query": "name:mailbox-listener-ListeningCurrentQuotaUpdater",
+          "query": "name:\"mailbox-listener-ListeningCurrentQuotaUpdater\"",
           "refId": "A",
           "timeField": "@timestamp"
         }
@@ -531,7 +541,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Elasticsearch",
+      "datasource": "${DS_JAMES_ES}",
       "fill": 1,
       "gridPos": {
         "h": 11,
@@ -607,7 +617,7 @@
               "type": "avg"
             }
           ],
-          "query": "name:mailbox-listener-MailboxAnnotationListener",
+          "query": "name:\"mailbox-listener-MailboxAnnotationListener\"",
           "refId": "A",
           "timeField": "@timestamp"
         }
@@ -658,7 +668,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Elasticsearch",
+      "datasource": "${DS_JAMES_ES}",
       "fill": 1,
       "gridPos": {
         "h": 11,
@@ -734,7 +744,7 @@
               "type": "avg"
             }
           ],
-          "query": "name: mailbox-listener-QuotaThresholdCrossingListener",
+          "query": "name:\" mailbox-listener-QuotaThresholdCrossingListener\"",
           "refId": "A",
           "timeField": "@timestamp"
         }

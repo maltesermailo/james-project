@@ -33,8 +33,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.StringTokenizer;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.james.core.Username;
 import org.apache.james.protocols.api.Request;
 import org.apache.james.protocols.api.Response;
 import org.apache.james.protocols.api.handler.CommandHandler;
@@ -83,7 +82,7 @@ public class AuthCmdHandler
     private static final Response AUTH_FAILED = new SMTPResponse(SMTPRetCode.AUTH_FAILED, "Authentication Failed").immutable();
     private static final Response UNKNOWN_AUTH_TYPE = new SMTPResponse(SMTPRetCode.PARAMETER_NOT_IMPLEMENTED, "Unrecognized Authentication Type").immutable();
     
-    private abstract class AbstractSMTPLineHandler implements LineHandler<SMTPSession> {
+    private abstract static class AbstractSMTPLineHandler implements LineHandler<SMTPSession> {
 
         @Override
         public Response onLine(SMTPSession session, ByteBuffer line) {
@@ -139,16 +138,6 @@ public class AuthCmdHandler
     
     private List<HookResultHook> rHooks;
 
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
-    }
-
     /**
      * handles AUTH command
      *
@@ -168,7 +157,7 @@ public class AuthCmdHandler
      * @param argument the argument passed in with the command by the SMTP client
      */
     private Response doAUTH(SMTPSession session, String argument) {
-        if (session.getUser() != null) {
+        if (session.getUsername() != null) {
             return ALREADY_AUTH;
         } else if (argument == null) {
             return SYNTAX_ERROR;
@@ -187,16 +176,6 @@ public class AuthCmdHandler
                         protected Response onCommand(SMTPSession session, String l) {
                             return doPlainAuthPass(session, l);
                         }
-
-                        @Override
-                        public void init(Configuration config) throws ConfigurationException {
-
-                        }
-
-                        @Override
-                        public void destroy() {
-
-                        }
                     });
                     return AUTH_READY_PLAIN;
                 } else {
@@ -210,16 +189,6 @@ public class AuthCmdHandler
                         @Override
                         protected Response onCommand(SMTPSession session, String l) {
                             return doLoginAuthPass(session, l);
-                        }
-
-                        @Override
-                        public void init(Configuration config) throws ConfigurationException {
-
-                        }
-
-                        @Override
-                        public void destroy() {
-
                         }
                     });
                     return AUTH_READY_USERNAME_LOGIN;
@@ -245,7 +214,7 @@ public class AuthCmdHandler
      * Decoded: test\000test\000tEst42
      *
      * @param session SMTP session object
-     * @param initialResponse the initial response line passed in with the AUTH command
+     * @param line the initial response line passed in with the AUTH command
      */
     private Response doPlainAuthPass(SMTPSession session, String line) {
         String user = null;
@@ -299,7 +268,7 @@ public class AuthCmdHandler
             // with in the if clause below
         }
         // Authenticate user
-        Response response = doAuthTest(session, user, pass, "PLAIN");
+        Response response = doAuthTest(session, Username.of(user), pass, "PLAIN");
         
         session.popLineHandler();
 
@@ -318,7 +287,7 @@ public class AuthCmdHandler
      * Carries out the Login AUTH SASL exchange.
      *
      * @param session SMTP session object
-     * @param initialResponse the initial response line passed in with the AUTH command
+     * @param user the user passed in with the AUTH command
      */
     private Response doLoginAuthPass(SMTPSession session, String user) {
         if (user != null) {
@@ -335,32 +304,22 @@ public class AuthCmdHandler
         
         session.pushLineHandler(new AbstractSMTPLineHandler() {
 
-            private String user;
+            private Username username;
 
-            public LineHandler<SMTPSession> setUser(String user) {
-                this.user = user;
+            public LineHandler<SMTPSession> setUsername(Username username) {
+                this.username = username;
                 return this;
             }
 
             @Override
             protected Response onCommand(SMTPSession session, String l) {
-                return doLoginAuthPassCheck(session, user, l);
+                return doLoginAuthPassCheck(session, username, l);
             }
-
-            @Override
-            public void init(Configuration config) throws ConfigurationException {
-
-            }
-
-            @Override
-            public void destroy() {
-
-            }
-        }.setUser(user));
+        }.setUsername(Username.of(user)));
         return AUTH_READY_PASSWORD_LOGIN;
     }
     
-    private Response doLoginAuthPassCheck(SMTPSession session, String user, String pass) {
+    private Response doLoginAuthPassCheck(SMTPSession session, Username username, String pass) {
         if (pass != null) {
             try {
                 pass = decodeBase64(pass);
@@ -374,20 +333,11 @@ public class AuthCmdHandler
         session.popLineHandler();
 
         // Authenticate user
-        return doAuthTest(session, user, pass, "LOGIN");
+        return doAuthTest(session, username, pass, "LOGIN");
     }
 
-
-
-    /**
-     * @param session
-     * @param user
-     * @param pass
-     * @param authType
-     * @return
-     */
-    protected Response doAuthTest(SMTPSession session, String user, String pass, String authType) {
-        if ((user == null) || (pass == null)) {
+    protected Response doAuthTest(SMTPSession session, Username username, String pass, String authType) {
+        if ((username == null) || (pass == null)) {
             return new SMTPResponse(SMTPRetCode.SYNTAX_ERROR_ARGUMENTS,"Could not decode parameters for AUTH " + authType);
         }
 
@@ -400,7 +350,7 @@ public class AuthCmdHandler
                 LOGGER.debug("executing  hook {}", rawHook);
 
                 long start = System.currentTimeMillis();
-                HookResult hRes = rawHook.doAuth(session, user, pass);
+                HookResult hRes = rawHook.doAuth(session, username, pass);
                 long executionTime = System.currentTimeMillis() - start;
 
                 if (rHooks != null) {
@@ -425,7 +375,7 @@ public class AuthCmdHandler
         }
 
         res = AUTH_FAILED;
-        LOGGER.error("AUTH method {} failed from {}@{}", authType, user, session.getRemoteAddress().getAddress().getHostAddress());
+        LOGGER.error("AUTH method {} failed from {}@{}", authType, username, session.getRemoteAddress().getAddress().getHostAddress());
         return res;
     }
 
@@ -517,12 +467,11 @@ public class AuthCmdHandler
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public List<String> getImplementedEsmtpFeatures(SMTPSession session) {
         if (session.isAuthSupported()) {
             return ESMTP_FEATURES;
         } else {
-            return Collections.EMPTY_LIST;
+            return Collections.emptyList();
         }
     }
 

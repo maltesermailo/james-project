@@ -23,9 +23,9 @@ import java.io.InputStream;
 
 import org.apache.commons.io.input.BoundedInputStream;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
-import org.apache.james.protocols.imap.DecodingException;
-import org.apache.james.protocols.imap.utils.EolInputStream;
+import org.apache.james.imap.utils.EolInputStream;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBufferInputStream;
 import org.jboss.netty.channel.Channel;
@@ -115,7 +115,7 @@ public class NettyImapRequestLineReader extends AbstractNettyImapRequestLineRead
      * {@link NettyImapRequestLineReader#read(int, boolean)} if not enough data is
      * readable in the underlying {@link ChannelBuffer}
      */
-    public final class NotEnoughDataException extends RuntimeException {
+    public static final class NotEnoughDataException extends RuntimeException {
 
         public static final int UNKNOWN_SIZE = -1;
         private final int size;

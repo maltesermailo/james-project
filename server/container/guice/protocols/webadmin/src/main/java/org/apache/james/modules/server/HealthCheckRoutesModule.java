@@ -20,7 +20,7 @@
 package org.apache.james.modules.server;
 
 import org.apache.james.core.healthcheck.HealthCheck;
-import org.apache.james.webadmin.PublicRoutes;
+import org.apache.james.webadmin.Routes;
 import org.apache.james.webadmin.routes.HealthCheckRoutes;
 
 import com.google.inject.AbstractModule;
@@ -32,7 +32,7 @@ public class HealthCheckRoutesModule extends AbstractModule {
     protected void configure() {
         bind(HealthCheckRoutes.class).in(Scopes.SINGLETON);
 
-        Multibinder<PublicRoutes> routesMultibinder = Multibinder.newSetBinder(binder(), PublicRoutes.class);
+        Multibinder<Routes> routesMultibinder = Multibinder.newSetBinder(binder(), Routes.class);
         routesMultibinder.addBinding().to(HealthCheckRoutes.class);
 
         Multibinder.newSetBinder(binder(), HealthCheck.class);

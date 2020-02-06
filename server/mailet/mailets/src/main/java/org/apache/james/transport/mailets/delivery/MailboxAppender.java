@@ -22,10 +22,10 @@ package org.apache.james.transport.mailets.delivery;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
-import org.apache.james.mailbox.exception.BadCredentialsException;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.MailboxExistsException;
 import org.apache.james.mailbox.model.ComposedMessageId;
@@ -45,7 +45,7 @@ public class MailboxAppender {
         this.mailboxManager = mailboxManager;
     }
 
-    public ComposedMessageId append(MimeMessage mail, String user, String folder) throws MessagingException {
+    public ComposedMessageId append(MimeMessage mail, Username user, String folder) throws MessagingException {
         MailboxSession session = createMailboxSession(user);
         return append(mail, user, useSlashAsSeparator(folder, session), session);
     }
@@ -61,7 +61,7 @@ public class MailboxAppender {
         return destination;
     }
 
-    private ComposedMessageId append(MimeMessage mail, String user, String folder, MailboxSession session) throws MessagingException {
+    private ComposedMessageId append(MimeMessage mail, Username user, String folder, MailboxSession session) throws MessagingException {
         mailboxManager.startProcessingRequest(session);
         try {
             MailboxPath mailboxPath = MailboxPath.forUser(user, folder);
@@ -95,24 +95,14 @@ public class MailboxAppender {
         }
     }
 
-    public MailboxSession createMailboxSession(String user) throws MessagingException {
-        try {
-            return mailboxManager.createSystemSession(user);
-        } catch (BadCredentialsException e) {
-            throw new MessagingException("Unable to authenticate to mailbox", e);
-        } catch (MailboxException e) {
-            throw new MessagingException("Can not access mailbox", e);
-        }
+    public MailboxSession createMailboxSession(Username user) {
+        return mailboxManager.createSystemSession(user);
     }
 
     private void closeProcessing(MailboxSession session) throws MessagingException {
         session.close();
         try {
-            try {
-                mailboxManager.logout(session, true);
-            } catch (MailboxException e) {
-                throw new MessagingException("Can logout from mailbox", e);
-            }
+            mailboxManager.logout(session);
         } finally {
             mailboxManager.endProcessingRequest(session);
         }

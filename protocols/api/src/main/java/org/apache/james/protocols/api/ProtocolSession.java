@@ -23,12 +23,11 @@ import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.util.Map;
 
+import org.apache.james.core.Username;
 import org.apache.james.protocols.api.handler.LineHandler;
 
 /**
  * Session for a protocol. Every new connection generates a new session
- * 
- *
  */
 public interface ProtocolSession {
    
@@ -85,22 +84,16 @@ public interface ProtocolSession {
     
     /**
      * Return the {@link InetSocketAddress} of the remote peer
-     * 
-     * @return address
      */
     InetSocketAddress getRemoteAddress();
 
     /**
      * Return the {@link InetSocketAddress} of the local bound address
-     * 
-     * @return local
      */
     InetSocketAddress getLocalAddress();
     
     /**
      * Return the ID for the session
-     * 
-     * @return id
      */
     String getSessionID();
 
@@ -124,14 +117,14 @@ public interface ProtocolSession {
      *
      * @return the user name
      */
-    String getUser();
+    Username getUsername();
 
     /**
      * Sets the user name associated with this interaction.
      *
-     * @param user the user name
+     * @param username the user name
      */
-    void setUser(String user);
+    void setUsername(Username username);
 
     /**
      * Return true if StartTLS is supported by the configuration
@@ -142,22 +135,16 @@ public interface ProtocolSession {
     
     /**
      * Return true if the starttls was started
-     * 
-     * @return true
      */
     boolean isTLSStarted();
     
     /**
-     * Return the {@link ProtocolConfiguration} 
-     * 
-     * @return config
+     * Return the {@link ProtocolConfiguration}
      */
     ProtocolConfiguration getConfiguration();
     
     /**
      * Return the {@link Charset} which is used by the {@link ProtocolSession}
-     * 
-     * @return charset
      */
     Charset getCharset();
     
@@ -170,7 +157,6 @@ public interface ProtocolSession {
     
     /**
      * Put a new line handler in the chain
-     * @param overrideCommandHandler
      */
     <T extends ProtocolSession> void pushLineHandler(LineHandler<T> overrideCommandHandler);
     

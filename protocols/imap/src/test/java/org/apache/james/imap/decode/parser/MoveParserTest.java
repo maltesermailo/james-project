@@ -19,30 +19,30 @@
 
 package org.apache.james.imap.decode.parser;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.message.IdRange;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestStreamLineReader;
 import org.apache.james.imap.message.request.MoveRequest;
-import org.apache.james.protocols.imap.DecodingException;
 import org.junit.Test;
 
 public class MoveParserTest {
-
     @Test
     public void testQuotaParsing() throws DecodingException {
-        MoveCommandParser parser = new MoveCommandParser();
-        ImapCommand command = ImapCommand.anyStateCommand("Command");
+        MoveCommandParser parser = new MoveCommandParser(mock(StatusResponseFactory.class));
         String commandString = " 42:69 foo \n";
 
         InputStream inputStream = new ByteArrayInputStream(commandString.getBytes());
         ImapRequestStreamLineReader lineReader = new ImapRequestStreamLineReader(inputStream, null);
-        MoveRequest request = (MoveRequest) parser.decode(command, lineReader, "A003", null);
-        MoveRequest expected = new MoveRequest(command, new IdRange[] {new IdRange(42, 69)}, "foo", false, "A003");
+        MoveRequest request = (MoveRequest) parser.decode(lineReader, TAG, null);
+        MoveRequest expected = new MoveRequest(new IdRange[] {new IdRange(42, 69)}, "foo", false, TAG);
 
         assertThat(request).isEqualTo(expected);
     }

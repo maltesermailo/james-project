@@ -18,6 +18,7 @@
  ****************************************************************/
 package org.apache.james.mailbox.jpa.mail;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -29,11 +30,12 @@ import javax.persistence.EntityManagerFactory;
 import javax.persistence.PersistenceException;
 import javax.persistence.Query;
 
-import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.jpa.JPAId;
 import org.apache.james.mailbox.jpa.JPATransactionalMapper;
+import org.apache.james.mailbox.jpa.mail.MessageUtils.MessageChangedFlags;
 import org.apache.james.mailbox.jpa.mail.model.JPAMailbox;
 import org.apache.james.mailbox.jpa.mail.model.openjpa.AbstractJPAMailboxMessage;
 import org.apache.james.mailbox.jpa.mail.model.openjpa.JPAEncryptedMailboxMessage;
@@ -47,14 +49,13 @@ import org.apache.james.mailbox.model.MessageRange.Type;
 import org.apache.james.mailbox.model.UpdatedFlags;
 import org.apache.james.mailbox.store.FlagsUpdateCalculator;
 import org.apache.james.mailbox.store.mail.MessageMapper;
-import org.apache.james.mailbox.store.mail.MessageUtils;
-import org.apache.james.mailbox.store.mail.MessageUtils.MessageChangedFlags;
 import org.apache.james.mailbox.store.mail.ModSeqProvider;
 import org.apache.james.mailbox.store.mail.UidProvider;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
 import org.apache.james.mailbox.store.mail.utils.ApplicableFlagCalculator;
 import org.apache.openjpa.persistence.ArgumentException;
 
+import com.github.fge.lambdas.Throwing;
 import com.github.steveash.guavate.Guavate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
@@ -67,15 +68,20 @@ public class JPAMessageMapper extends JPATransactionalMapper implements MessageM
     private static final int UNLIMITED = -1;
 
     private final MessageUtils messageMetadataMapper;
+    private final UidProvider uidProvider;
+    private final ModSeqProvider modSeqProvider;
 
-    public JPAMessageMapper(MailboxSession mailboxSession, UidProvider uidProvider, ModSeqProvider modSeqProvider, EntityManagerFactory entityManagerFactory) {
+    public JPAMessageMapper(UidProvider uidProvider, ModSeqProvider modSeqProvider, EntityManagerFactory entityManagerFactory) {
         super(entityManagerFactory);
-        this.messageMetadataMapper = new MessageUtils(mailboxSession, uidProvider, modSeqProvider);
+        this.messageMetadataMapper = new MessageUtils(uidProvider, modSeqProvider);
+        this.uidProvider = uidProvider;
+        this.modSeqProvider = modSeqProvider;
     }
 
     @Override
     public MailboxCounters getMailboxCounters(Mailbox mailbox) throws MailboxException {
         return MailboxCounters.builder()
+            .mailboxId(mailbox.getMailboxId())
             .count(countMessagesInMailbox(mailbox))
             .unseen(countUnseenMessagesInMailbox(mailbox))
             .build();
@@ -121,24 +127,39 @@ public class JPAMessageMapper extends JPATransactionalMapper implements MessageM
 
     @Override
     public long countMessagesInMailbox(Mailbox mailbox) throws MailboxException {
+        JPAId mailboxId = (JPAId) mailbox.getMailboxId();
+        return countMessagesInMailbox(mailboxId);
+    }
+
+    private long countMessagesInMailbox(JPAId mailboxId) throws MailboxException {
         try {
-            JPAId mailboxId = (JPAId) mailbox.getMailboxId();
             return (Long) getEntityManager().createNamedQuery("countMessagesInMailbox")
                     .setParameter("idParam", mailboxId.getRawId()).getSingleResult();
         } catch (PersistenceException e) {
-            throw new MailboxException("Count of messages failed in mailbox " + mailbox, e);
+            throw new MailboxException("Count of messages failed in mailbox " + mailboxId, e);
         }
     }
 
     @Override
     public long countUnseenMessagesInMailbox(Mailbox mailbox) throws MailboxException {
+        JPAId mailboxId = (JPAId) mailbox.getMailboxId();
+        return countUnseenMessagesInMailbox(mailboxId);
+    }
+
+    private long countUnseenMessagesInMailbox(JPAId mailboxId) throws MailboxException {
         try {
-            JPAId mailboxId = (JPAId) mailbox.getMailboxId();
             return (Long) getEntityManager().createNamedQuery("countUnseenMessagesInMailbox")
                     .setParameter("idParam", mailboxId.getRawId()).getSingleResult();
         } catch (PersistenceException e) {
-            throw new MailboxException("Count of useen messages failed in mailbox " + mailbox, e);
+            throw new MailboxException("Count of useen messages failed in mailbox " + mailboxId, e);
         }
+    }
+
+    @Override
+    public List<MailboxCounters> getMailboxCounters(Collection<Mailbox> mailboxes) throws MailboxException {
+        return mailboxes.stream()
+            .map(Throwing.<Mailbox, MailboxCounters>function(this::getMailboxCounters).sneakyThrow())
+            .collect(Guavate.toImmutableList());
     }
 
     @Override
@@ -297,17 +318,17 @@ public class JPAMessageMapper extends JPATransactionalMapper implements MessageM
 
     @Override
     public MessageMetaData copy(Mailbox mailbox, MailboxMessage original) throws MailboxException {
-        return copy(mailbox, messageMetadataMapper.nextUid(mailbox), messageMetadataMapper.nextModSeq(mailbox), original);  
+        return copy(mailbox, uidProvider.nextUid(mailbox), modSeqProvider.nextModSeq(mailbox), original);
     }
 
     @Override
     public Optional<MessageUid> getLastUid(Mailbox mailbox) throws MailboxException {
-        return messageMetadataMapper.getLastUid(mailbox);
+        return uidProvider.lastUid(mailbox);
     }
 
     @Override
-    public long getHighestModSeq(Mailbox mailbox) throws MailboxException {
-        return messageMetadataMapper.getHighestModSeq(mailbox);
+    public ModSeq getHighestModSeq(Mailbox mailbox) throws MailboxException {
+        return modSeqProvider.highestModSeq(mailbox);
     }
 
     @Override
@@ -317,7 +338,7 @@ public class JPAMessageMapper extends JPATransactionalMapper implements MessageM
             .computeApplicableFlags();
     }
 
-    private MessageMetaData copy(Mailbox mailbox, MessageUid uid, long modSeq, MailboxMessage original)
+    private MessageMetaData copy(Mailbox mailbox, MessageUid uid, ModSeq modSeq, MailboxMessage original)
             throws MailboxException {
         MailboxMessage copy;
         JPAMailbox currentMailbox = JPAMailbox.from(mailbox);

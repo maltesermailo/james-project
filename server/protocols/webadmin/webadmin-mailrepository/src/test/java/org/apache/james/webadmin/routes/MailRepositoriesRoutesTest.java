@@ -56,15 +56,15 @@ import org.apache.james.mailrepository.api.MailRepositoryUrl;
 import org.apache.james.mailrepository.api.Protocol;
 import org.apache.james.mailrepository.memory.MailRepositoryStoreConfiguration;
 import org.apache.james.mailrepository.memory.MemoryMailRepository;
-import org.apache.james.mailrepository.memory.MemoryMailRepositoryProvider;
 import org.apache.james.mailrepository.memory.MemoryMailRepositoryStore;
 import org.apache.james.mailrepository.memory.MemoryMailRepositoryUrlStore;
+import org.apache.james.mailrepository.memory.TestingMailRepositoryLoader;
 import org.apache.james.queue.api.MailQueueFactory;
 import org.apache.james.queue.api.ManageableMailQueue;
 import org.apache.james.queue.api.RawMailQueueItemDecoratorFactory;
 import org.apache.james.queue.memory.MemoryMailQueueFactory;
+import org.apache.james.task.Hostname;
 import org.apache.james.task.MemoryTaskManager;
-import org.apache.james.task.eventsourcing.Hostname;
 import org.apache.james.util.ClassLoaderUtils;
 import org.apache.james.webadmin.Constants;
 import org.apache.james.webadmin.WebAdminServer;
@@ -86,7 +86,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
 
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
@@ -175,6 +174,22 @@ public class MailRepositoriesRoutesTest {
 
         assertThat(mailRepositoryStore.getByPath(PATH_MY_REPO))
             .hasSize(1);
+    }
+
+    @Test
+    public void putMailRepositoryShouldReturnInvalidArgumentWhenProtocolIsUnsupported() {
+        given()
+            .params("protocol", "unsupported")
+        .when()
+            .put(PATH_ESCAPED_MY_REPO)
+        .then()
+            .statusCode(HttpStatus.BAD_REQUEST_400)
+            .body("statusCode", is(400))
+            .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
+            .body("message", is("'unsupported' is an unsupported protocol"));
+
+        assertThat(mailRepositoryStore.get(URL_MY_REPO))
+            .isEmpty();
     }
 
     @Test
@@ -978,7 +993,7 @@ public class MailRepositoriesRoutesTest {
         .then()
             .body("status", is("completed"))
             .body("taskId", is(notNullValue()))
-            .body("type", is(ClearMailRepositoryTask.TYPE))
+            .body("type", is(ClearMailRepositoryTask.TYPE.asString()))
             .body("additionalInformation.repositoryPath", is(PATH_MY_REPO.asString()))
             .body("additionalInformation.initialCount", is(2))
             .body("additionalInformation.remainingCount", is(0))
@@ -1060,7 +1075,8 @@ public class MailRepositoriesRoutesTest {
             .statusCode(HttpStatus.BAD_REQUEST_400)
             .body("statusCode", is(400))
             .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
-            .body("message", is("action query parameter is mandatory. The only supported value is `reprocess`"));
+            .body("message", is("Invalid arguments supplied in the user request"))
+            .body("details", is("Invalid value supplied for query parameter 'action': invalid. Supported values are [reprocess]"));
     }
 
     @Test
@@ -1071,7 +1087,8 @@ public class MailRepositoriesRoutesTest {
             .statusCode(HttpStatus.BAD_REQUEST_400)
             .body("statusCode", is(400))
             .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
-            .body("message", is("action query parameter is mandatory. The only supported value is `reprocess`"));
+            .body("message", is("Invalid arguments supplied in the user request"))
+            .body("details", is("'action' query parameter is compulsory. Supported values are [reprocess]"));
     }
 
     @Test
@@ -1097,7 +1114,7 @@ public class MailRepositoriesRoutesTest {
         .then()
             .body("status", is("completed"))
             .body("taskId", is(notNullValue()))
-            .body("type", is(ReprocessingAllMailsTask.TYPE))
+            .body("type", is(ReprocessingAllMailsTask.TYPE.asString()))
             .body("additionalInformation.repositoryPath", is(PATH_MY_REPO.asString()))
             .body("additionalInformation.initialCount", is(2))
             .body("additionalInformation.remainingCount", is(0))
@@ -1136,7 +1153,7 @@ public class MailRepositoriesRoutesTest {
         .then()
             .body("status", is("completed"))
             .body("taskId", is(notNullValue()))
-            .body("type", is(ReprocessingAllMailsTask.TYPE))
+            .body("type", is(ReprocessingAllMailsTask.TYPE.asString()))
             .body("additionalInformation.repositoryPath", is(PATH_MY_REPO.asString()))
             .body("additionalInformation.initialCount", is(2))
             .body("additionalInformation.remainingCount", is(0))
@@ -1418,7 +1435,8 @@ public class MailRepositoriesRoutesTest {
             .statusCode(HttpStatus.BAD_REQUEST_400)
             .body("statusCode", is(400))
             .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
-            .body("message", is("action query parameter is mandatory. The only supported value is `reprocess`"));
+            .body("message", is("Invalid arguments supplied in the user request"))
+            .body("details", is("Invalid value supplied for query parameter 'action': invalid. Supported values are [reprocess]"));
     }
 
     @Test
@@ -1434,7 +1452,8 @@ public class MailRepositoriesRoutesTest {
             .statusCode(HttpStatus.BAD_REQUEST_400)
             .body("statusCode", is(400))
             .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
-            .body("message", is("action query parameter is mandatory. The only supported value is `reprocess`"));
+            .body("message", is("Invalid arguments supplied in the user request"))
+            .body("details", is("'action' query parameter is compulsory. Supported values are [reprocess]"));
     }
 
     @Test
@@ -1462,7 +1481,7 @@ public class MailRepositoriesRoutesTest {
         .then()
             .body("status", is("completed"))
             .body("taskId", is(notNullValue()))
-            .body("type", is(ReprocessingOneMailTask.TYPE))
+            .body("type", is(ReprocessingOneMailTask.TYPE.asString()))
             .body("additionalInformation.repositoryPath", is(PATH_MY_REPO.asString()))
             .body("additionalInformation.mailKey", is(NAME_1))
             .body("additionalInformation.targetProcessor", isEmptyOrNullString())
@@ -1500,7 +1519,7 @@ public class MailRepositoriesRoutesTest {
         .then()
             .body("status", is("completed"))
             .body("taskId", is(notNullValue()))
-            .body("type", is(ReprocessingOneMailTask.TYPE))
+            .body("type", is(ReprocessingOneMailTask.TYPE.asString()))
             .body("additionalInformation.repositoryPath", is(PATH_MY_REPO.asString()))
             .body("additionalInformation.mailKey", is(NAME_1))
             .body("additionalInformation.targetProcessor", is(transport))
@@ -1776,7 +1795,7 @@ public class MailRepositoriesRoutesTest {
                 ImmutableList.of(new Protocol("other")),
                 MemoryMailRepository.class.getName(),
                 new BaseHierarchicalConfiguration()));
-        mailRepositoryStore = new MemoryMailRepositoryStore(urlStore, Sets.newHashSet(new MemoryMailRepositoryProvider()), configuration);
+        mailRepositoryStore = new MemoryMailRepositoryStore(urlStore, new TestingMailRepositoryLoader(), configuration);
 
         mailRepositoryStore.init();
     }

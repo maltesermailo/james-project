@@ -22,39 +22,32 @@ package org.apache.james.imap.encode;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import org.apache.james.imap.api.ImapMessage;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.display.Locales;
 import org.apache.james.imap.api.display.Localizer;
-import org.apache.james.imap.api.process.ImapSession;
-import org.apache.james.imap.encode.base.AbstractChainedImapEncoder;
 import org.apache.james.imap.message.response.ContinuationResponse;
 
-public class ContinuationResponseEncoder extends AbstractChainedImapEncoder {
+public class ContinuationResponseEncoder implements ImapResponseEncoder<ContinuationResponse> {
 
     private final Localizer localizer;
 
-    public ContinuationResponseEncoder(ImapEncoder next, Localizer localizer) {
-        super(next);
+    public ContinuationResponseEncoder(Localizer localizer) {
         this.localizer = localizer;
     }
 
     @Override
-    protected void doEncode(ImapMessage acceptableMessage, ImapResponseComposer composer, ImapSession session) throws IOException {
-
-        ContinuationResponse response = (ContinuationResponse) acceptableMessage;
-        final String message = response.getData() != null ? response.getData() : asString(response.getTextKey(), session);
-        composer.continuationResponse(message);
-    }
-
-    private String asString(HumanReadableText text, ImapSession session) {
-        // TODO: calculate locales
-        return localizer.localize(text, new Locales(new ArrayList<>(), null));
+    public Class<ContinuationResponse> acceptableMessages() {
+        return ContinuationResponse.class;
     }
 
     @Override
-    protected boolean isAcceptable(ImapMessage message) {
-        return (message instanceof ContinuationResponse);
+    public void encode(ContinuationResponse response, ImapResponseComposer composer) throws IOException {
+        String message = asString(response.getTextKey());
+        composer.continuationResponse(message);
     }
 
+    private String asString(HumanReadableText text) {
+        // TODO: calculate locales
+        return localizer.localize(text, new Locales(new ArrayList<>(), null));
+    }
 }

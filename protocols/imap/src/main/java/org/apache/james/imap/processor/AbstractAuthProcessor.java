@@ -20,8 +20,7 @@ package org.apache.james.imap.processor;
 
 import java.util.Optional;
 
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionUtils;
+import org.apache.james.core.Username;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.request.ImapRequest;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
@@ -45,7 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 
-public abstract class AbstractAuthProcessor<M extends ImapRequest> extends AbstractMailboxProcessor<M> {
+public abstract class AbstractAuthProcessor<R extends ImapRequest> extends AbstractMailboxProcessor<R> {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractAuthProcessor.class);
 
     private static final String ATTRIBUTE_NUMBER_OF_FAILURES = "org.apache.james.imap.processor.imap4rev1.NUMBER_OF_FAILURES";
@@ -53,12 +52,12 @@ public abstract class AbstractAuthProcessor<M extends ImapRequest> extends Abstr
     // TODO: this should be configurable
     private static final int MAX_FAILURES = 3;
     
-    public AbstractAuthProcessor(Class<M> acceptableClass, ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
-            MetricFactory metricFactory) {
+    public AbstractAuthProcessor(Class<R> acceptableClass, ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
+                                 MetricFactory metricFactory) {
         super(acceptableClass, next, mailboxManager, factory, metricFactory);
     }
 
-    protected void doAuth(AuthenticationAttempt authenticationAttempt, ImapSession session, String tag, ImapCommand command, Responder responder, HumanReadableText failed) {
+    protected void doAuth(AuthenticationAttempt authenticationAttempt, ImapSession session, ImapRequest request, Responder responder, HumanReadableText failed) {
         Preconditions.checkArgument(!authenticationAttempt.isDelegation());
         try {
             boolean authFailure = false;
@@ -71,23 +70,23 @@ public abstract class AbstractAuthProcessor<M extends ImapRequest> extends Abstr
                     final MailboxSession mailboxSession = mailboxManager.login(authenticationAttempt.getAuthenticationId(),
                         authenticationAttempt.getPassword());
                     session.authenticated();
-                    session.setAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY, mailboxSession);
+                    session.setMailboxSession(mailboxSession);
                     provisionInbox(session, mailboxManager, mailboxSession);
-                    okComplete(command, tag, responder);
+                    okComplete(request, responder);
                 } catch (BadCredentialsException e) {
                     authFailure = true;
                 }
             }
             if (authFailure) {
-                manageFailureCount(session, tag, command, responder, failed);
+                manageFailureCount(session, request, responder, failed);
             }
         } catch (MailboxException e) {
             LOGGER.error("Error encountered while login", e);
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
         }
     }
 
-    protected void doAuthWithDelegation(AuthenticationAttempt authenticationAttempt, ImapSession session, String tag, ImapCommand command, Responder responder, HumanReadableText failed) {
+    protected void doAuthWithDelegation(AuthenticationAttempt authenticationAttempt, ImapSession session, ImapRequest request, Responder responder, HumanReadableText failed) {
         Preconditions.checkArgument(authenticationAttempt.isDelegation());
         try {
             boolean authFailure = false;
@@ -101,25 +100,25 @@ public abstract class AbstractAuthProcessor<M extends ImapRequest> extends Abstr
                         authenticationAttempt.getPassword(),
                         authenticationAttempt.getDelegateUserName().get());
                     session.authenticated();
-                    session.setAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY, mailboxSession);
+                    session.setMailboxSession(mailboxSession);
                     provisionInbox(session, mailboxManager, mailboxSession);
-                    okComplete(command, tag, responder);
+                    okComplete(request, responder);
                 } catch (BadCredentialsException e) {
                     authFailure = true;
                 }
             }
             if (authFailure) {
-                manageFailureCount(session, tag, command, responder, failed);
+                manageFailureCount(session, request, responder, failed);
             }
         } catch (UserDoesNotExistException e) {
             LOGGER.info("User {} does not exist", authenticationAttempt.getAuthenticationId(), e);
-            no(command, tag, responder, HumanReadableText.USER_DOES_NOT_EXIST);
+            no(request, responder, HumanReadableText.USER_DOES_NOT_EXIST);
         } catch (NotAdminException e) {
             LOGGER.info("User {} is not an admin", authenticationAttempt.getDelegateUserName(), e);
-            no(command, tag, responder, HumanReadableText.NOT_AN_ADMIN);
+            no(request, responder, HumanReadableText.NOT_AN_ADMIN);
         } catch (MailboxException e) {
             LOGGER.info("Login failed", e);
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
         }
     }
 
@@ -138,7 +137,7 @@ public abstract class AbstractAuthProcessor<M extends ImapRequest> extends Abstr
         }
     }
 
-    protected void manageFailureCount(ImapSession session, String tag, ImapCommand command, Responder responder, HumanReadableText failed) {
+    protected void manageFailureCount(ImapSession session, ImapRequest request, Responder responder, HumanReadableText failed) {
         final Integer currentNumberOfFailures = (Integer) session.getAttribute(ATTRIBUTE_NUMBER_OF_FAILURES);
         final int failures;
         if (currentNumberOfFailures == null) {
@@ -148,7 +147,7 @@ public abstract class AbstractAuthProcessor<M extends ImapRequest> extends Abstr
         }
         if (failures < MAX_FAILURES) {
             session.setAttribute(ATTRIBUTE_NUMBER_OF_FAILURES, failures);
-            no(command, tag, responder, failed);
+            no(request, responder, failed);
         } else {
             LOGGER.info("Too many authentication failures. Closing connection.");
             bye(responder, HumanReadableText.TOO_MANY_FAILURES);
@@ -156,20 +155,20 @@ public abstract class AbstractAuthProcessor<M extends ImapRequest> extends Abstr
         }
     }
 
-    protected static AuthenticationAttempt delegation(String authorizeId, String authenticationId, String password) {
+    protected static AuthenticationAttempt delegation(Username authorizeId, Username authenticationId, String password) {
         return new AuthenticationAttempt(Optional.of(authorizeId), authenticationId, password);
     }
 
-    protected static AuthenticationAttempt noDelegation(String authenticationId, String password) {
+    protected static AuthenticationAttempt noDelegation(Username authenticationId, String password) {
         return new AuthenticationAttempt(Optional.empty(), authenticationId, password);
     }
 
     protected static class AuthenticationAttempt {
-        private final Optional<String> delegateUserName;
-        private final String authenticationId;
+        private final Optional<Username> delegateUserName;
+        private final Username authenticationId;
         private final String password;
 
-        public AuthenticationAttempt(Optional<String> delegateUserName, String authenticationId, String password) {
+        public AuthenticationAttempt(Optional<Username> delegateUserName, Username authenticationId, String password) {
             this.delegateUserName = delegateUserName;
             this.authenticationId = authenticationId;
             this.password = password;
@@ -179,11 +178,11 @@ public abstract class AbstractAuthProcessor<M extends ImapRequest> extends Abstr
             return delegateUserName.isPresent() && !delegateUserName.get().equals(authenticationId);
         }
 
-        public Optional<String> getDelegateUserName() {
+        public Optional<Username> getDelegateUserName() {
             return delegateUserName;
         }
 
-        public String getAuthenticationId() {
+        public Username getAuthenticationId() {
             return authenticationId;
         }
 

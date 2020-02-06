@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
-public class SizeTest {
+class SizeTest {
 
     @Test
     void testNoUnit() throws Exception {
@@ -68,7 +68,7 @@ public class SizeTest {
     }
 
     @Test
-    void testWrongNumber() throws Exception {
+    void testWrongNumber() {
         assertThatThrownBy(() -> Size.parse("42RG"))
             .isInstanceOf(NumberFormatException.class);
     }

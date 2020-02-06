@@ -22,8 +22,8 @@ import org.apache.commons.configuration2.BaseHierarchicalConfiguration;
 import org.apache.james.CassandraJamesServerMain;
 import org.apache.james.CleanupTasksPerformer;
 import org.apache.james.GuiceJamesServer;
-import org.apache.james.backend.rabbitmq.DockerRabbitMQSingleton;
 import org.apache.james.backends.cassandra.init.configuration.ClusterConfiguration;
+import org.apache.james.backends.rabbitmq.DockerRabbitMQSingleton;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.modules.TestAwsS3BlobStoreModule;
 import org.apache.james.modules.TestRabbitMQModule;
@@ -67,6 +67,7 @@ public final class CassandraRabbitMQAwsS3SmtpTestRuleFactory {
                     ClusterConfiguration.builder()
                         .host(cassandraHost)
                         .keyspace("testing")
+                        .createKeyspace()
                         .replicationFactor(1)
                         .build()),
                 binder -> binder.bind(DNSService.class).toInstance(dnsService),

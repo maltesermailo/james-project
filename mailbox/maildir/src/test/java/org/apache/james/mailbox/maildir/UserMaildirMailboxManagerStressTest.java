@@ -19,34 +19,33 @@
 
 package org.apache.james.mailbox.maildir;
 
-import org.apache.james.mailbox.MailboxManagerStressTest;
+import java.io.File;
+
+import org.apache.james.mailbox.MailboxManagerStressContract;
 import org.apache.james.mailbox.events.EventBus;
+import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.store.StoreMailboxManager;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
 
-public class UserMaildirMailboxManagerStressTest extends MailboxManagerStressTest<StoreMailboxManager> {
-    @Rule
-    public TemporaryFolder tmpFolder = new TemporaryFolder();
-    
+class UserMaildirMailboxManagerStressTest implements MailboxManagerStressContract<StoreMailboxManager> {
+    @TempDir
+    File tmpFolder;
+
+    StoreMailboxManager mailboxManager;
+
     @Override
-    @Before
-    public void setUp() throws Exception {
-        super.setUp();
-    }
-    
-    @Override
-    protected StoreMailboxManager provideManager() {
-        try {
-            return MaildirMailboxManagerProvider.createMailboxManager("/%user", tmpFolder);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+    public StoreMailboxManager getManager() {
+        return mailboxManager;
     }
 
     @Override
-    protected EventBus retrieveEventBus(StoreMailboxManager mailboxManager) {
+    public EventBus retrieveEventBus() {
         return mailboxManager.getEventBus();
+    }
+
+    @BeforeEach
+    void setUp() throws MailboxException {
+        this.mailboxManager = MaildirMailboxManagerProvider.createMailboxManager("/%user", tmpFolder);
     }
 }

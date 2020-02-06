@@ -25,27 +25,16 @@ import java.util.stream.Stream;
 
 import javax.inject.Inject;
 
+import org.apache.james.core.Username;
 import org.apache.james.user.api.UsersRepository;
 import org.apache.james.user.api.UsersRepositoryException;
 import org.apache.james.user.api.model.User;
 import org.apache.james.util.streams.Iterators;
 import org.apache.james.webadmin.dto.UserResponse;
-import org.apache.james.webadmin.utils.Responses;
-import org.eclipse.jetty.http.HttpStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.github.steveash.guavate.Guavate;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
-
-import spark.Response;
 
 public class UserService {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(UserService.class);
-    private static final String EMPTY_BODY = "";
-    public static final int MAXIMUM_MAIL_ADDRESS_LENGTH = 255;
 
     private final UsersRepository usersRepository;
 
@@ -58,34 +47,22 @@ public class UserService {
         return  Optional.ofNullable(usersRepository.list())
             .map(Iterators::toStream)
             .orElse(Stream.of())
+            .map(Username::asString)
             .map(UserResponse::new)
             .collect(Guavate.toImmutableList());
     }
 
-    public void removeUser(String username) throws UsersRepositoryException {
-        usernamePreconditions(username);
+    public void removeUser(Username username) throws UsersRepositoryException {
         usersRepository.removeUser(username);
     }
 
-    public String upsertUser(String username, char[] password, Response response) throws UsersRepositoryException {
-        usernamePreconditions(username);
+    public void upsertUser(Username username, char[] password) throws UsersRepositoryException {
         User user = usersRepository.getUserByName(username);
-        try {
-            upsert(user, username, password);
-            return Responses.returnNoContent(response);
-        } catch (UsersRepositoryException e) {
-            LOGGER.info("Error creating or updating user : {}", e.getMessage());
-            response.status(HttpStatus.CONFLICT_409);
-        }
-        return EMPTY_BODY;
+        upsert(user, username, password);
     }
 
-    private void usernamePreconditions(String username) {
-        Preconditions.checkArgument(!Strings.isNullOrEmpty(username));
-        Preconditions.checkArgument(username.length() < MAXIMUM_MAIL_ADDRESS_LENGTH);
-    }
 
-    private void upsert(User user, String username, char[] password) throws UsersRepositoryException {
+    private void upsert(User user, Username username, char[] password) throws UsersRepositoryException {
         if (user == null) {
             usersRepository.addUser(username, new String(password));
         } else {

@@ -39,7 +39,6 @@ import org.apache.james.core.MaybeSender;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.javax.MimeMultipartReport;
 import org.apache.james.server.core.MailImpl;
-import org.apache.james.transport.mailets.managesieve.ManageSieveMailet;
 import org.apache.james.transport.mailets.redirect.InitParameters;
 import org.apache.james.transport.mailets.redirect.MailModifier;
 import org.apache.james.transport.mailets.redirect.NotifyMailetInitParameters;
@@ -107,7 +106,7 @@ import com.google.common.collect.ImmutableList;
  */
 
 public class DSNBounce extends GenericMailet implements RedirectNotify {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ManageSieveMailet.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(DSNBounce.class);
 
     private static final String[] CONFIGURABLE_PARAMETERS = new String[]{ "debug", "passThrough", "messageString", "attachment", "sender", "prefix" };
     private static final List<MailAddress> RECIPIENT_MAIL_ADDRESSES = ImmutableList.of(SpecialAddress.REVERSE_PATH);
@@ -220,8 +219,9 @@ public class DSNBounce extends GenericMailet implements RedirectNotify {
 
     @Override
     public Optional<MailAddress> getSender() throws MessagingException {
-        return SpecialAddressesUtils.from(this)
-                .getFirstSpecialAddressIfMatchingOrGivenAddress(getInitParameters().getSender(), RedirectNotify.SENDER_ALLOWED_SPECIALS);
+        return SpecialAddressesUtils.from(this).getFirstSpecialAddressIfMatchingOrGivenAddress(
+                Optional.of(getInitParameters().getSender().orElse("postmaster")),
+                RedirectNotify.SENDER_ALLOWED_SPECIALS);
     }
 
     @Override
@@ -347,20 +347,20 @@ public class DSNBounce extends GenericMailet implements RedirectNotify {
     }
 
     private MimeBodyPart createTextMsg(Mail originalMail) throws MessagingException {
-        StringBuffer buffer = new StringBuffer();
+        StringBuilder builder = new StringBuilder();
 
-        buffer.append(bounceMessage()).append(LINE_BREAK);
-        buffer.append("Failed recipient(s):").append(LINE_BREAK);
+        builder.append(bounceMessage()).append(LINE_BREAK);
+        builder.append("Failed recipient(s):").append(LINE_BREAK);
         for (MailAddress mailAddress : originalMail.getRecipients()) {
-            buffer.append(mailAddress);
+            builder.append(mailAddress);
         }
-        buffer.append(LINE_BREAK).append(LINE_BREAK);
-        buffer.append("Error message:").append(LINE_BREAK);
-        buffer.append(AttributeUtils.getValueAndCastFromMail(originalMail, DELIVERY_ERROR, String.class).orElse("")).append(LINE_BREAK);
-        buffer.append(LINE_BREAK);
+        builder.append(LINE_BREAK).append(LINE_BREAK);
+        builder.append("Error message:").append(LINE_BREAK);
+        builder.append(AttributeUtils.getValueAndCastFromMail(originalMail, DELIVERY_ERROR, String.class).orElse("")).append(LINE_BREAK);
+        builder.append(LINE_BREAK);
 
         MimeBodyPart bodyPart = new MimeBodyPart();
-        bodyPart.setText(buffer.toString());
+        bodyPart.setText(builder.toString());
         return bodyPart;
     }
 
@@ -454,6 +454,6 @@ public class DSNBounce extends GenericMailet implements RedirectNotify {
 
     @Override
     public MimeMessageModifier getMimeMessageModifier(Mail newMail, Mail originalMail) throws MessagingException {
-        return new MimeMessageModifier(originalMail.getMessage());
+        return new MimeMessageModifier(newMail.getMessage());
     }
 }

@@ -49,7 +49,9 @@ import org.apache.james.mailbox.store.FakeAuthenticator;
 import org.apache.james.mailbox.store.FakeAuthorizator;
 import org.apache.james.mailbox.store.JVMMailboxPathLocker;
 import org.apache.james.mailbox.store.PreDeletionHooks;
-import org.apache.james.mailbox.store.SessionProvider;
+import org.apache.james.mailbox.store.SessionProviderImpl;
+import org.apache.james.mailbox.store.StoreAttachmentManager;
+import org.apache.james.mailbox.store.StoreBlobManager;
 import org.apache.james.mailbox.store.StoreMailboxAnnotationManager;
 import org.apache.james.mailbox.store.StoreMailboxManager;
 import org.apache.james.mailbox.store.StoreMessageIdManager;
@@ -65,7 +67,7 @@ import org.apache.james.mailbox.store.quota.StoreQuotaManager;
 import org.apache.james.mailbox.store.search.ListeningMessageSearchIndex;
 import org.apache.james.mailbox.store.search.MessageSearchIndex;
 import org.apache.james.mailbox.store.search.SimpleMessageSearchIndex;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 
 import com.github.steveash.guavate.Guavate;
 import com.google.common.base.Preconditions;
@@ -99,7 +101,7 @@ public class InMemoryIntegrationResources implements IntegrationResources<StoreM
             RequireAnnotationLimits eventBus(EventBus eventBus);
 
             default RequireAnnotationLimits inVmEventBus() {
-                return eventBus(new InVMEventBus(new InVmEventDelivery(new NoopMetricFactory())));
+                return eventBus(new InVMEventBus(new InVmEventDelivery(new RecordingMetricFactory())));
             }
         }
 
@@ -296,14 +298,14 @@ public class InMemoryIntegrationResources implements IntegrationResources<StoreM
             StoreMailboxAnnotationManager annotationManager = new StoreMailboxAnnotationManager(mailboxSessionMapperFactory,
                 storeRightManager, limitAnnotationCount.get(), limitAnnotationSize.get());
 
-            SessionProvider sessionProvider = new SessionProvider(authenticator.get(), authorizator.get());
+            SessionProviderImpl sessionProvider = new SessionProviderImpl(authenticator.get(), authorizator.get());
 
             InMemoryPerUserMaxQuotaManager maxQuotaManager = new InMemoryPerUserMaxQuotaManager();
             DefaultUserQuotaRootResolver quotaRootResolver = new DefaultUserQuotaRootResolver(sessionProvider, mailboxSessionMapperFactory);
             InMemoryCurrentQuotaManager currentQuotaManager = new InMemoryCurrentQuotaManager(new CurrentQuotaCalculator(mailboxSessionMapperFactory, quotaRootResolver), sessionProvider);
             QuotaManager quotaManager = this.quotaManager.get().apply(new BaseQuotaComponentsStage(maxQuotaManager, currentQuotaManager));
             ListeningCurrentQuotaUpdater listeningCurrentQuotaUpdater = new ListeningCurrentQuotaUpdater(currentQuotaManager, quotaRootResolver, eventBus, quotaManager);
-            QuotaComponents quotaComponents = new QuotaComponents(maxQuotaManager, quotaManager, quotaRootResolver, listeningCurrentQuotaUpdater);
+            QuotaComponents quotaComponents = new QuotaComponents(maxQuotaManager, quotaManager, quotaRootResolver);
 
             MailboxManagerPreInstanciationStage preInstanciationStage = new MailboxManagerPreInstanciationStage(mailboxSessionMapperFactory, sessionProvider);
             MessageSearchIndex index = searchIndexFactory.get().apply(preInstanciationStage);
@@ -334,7 +336,7 @@ public class InMemoryIntegrationResources implements IntegrationResources<StoreM
                 .stream()
                 .map(biFunction -> biFunction.apply(preInstanciationStage))
                 .collect(Guavate.toImmutableSet());
-            return new PreDeletionHooks(preDeletionHooksSet, new NoopMetricFactory());
+            return new PreDeletionHooks(preDeletionHooksSet, new RecordingMetricFactory());
         }
     }
 
@@ -358,9 +360,9 @@ public class InMemoryIntegrationResources implements IntegrationResources<StoreM
 
     public static class MailboxManagerPreInstanciationStage {
         private final InMemoryMailboxSessionMapperFactory mapperFactory;
-        private final SessionProvider sessionProvider;
+        private final SessionProviderImpl sessionProvider;
 
-        public MailboxManagerPreInstanciationStage(InMemoryMailboxSessionMapperFactory mapperFactory, SessionProvider sessionProvider) {
+        public MailboxManagerPreInstanciationStage(InMemoryMailboxSessionMapperFactory mapperFactory, SessionProviderImpl sessionProvider) {
             this.mapperFactory = mapperFactory;
             this.sessionProvider = sessionProvider;
         }
@@ -369,7 +371,7 @@ public class InMemoryIntegrationResources implements IntegrationResources<StoreM
             return mapperFactory;
         }
 
-        public SessionProvider getSessionProvider() {
+        public SessionProviderImpl getSessionProvider() {
             return sessionProvider;
         }
     }
@@ -384,6 +386,7 @@ public class InMemoryIntegrationResources implements IntegrationResources<StoreM
     private final StoreMessageIdManager storeMessageIdManager;
     private final MessageSearchIndex searchIndex;
     private final EventBus eventBus;
+    private final StoreBlobManager blobManager;
 
     InMemoryIntegrationResources(InMemoryMailboxManager mailboxManager, StoreRightManager storeRightManager, MessageId.Factory messageIdFactory, InMemoryCurrentQuotaManager currentQuotaManager, DefaultUserQuotaRootResolver defaultUserQuotaRootResolver, InMemoryPerUserMaxQuotaManager maxQuotaManager, QuotaManager quotaManager, MessageSearchIndex searchIndex, EventBus eventBus) {
         this.mailboxManager = mailboxManager;
@@ -404,6 +407,11 @@ public class InMemoryIntegrationResources implements IntegrationResources<StoreM
             quotaManager,
             defaultUserQuotaRootResolver,
             mailboxManager.getPreDeletionHooks());
+
+        this.blobManager = new StoreBlobManager(
+            new StoreAttachmentManager((InMemoryMailboxSessionMapperFactory) mailboxManager.getMapperFactory(), storeMessageIdManager),
+            storeMessageIdManager,
+            messageIdFactory);
     }
 
     public DefaultUserQuotaRootResolver getDefaultUserQuotaRootResolver() {
@@ -449,5 +457,9 @@ public class InMemoryIntegrationResources implements IntegrationResources<StoreM
 
     public EventBus getEventBus() {
         return eventBus;
+    }
+
+    public StoreBlobManager getBlobManager() {
+        return blobManager;
     }
 }

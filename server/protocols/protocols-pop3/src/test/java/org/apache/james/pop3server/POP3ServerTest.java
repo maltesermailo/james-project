@@ -30,6 +30,8 @@ import java.util.List;
 import org.apache.commons.net.pop3.POP3Client;
 import org.apache.commons.net.pop3.POP3MessageInfo;
 import org.apache.commons.net.pop3.POP3Reply;
+import org.apache.james.core.Username;
+import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.filesystem.api.FileSystem;
 import org.apache.james.filesystem.api.mock.MockFileSystem;
 import org.apache.james.mailbox.MailboxManager;
@@ -53,10 +55,13 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.google.inject.name.Names;
+
 public class POP3ServerTest {
+    private static final DomainList NO_DOMAIN_LIST = null;
 
     private POP3TestConfiguration pop3Configuration;
-    private final MemoryUsersRepository usersRepository = MemoryUsersRepository.withoutVirtualHosting();
+    private final MemoryUsersRepository usersRepository = MemoryUsersRepository.withoutVirtualHosting(NO_DOMAIN_LIST);
     private POP3Client pop3Client = null;
     protected MockFileSystem fileSystem;
     protected MockProtocolHandlerLoader protocolHandlerChain;
@@ -101,7 +106,7 @@ public class POP3ServerTest {
         InetSocketAddress bindedAddress = new ProtocolServerUtils(pop3Server).retrieveBindedAddress();
         pop3Client.connect(bindedAddress.getAddress().getHostAddress(), bindedAddress.getPort());
 
-        usersRepository.addUser("known", "test2");
+        usersRepository.addUser(Username.of("known"), "test2");
 
         pop3Client.login("known", "test");
         assertThat(pop3Client.getState()).isEqualTo(0);
@@ -129,7 +134,7 @@ public class POP3ServerTest {
         InetSocketAddress bindedAddress = new ProtocolServerUtils(pop3Server).retrieveBindedAddress();
         pop3Client.connect(bindedAddress.getAddress().getHostAddress(), bindedAddress.getPort());
 
-        usersRepository.addUser("foo", "bar");
+        usersRepository.addUser(Username.of("foo"), "bar");
 
         // not authenticated
         POP3MessageInfo[] entries = pop3Client.listMessages();
@@ -187,7 +192,8 @@ public class POP3ServerTest {
     public void testUidlCommand() throws Exception {
         finishSetUp(pop3Configuration);
 
-        usersRepository.addUser("foo", "bar");
+        Username username = Username.of("foo");
+        usersRepository.addUser(username, "bar");
 
         pop3Client = new POP3Client();
         InetSocketAddress bindedAddress = new ProtocolServerUtils(pop3Server).retrieveBindedAddress();
@@ -202,8 +208,8 @@ public class POP3ServerTest {
         assertThat(list.length).describedAs("Found unexpected messages").isEqualTo(0);
 
         pop3Client.disconnect();
-        MailboxPath mailboxPath = MailboxPath.forUser("foo", "INBOX");
-        MailboxSession session = mailboxManager.login("foo", "bar");
+        MailboxPath mailboxPath = MailboxPath.inbox(username);
+        MailboxSession session = mailboxManager.login(username, "bar");
         if (!mailboxManager.mailboxExists(mailboxPath, session)) {
             mailboxManager.createMailbox(mailboxPath, session);
         }
@@ -226,7 +232,7 @@ public class POP3ServerTest {
     public void testMiscCommandsWithWithoutAuth() throws Exception {
         finishSetUp(pop3Configuration);
 
-        usersRepository.addUser("foo", "bar");
+        usersRepository.addUser(Username.of("foo"), "bar");
 
         pop3Client = new POP3Client();
         InetSocketAddress bindedAddress = new ProtocolServerUtils(pop3Server).retrieveBindedAddress();
@@ -285,10 +291,11 @@ public class POP3ServerTest {
         InetSocketAddress bindedAddress = new ProtocolServerUtils(pop3Server).retrieveBindedAddress();
         pop3Client.connect(bindedAddress.getAddress().getHostAddress(), bindedAddress.getPort());
 
-        usersRepository.addUser("foo2", "bar2");
+        Username username = Username.of("foo2");
+        usersRepository.addUser(username, "bar2");
 
-        MailboxPath mailboxPath = MailboxPath.forUser("foo2", "INBOX");
-        MailboxSession session = mailboxManager.login("foo2", "bar2");
+        MailboxPath mailboxPath = MailboxPath.inbox(username);
+        MailboxSession session = mailboxManager.login(username, "bar2");
 
         if (!mailboxManager.mailboxExists(mailboxPath, session)) {
             mailboxManager.createMailbox(mailboxPath, session);
@@ -374,10 +381,11 @@ public class POP3ServerTest {
         InetSocketAddress bindedAddress = new ProtocolServerUtils(pop3Server).retrieveBindedAddress();
         pop3Client.connect(bindedAddress.getAddress().getHostAddress(), bindedAddress.getPort());
 
-        usersRepository.addUser("foo2", "bar2");
+        Username username = Username.of("foo2");
+        usersRepository.addUser(username, "bar2");
 
-        MailboxPath mailboxPath = MailboxPath.forUser("foo2", "INBOX");
-        MailboxSession session = mailboxManager.login("foo2", "bar2");
+        MailboxPath mailboxPath = MailboxPath.inbox(username);
+        MailboxSession session = mailboxManager.login(username, "bar2");
 
         if (!mailboxManager.mailboxExists(mailboxPath, session)) {
             mailboxManager.createMailbox(mailboxPath, session);
@@ -427,10 +435,11 @@ public class POP3ServerTest {
         InetSocketAddress bindedAddress = new ProtocolServerUtils(pop3Server).retrieveBindedAddress();
         pop3Client.connect(bindedAddress.getAddress().getHostAddress(), bindedAddress.getPort());
 
-        usersRepository.addUser("foo2", "bar2");
+        Username username = Username.of("foo2");
+        usersRepository.addUser(username, "bar2");
 
-        MailboxPath mailboxPath = MailboxPath.forUser("foo2", "INBOX");
-        MailboxSession session = mailboxManager.login("foo2", "bar2");
+        MailboxPath mailboxPath = MailboxPath.inbox(username);
+        MailboxSession session = mailboxManager.login(username, "bar2");
 
         if (!mailboxManager.mailboxExists(mailboxPath, session)) {
             mailboxManager.createMailbox(mailboxPath, session);
@@ -552,7 +561,7 @@ public class POP3ServerTest {
         pop3Client.connect(bindedAddress.getAddress().getHostAddress(), bindedAddress.getPort());
 
         String pass = "password";
-        usersRepository.addUser("foo", pass);
+        usersRepository.addUser(Username.of("foo"), pass);
 
         pop3Client.login("foo", pass);
         assertThat(pop3Client.getState()).isEqualTo(1);
@@ -569,7 +578,7 @@ public class POP3ServerTest {
         pop3Client.connect(bindedAddress.getAddress().getHostAddress(), bindedAddress.getPort());
 
         String pass = "password";
-        usersRepository.addUser("foo", pass);
+        usersRepository.addUser(Username.of("foo"), pass);
 
         assertThat(pop3Client.sendCommand("CAPA")).isEqualTo(POP3Reply.OK);
 
@@ -637,10 +646,11 @@ public class POP3ServerTest {
         InetSocketAddress bindedAddress = new ProtocolServerUtils(pop3Server).retrieveBindedAddress();
         pop3Client.connect(bindedAddress.getAddress().getHostAddress(), bindedAddress.getPort());
 
-        usersRepository.addUser("foo6", "bar6");
-        MailboxSession session = mailboxManager.login("foo6", "bar6");
+        Username username = Username.of("foo6");
+        usersRepository.addUser(username, "bar6");
+        MailboxSession session = mailboxManager.login(username, "bar6");
 
-        MailboxPath mailboxPath = MailboxPath.inbox(session);
+        MailboxPath mailboxPath = MailboxPath.inbox(username);
 
         mailboxManager.startProcessingRequest(session);
         if (!mailboxManager.mailboxExists(mailboxPath, session)) {
@@ -708,9 +718,6 @@ public class POP3ServerTest {
     }
 
     protected void setUpServiceManager() throws Exception {
-        protocolHandlerChain = new MockProtocolHandlerLoader();
-        protocolHandlerChain.put("usersrepository", UsersRepository.class, usersRepository);
-
         mailboxManager = InMemoryIntegrationResources.builder()
             .authenticator((userid, passwd) -> {
                 try {
@@ -729,12 +736,13 @@ public class POP3ServerTest {
             .storeQuotaManager()
             .build()
             .getMailboxManager();
-
-        protocolHandlerChain.put("mailboxmanager", MailboxManager.class, mailboxManager);
-    
         fileSystem = new MockFileSystem();
-        protocolHandlerChain.put("fileSystem", FileSystem.class, fileSystem);
-    
+
+        protocolHandlerChain = MockProtocolHandlerLoader.builder()
+            .put(binder -> binder.bind(UsersRepository.class).toInstance(usersRepository))
+            .put(binder -> binder.bind(MailboxManager.class).annotatedWith(Names.named("mailboxmanager")).toInstance(mailboxManager))
+            .put(binder -> binder.bind(FileSystem.class).toInstance(fileSystem))
+            .build();
     }
 
     private void setupTestMails(MailboxSession session, MessageManager mailbox) throws MailboxException {

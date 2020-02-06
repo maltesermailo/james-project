@@ -31,8 +31,8 @@ import java.nio.charset.StandardCharsets;
 
 import org.apache.james.core.CoreFixture.Users.Alphabet;
 import org.apache.james.core.CoreFixture.Users.Simpson;
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.domainlist.api.DomainListException;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
@@ -51,10 +51,10 @@ public interface QuotaSearcherContract {
     @Test
     default void moreThanShouldFilterOutTooSmallValues(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(SIMPSON_COM);
-        testSystem.getUsersRepository().addUser(Simpson.BART.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.HOMER.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.LISA.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Simpson.BART, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.HOMER, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.LISA, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Simpson.BART, withSize(49));
         appendMessage(testSystem, Simpson.HOMER, withSize(50));
@@ -71,10 +71,10 @@ public interface QuotaSearcherContract {
     @Test
     default void lessThanShouldFilterOutTooBigValues(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(SIMPSON_COM);
-        testSystem.getUsersRepository().addUser(Simpson.BART.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.HOMER.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.LISA.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Simpson.BART, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.HOMER, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.LISA, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Simpson.BART, withSize(49));
         appendMessage(testSystem, Simpson.HOMER, withSize(50));
@@ -91,10 +91,10 @@ public interface QuotaSearcherContract {
     @Test
     default void rangeShouldFilterValuesOutOfRange(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(SIMPSON_COM);
-        testSystem.getUsersRepository().addUser(Simpson.BART.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.HOMER.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.LISA.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Simpson.BART, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.HOMER, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.LISA, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Simpson.BART, withSize(40));
         appendMessage(testSystem, Simpson.HOMER, withSize(51));
@@ -114,10 +114,10 @@ public interface QuotaSearcherContract {
     default void hasDomainShouldFilterOutValuesWithDifferentDomains(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(SIMPSON_COM);
         testSystem.getDomainList().addDomain(DOMAIN_TLD);
-        testSystem.getUsersRepository().addUser(Simpson.BART.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.LISA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(BENOIT_AT_DOMAIN_TLD.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Simpson.BART, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.LISA, PASSWORD);
+        testSystem.getUsersRepository().addUser(BENOIT_AT_DOMAIN_TLD, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Simpson.BART, withSize(49));
         appendMessage(testSystem, Simpson.LISA, withSize(51));
@@ -135,10 +135,10 @@ public interface QuotaSearcherContract {
     default void andShouldCombineClauses(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(SIMPSON_COM);
         testSystem.getDomainList().addDomain(DOMAIN_TLD);
-        testSystem.getUsersRepository().addUser(Simpson.BART.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.LISA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(BENOIT_AT_DOMAIN_TLD.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Simpson.BART, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.LISA, PASSWORD);
+        testSystem.getUsersRepository().addUser(BENOIT_AT_DOMAIN_TLD, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Simpson.BART, withSize(49));
         appendMessage(testSystem, Simpson.LISA, withSize(51));
@@ -156,11 +156,11 @@ public interface QuotaSearcherContract {
     @Test
     default void resultShouldBeAlphabeticallyOrdered(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(ALPHABET_TLD);
-        testSystem.getUsersRepository().addUser(Alphabet.AAA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ABA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ABB.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ACB.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Alphabet.AAA, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ABA, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ABB, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ACB, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Alphabet.AAA, withSize(49));
         appendMessage(testSystem, Alphabet.ABA, withSize(50));
@@ -177,11 +177,11 @@ public interface QuotaSearcherContract {
     @Test
     default void limitShouldBeTheMaximumValueOfReturnedResults(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(ALPHABET_TLD);
-        testSystem.getUsersRepository().addUser(Alphabet.AAA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ABA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ABB.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ACB.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Alphabet.AAA, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ABA, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ABB, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ACB, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Alphabet.AAA, withSize(49));
         appendMessage(testSystem, Alphabet.ABA, withSize(50));
@@ -199,11 +199,11 @@ public interface QuotaSearcherContract {
     @Test
     default void offsetShouldSkipSomeResults(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(ALPHABET_TLD);
-        testSystem.getUsersRepository().addUser(Alphabet.AAA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ABA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ABB.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ACB.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Alphabet.AAA, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ABA, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ABB, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ACB, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Alphabet.AAA, withSize(49));
         appendMessage(testSystem, Alphabet.ABA, withSize(50));
@@ -222,11 +222,11 @@ public interface QuotaSearcherContract {
     default void searchShouldReturnEmptyOnTooBigOffset(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(SIMPSON_COM);
         testSystem.getDomainList().addDomain(DOMAIN_TLD);
-        testSystem.getUsersRepository().addUser(Simpson.BART.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.HOMER.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Simpson.LISA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(BENOIT_AT_DOMAIN_TLD.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Simpson.BART, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.HOMER, PASSWORD);
+        testSystem.getUsersRepository().addUser(Simpson.LISA, PASSWORD);
+        testSystem.getUsersRepository().addUser(BENOIT_AT_DOMAIN_TLD, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Simpson.BART, withSize(49));
         appendMessage(testSystem, Simpson.HOMER, withSize(50));
@@ -244,11 +244,11 @@ public interface QuotaSearcherContract {
     @Test
     default void pagingShouldBeSupported(QuotaSearchTestSystem testSystem) throws Exception {
         testSystem.getDomainList().addDomain(ALPHABET_TLD);
-        testSystem.getUsersRepository().addUser(Alphabet.AAA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ABA.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ABB.asString(), PASSWORD);
-        testSystem.getUsersRepository().addUser(Alphabet.ACB.asString(), PASSWORD);
-        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSize.size(100));
+        testSystem.getUsersRepository().addUser(Alphabet.AAA, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ABA, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ABB, PASSWORD);
+        testSystem.getUsersRepository().addUser(Alphabet.ACB, PASSWORD);
+        testSystem.getMaxQuotaManager().setGlobalMaxStorage(QuotaSizeLimit.size(100));
 
         appendMessage(testSystem, Alphabet.AAA, withSize(49));
         appendMessage(testSystem, Alphabet.ABA, withSize(50));
@@ -264,9 +264,9 @@ public interface QuotaSearcherContract {
             .containsExactly(Alphabet.ABA, Alphabet.ABB);
     }
 
-    default void appendMessage(QuotaSearchTestSystem testSystem, User user, MessageManager.AppendCommand appendCommand) throws MailboxException, UsersRepositoryException, DomainListException {
+    default void appendMessage(QuotaSearchTestSystem testSystem, Username username, MessageManager.AppendCommand appendCommand) throws MailboxException, UsersRepositoryException, DomainListException {
         MailboxManager mailboxManager = testSystem.getMailboxManager();
-        MailboxSession session = mailboxManager.createSystemSession(user.asString());
+        MailboxSession session = mailboxManager.createSystemSession(username);
 
         MailboxPath mailboxPath = MailboxPath.inbox(session);
         mailboxManager.createMailbox(mailboxPath, session);

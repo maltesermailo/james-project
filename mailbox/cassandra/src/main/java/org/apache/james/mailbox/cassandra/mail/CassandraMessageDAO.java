@@ -23,6 +23,8 @@ import static com.datastax.driver.core.querybuilder.QueryBuilder.bindMarker;
 import static com.datastax.driver.core.querybuilder.QueryBuilder.eq;
 import static com.datastax.driver.core.querybuilder.QueryBuilder.insertInto;
 import static com.datastax.driver.core.querybuilder.QueryBuilder.select;
+import static org.apache.james.blob.api.BlobStore.StoragePolicy.LOW_COST;
+import static org.apache.james.blob.api.BlobStore.StoragePolicy.SIZE_BASED;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageIds.MESSAGE_ID;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV2Table.ATTACHMENTS;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV2Table.BODY;
@@ -70,8 +72,8 @@ import org.apache.james.mailbox.model.MessageAttachment;
 import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.mailbox.store.mail.MessageMapper.FetchType;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
+import org.apache.james.mailbox.store.mail.model.Property;
 import org.apache.james.mailbox.store.mail.model.impl.PropertyBuilder;
-import org.apache.james.mailbox.store.mail.model.impl.SimpleProperty;
 import org.apache.james.util.streams.Limit;
 
 import com.datastax.driver.core.BoundStatement;
@@ -182,8 +184,8 @@ public class CassandraMessageDAO {
             byte[] headerContent = IOUtils.toByteArray(message.getHeaderContent());
             byte[] bodyContent = IOUtils.toByteArray(message.getBodyContent());
 
-            Mono<BlobId> bodyFuture = blobStore.save(blobStore.getDefaultBucketName(), bodyContent);
-            Mono<BlobId> headerFuture = blobStore.save(blobStore.getDefaultBucketName(), headerContent);
+            Mono<BlobId> bodyFuture = blobStore.save(blobStore.getDefaultBucketName(), bodyContent, LOW_COST);
+            Mono<BlobId> headerFuture = blobStore.save(blobStore.getDefaultBucketName(), headerContent, SIZE_BASED);
 
             return headerFuture.zipWith(bodyFuture);
         } catch (IOException e) {
@@ -213,21 +215,24 @@ public class CassandraMessageDAO {
     }
 
     private UDTValue toUDT(MessageAttachment messageAttachment) {
-        return typesProvider.getDefinedUserType(ATTACHMENTS)
+        UDTValue result = typesProvider.getDefinedUserType(ATTACHMENTS)
             .newValue()
             .setString(Attachments.ID, messageAttachment.getAttachmentId().getId())
-            .setString(Attachments.NAME, messageAttachment.getName().orElse(null))
-            .setString(Attachments.CID, messageAttachment.getCid().map(Cid::getValue).orElse(null))
             .setBool(Attachments.IS_INLINE, messageAttachment.isInline());
+        messageAttachment.getName()
+            .ifPresent(name -> result.setString(Attachments.NAME, name));
+        messageAttachment.getCid()
+            .ifPresent(cid -> result.setString(Attachments.CID, cid.getValue()));
+        return result;
     }
 
     private List<UDTValue> buildPropertiesUdt(MailboxMessage message) {
         return message.getProperties().stream()
-            .map(x -> typesProvider.getDefinedUserType(PROPERTIES)
+            .map(property -> typesProvider.getDefinedUserType(PROPERTIES)
                 .newValue()
-                .setString(Properties.NAMESPACE, x.getNamespace())
-                .setString(Properties.NAME, x.getLocalName())
-                .setString(Properties.VALUE, x.getValue()))
+                .setString(Properties.NAMESPACE, property.getNamespace())
+                .setString(Properties.NAME, property.getLocalName())
+                .setString(Properties.VALUE, property.getValue()))
             .collect(Guavate.toImmutableList());
     }
 
@@ -267,30 +272,33 @@ public class CassandraMessageDAO {
                     getPropertyBuilder(row),
                     messageId.getMailboxId(),
                     messageId.getUid(),
-                    messageIdWithMetaData.getModSeq());
-            return found(Pair.of(messageWithoutAttachment, getAttachments(row, fetchType)));
+                    messageIdWithMetaData.getModSeq(),
+                    hasAttachment(row));
+            return found(Pair.of(messageWithoutAttachment, getAttachments(row)));
         });
     }
 
     private PropertyBuilder getPropertyBuilder(Row row) {
         PropertyBuilder property = new PropertyBuilder(
             row.getList(PROPERTIES, UDTValue.class).stream()
-                .map(x -> new SimpleProperty(x.getString(Properties.NAMESPACE), x.getString(Properties.NAME), x.getString(Properties.VALUE)))
+                .map(this::toProperty)
                 .collect(Collectors.toList()));
         property.setTextualLineCount(row.getLong(TEXTUAL_LINE_COUNT));
         return property;
     }
 
-    private Stream<MessageAttachmentRepresentation> getAttachments(Row row, FetchType fetchType) {
-        switch (fetchType) {
-            case Full:
-            case Body:
-                List<UDTValue> udtValues = row.getList(ATTACHMENTS, UDTValue.class);
+    private Property toProperty(UDTValue udtValue) {
+        return new Property(udtValue.getString(Properties.NAMESPACE), udtValue.getString(Properties.NAME), udtValue.getString(Properties.VALUE));
+    }
 
-                return attachmentByIds(udtValues);
-            default:
-                return Stream.of();
-        }
+    private Stream<MessageAttachmentRepresentation> getAttachments(Row row) {
+        List<UDTValue> udtValues = row.getList(ATTACHMENTS, UDTValue.class);
+        return attachmentByIds(udtValues);
+    }
+
+    private boolean hasAttachment(Row row) {
+        List<UDTValue> udtValues = row.getList(ATTACHMENTS, UDTValue.class);
+        return !udtValues.isEmpty();
     }
 
     private Stream<MessageAttachmentRepresentation> attachmentByIds(List<UDTValue> udtValues) {

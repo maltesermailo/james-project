@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.EnumSet;
 
-import org.apache.james.jmap.JMAPModule;
+import org.apache.james.jmap.draft.JMAPModule;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.extractor.TextExtractor;
 import org.apache.james.mailbox.store.search.PDFTextExtractor;
@@ -38,8 +38,6 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 class JamesCapabilitiesServerTest {
     private static final MailboxManager mailboxManager = mock(MailboxManager.class);
 
-    private static final int LIMIT_MAX_MESSAGES = 10;
-
     @RegisterExtension
     static JamesServerExtension testExtension = new JamesServerBuilder()
         .extension(new DockerElasticSearchExtension())
@@ -47,7 +45,7 @@ class JamesCapabilitiesServerTest {
         .server(configuration -> GuiceJamesServer.forConfiguration(configuration)
             .combineWith(ALL_BUT_JMX_CASSANDRA_MODULE)
             .overrideWith(binder -> binder.bind(TextExtractor.class).to(PDFTextExtractor.class))
-            .overrideWith(new TestJMAPServerModule(LIMIT_MAX_MESSAGES))
+            .overrideWith(TestJMAPServerModule.limitToTenMessages())
             .overrideWith(binder -> binder.bind(MailboxManager.class).toInstance(mailboxManager)))
         .disableAutoStart()
         .build();

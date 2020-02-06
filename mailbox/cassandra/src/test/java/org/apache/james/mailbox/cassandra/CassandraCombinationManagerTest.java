@@ -19,42 +19,24 @@
 
 package org.apache.james.mailbox.cassandra;
 
-import org.apache.james.backends.cassandra.CassandraCluster;
-import org.apache.james.backends.cassandra.DockerCassandraRule;
+import org.apache.james.backends.cassandra.CassandraClusterExtension;
 import org.apache.james.mailbox.cassandra.mail.MailboxAggregateModule;
 import org.apache.james.mailbox.events.InVMEventBus;
 import org.apache.james.mailbox.events.delivery.InVmEventDelivery;
 import org.apache.james.mailbox.store.AbstractCombinationManagerTest;
 import org.apache.james.mailbox.store.CombinationManagerTestSystem;
 import org.apache.james.mailbox.store.quota.NoQuotaManager;
-import org.apache.james.metrics.api.NoopMetricFactory;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class CassandraCombinationManagerTest extends AbstractCombinationManagerTest {
-
-    @Rule public DockerCassandraRule cassandraServer = new DockerCassandraRule().allowRestart();
-
-    private CassandraCluster cassandra;
-
-    @Override
-    @Before
-    public void setUp() throws Exception {
-        cassandra = CassandraCluster.create(MailboxAggregateModule.MODULE, cassandraServer.getHost());
-        super.setUp();
-    }
-
-    @After
-    public void tearDown() {
-        cassandra.clearTables();
-        cassandra.closeCluster();
-    }
+class CassandraCombinationManagerTest extends AbstractCombinationManagerTest {
+    @RegisterExtension
+    static CassandraClusterExtension cassandraCluster = new CassandraClusterExtension(MailboxAggregateModule.MODULE);
     
     @Override
     public CombinationManagerTestSystem createTestingData() {
-        InVMEventBus eventBus = new InVMEventBus(new InVmEventDelivery(new NoopMetricFactory()));
-        return CassandraCombinationManagerTestSystem.createTestingData(cassandra, new NoQuotaManager(), eventBus);
+        InVMEventBus eventBus = new InVMEventBus(new InVmEventDelivery(new RecordingMetricFactory()));
+        return CassandraCombinationManagerTestSystem.createTestingData(cassandraCluster.getCassandraCluster(), new NoQuotaManager(), eventBus);
     }
     
 }

@@ -26,6 +26,7 @@ import javax.net.ssl.SSLEngine;
 
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.imap.api.ImapConfiguration;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.process.ImapProcessor;
@@ -41,7 +42,6 @@ import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.ChannelUpstreamHandler;
 import org.jboss.netty.channel.group.ChannelGroup;
-import org.jboss.netty.handler.codec.oneone.OneToOneEncoder;
 import org.jboss.netty.handler.execution.ExecutionHandler;
 import org.jboss.netty.handler.ssl.SslHandler;
 import org.jboss.netty.handler.stream.ChunkedWriteHandler;
@@ -90,7 +90,7 @@ public class IMAPServer extends AbstractConfigurableAsyncServer implements ImapC
     }
 
     @Override
-    public void doConfigure(HierarchicalConfiguration configuration) throws ConfigurationException {
+    public void doConfigure(HierarchicalConfiguration<ImmutableNode> configuration) throws ConfigurationException {
         
         super.doConfigure(configuration);
         
@@ -113,7 +113,7 @@ public class IMAPServer extends AbstractConfigurableAsyncServer implements ImapC
         processor.configure(getImapConfiguration(configuration));
     }
 
-    @VisibleForTesting static ImapConfiguration getImapConfiguration(HierarchicalConfiguration configuration) {
+    @VisibleForTesting static ImapConfiguration getImapConfiguration(HierarchicalConfiguration<ImmutableNode> configuration) {
         ImmutableSet<String> disabledCaps = ImmutableSet.copyOf(Splitter.on(CAPABILITY_SEPARATOR).split(configuration.getString("disabledCaps", "")));
 
         return ImapConfiguration.builder()
@@ -210,13 +210,6 @@ public class IMAPServer extends AbstractConfigurableAsyncServer implements ImapC
            coreHandler = new ImapChannelUpstreamHandler(hello, processor, encoder, compress, plainAuthDisallowed, imapMetrics);
         }
         return coreHandler;
-    }
-
-    /**
-     * Return null as we don't need this
-     */
-    protected OneToOneEncoder createEncoder() {
-        return null;
     }
 
     @Override

@@ -12,6 +12,181 @@ software documentation. Do not follow this guide blindly!
 
 Note: this section is in progress. It will be updated during all the development process until the release.
 
+Changes to apply between 3.4.x and 3.5.x will be reported here.
+
+Change list:
+
+ - [RabbitMQ minimal version](#rabbitmq-minimal-version)
+ - [Enforce usernames to be lower cased](#enforce-usernames-to-be-lower-cased)
+ - [Cassandra keyspace creation configuration](#cassandra-keyspace-creation-configuration)
+ - [UsersFileRepository](#usersfilerepository)
+ - [ElasticSearch performance enhancements](#elasticsearch-performance-enhancements)
+ - [JAMES-2703 Post 3.4.0 release removals](#james-2703-post-340-release-removals)
+ - [Health checks routes return code changes](#health-checks-routes-return-code-changes)
+ - [User mailboxes reIndexing endpoint change](#user-mailboxes-reindexing-endpoint-change)
+ - [Hybrid blobStore replaces Union blobStore](#hybrid-blobstore-replaces-union-blobstore)
+ - [New forbidden set of characters in Usernames local part](#new-forbidden-set-of-characters-in-usernames-local-part)
+ 
+### New forbidden set of characters in Usernames local part
+
+Date 04/02/2020
+
+SHA-1 XXX
+
+JIRA: https://issues.apache.org/jira/browse/JAMES-2950
+
+Even if this set of characters should be allowed for the local part of a Username regarding some context, as defined by the [RFC3696#section-3](https://tools.ietf.org/html/rfc3696#section-3), we decided that for reducing code complexity and more safety to not allow them anymore when creating new Usernames.
+
+However, the read of Usernames already existing with some of those characters is still allowed, to not introduce any breaking change.
+
+### Hybrid blobStore replaces Union blobStore
+
+Date 6/01/2020
+
+SHA-1 XXX
+
+Concerned products: Guice distributed James server
+
+Union blobStore, allowing to store older blobs within Cassandra while storing new blobs into object storage, had been removed.
+
+Hybrid blobStore had been replacing it, allowing to store blobs either in a low cost blobStore or in a high performance blobStore, allowing thus some performance 
+improvement for small, often read blobs while big or unfrequently read blobs keeps being stored cheaply.
+
+Users relying on the Union blobStore will need to adopt Hybrid blobStore. Please adjust "blob.properties" accordingly:
+
+```
+implementation=hybrid
+```
+
+### User mailboxes reIndexing endpoint change
+ 
+Date 16/12/2019
+
+SHA-1 d68a64d96ba8312ecbd34761e82c9c2c32348290
+
+Concerned products: Guice products
+
+In an effort to have a resource oriented webadmin REST API we decided to relocate the endpoint for user mailbox reIndexing.
+
+`curl -XPOST /mailboxes?task=reIndex&user=bob@apache.org`
+
+Had been moved to:
+
+`curl -XPOST /users/bob@apache.org/mailboxes?task=reIndex`
+
+#### Health checks routes return code changes
+
+Date 10/12/2019
+
+SHA-1 cdbc0ee65f
+
+Concerned products: Guice products
+
+Health check return codes had been changed:
+ - Degraded James server will now answer 200 instead of 500. JSON payload needs to be read in order to act upon a degraded server.
+ - Unhealthy James server will now answer 503 instead of 500.
+ 
+Depending on specific deployment usage of health-checks, management scripts might need to be updated.
+
+#### RabbitMQ minimal version
+
+Date 26/11/2019
+
+SHA-1 0bf4e8384e
+
+Concerned products: Guice distributed James (rabbitMQ)
+
+The distributed James project (relying on Guice, Cassandra, ElasticSearch, RabbitMQ and optionally Swift) benefits from a new distributed task mananger.
+
+In order to enforce task sequential processing at the cluster level, we rely on a single active consumer, which is a feature introduced in RabbitMQ 3.8.
+
+Users of distributed James product thus need to upgrade their RabbitMQ server to be at least version 3.8.
+
+#### Enforce usernames to be lower cased
+
+Date 21/11/2019
+
+SHA-1 9e976d3f49
+
+JIRA: https://issues.apache.org/jira/browse/JAMES-2949
+
+Many users recently complained about mails non received when sending to upper cased local recipients. We decided to simplify the handling of case for local recipients and users by always storing them lower cased.
+Now all the users repositories are storing user in lower case to ensure that. If you previously used to store users in a case sensitive way (which is very unlikely as it is broking delivery), you could need to update your user database to lower case all your users.
+
+#### Cassandra keyspace creation configuration
+
+Date 15/11/2019
+
+SHA-1 bcf4d36500
+
+In order to allow the usage of cassandra credentials limited to a keyspace, the default behaviour of James is now to NOT
+create the keyspace during start-up.
+
+The automatic creation of the cassandra keyspace by James could be enabled by setting
+ `cassandra.keyspace.create=true` in the `cassandra.properties` configuration file.
+ 
+#### UsersFileRepository
+
+Date 08/11/2019
+
+SHA-1 0f8ee6ce2a
+
+This specific user store was deprecated for years. It relied on Java serialization to store directly core.User object.
+
+If you are still using it, you should instead use an [other user repository](https://james.apache.org/server/config-users.html).
+
+If you need to export data from it, please [contact us](http://james.apache.org/#second), it could be possible to write a little extraction tool.
+
+### ElasticSearch performance enhancements
+
+Date 10/10/2019
+
+SHA-1 0d72783ff4
+
+JIRAS:
+ - https://issues.apache.org/jira/browse/JAMES-2917
+ - https://issues.apache.org/jira/browse/JAMES-2078
+ - https://issues.apache.org/jira/browse/JAMES-2079
+ - https://issues.apache.org/jira/browse/JAMES-2910
+
+Concerned product: Guice product relying on ElasticSearch
+
+We significantly improved our usage of ElasticSearch. Underlying changes include:
+
+ - The use of routing to collocate emails of a same mailbox within a same shard. This enables search queries to avoid cluster
+ level synchronisation, and thus enhance throughput, latencies and scalability.
+ - Disabling dynamic mapping. We now represent headers as nested objects.
+ - Removing some not needed fields from the mapping
+ - No longer index raw HTML. This was possible under some configuration combination, and caused the data stored in elasticSearch
+ to be significantly larger than required.
+
+The downside of these changes is that a reindex is needed, implying a downtime on search:
+ - Delete the indexes used by James
+ - Start James in order to create the missing indexes
+ - Trigger a [Full ReIndexing](https://james.apache.org/server/manage-webadmin.html#ReIndexing_all_mails), which can take
+  time to complete.
+ 
+#### JAMES-2703 Post 3.4.0 release removals
+
+Date: 25/09/2019
+
+SHA-1: f721747edf8deb50406a5a44f6476507a03e2543
+
+JIRA: https://issues.apache.org/jira/browse/JAMES-2703
+
+Concerned products: Spring, default bundled mailets
+
+- Classes marked as deprecated whose removal was planned after 3.4.0 release (See JAMES-2703) had been removed. 
+
+This includes:
+  - SieveDefaultRepository. Please use SieveFileRepository instead.
+  - JDBCRecipientRewriteTable, XMLRecipientRewriteTable, UsersRepositoryAliasingForwarding, JDBCAlias mailets. Please use RecipientRewriteTable mailet instead.
+  - JDBCRecipientRewriteTable implementation. Please use JPARecipientRewriteTable instead.
+  - JamesUsersJdbcRepository, DefaultUsersJdbcRepository. Please use JpaUsersRepository instead.
+  - MailboxQuotaFixed matcher. Please use IsOverQuota instead.
+
+## 3.4.0 version
+
 Changes to apply between 3.3.x and 3.4.x will be reported here.
 
 Change list:

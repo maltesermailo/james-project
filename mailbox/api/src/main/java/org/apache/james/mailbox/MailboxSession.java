@@ -27,7 +27,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-import org.apache.james.core.User;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.model.MailboxConstants;
 
 import com.google.common.base.MoreObjects;
@@ -97,20 +97,20 @@ public class MailboxSession {
     private final String otherUsersSpace;
     private final String personalSpace;
     private final SessionId sessionId;
-    private final String userName;
+    private final Username userName;
     private boolean open = true;
     private final List<Locale> localePreferences;
     private final Map<Object, Object> attributes;
     private final char pathSeparator;
     private final SessionType type;
 
-    public MailboxSession(SessionId sessionId, String userName,
+    public MailboxSession(SessionId sessionId, Username userName,
                                 List<Locale> localePreferences, char pathSeparator, SessionType type) {
         this(sessionId, userName, localePreferences, new ArrayList<>(), null, pathSeparator, type);
     }
 
-    public MailboxSession(SessionId sessionId, String userName,
-                                List<Locale> localePreferences, List<String> sharedSpaces, String otherUsersSpace, char pathSeparator, SessionType type) {
+    public MailboxSession(SessionId sessionId, Username userName,
+                          List<Locale> localePreferences, List<String> sharedSpaces, String otherUsersSpace, char pathSeparator, SessionType type) {
         this.sessionId = sessionId;
         this.userName = userName;
         this.otherUsersSpace = otherUsersSpace;
@@ -129,8 +129,6 @@ public class MailboxSession {
 
     /**
      * Return if the {@link MailboxSession} is of type {@link SessionType#User} or {@link SessionType#System}
-     * 
-     * @return type
      */
     public SessionType getType() {
         return type;
@@ -138,8 +136,6 @@ public class MailboxSession {
     
     /**
      * Gets the session ID.
-     * 
-     * @return session id
      */
     public SessionId getSessionId() {
         return sessionId;
@@ -166,8 +162,8 @@ public class MailboxSession {
      * 
      * @return not null
      */
-    public User getUser() {
-        return User.fromUsername(userName);
+    public Username getUser() {
+        return userName;
     }
 
     /**
@@ -220,8 +216,6 @@ public class MailboxSession {
 
     /**
      * Return the stored attributes for this {@link MailboxSession}.
-     * 
-     * @return attributes
      */
     public Map<Object, Object> getAttributes() {
         return attributes;
@@ -229,8 +223,6 @@ public class MailboxSession {
 
     /**
      * Return server side, folder path separator
-     * 
-     * @return path separator
      */
     public char getPathDelimiter() {
         return pathSeparator;

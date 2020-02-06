@@ -24,8 +24,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.StringTokenizer;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.james.core.MailAddress;
 import org.apache.james.core.MaybeSender;
 import org.apache.james.protocols.api.ProtocolSession.State;
@@ -56,16 +54,6 @@ public class DNSRBLHandler implements RcptHook {
     public static final String RBL_BLOCKLISTED_MAIL_ATTRIBUTE_NAME = "org.apache.james.smtpserver.rbl.blocklisted";
     
     public static final String RBL_DETAIL_MAIL_ATTRIBUTE_NAME = "org.apache.james.smtpserver.rbl.detail";
-
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
-    }
 
     /**
      * Set the whitelist array
@@ -128,7 +116,7 @@ public class DNSRBLHandler implements RcptHook {
         }
         
         if (whitelist != null || blacklist != null) {
-            StringBuffer sb = new StringBuffer();
+            StringBuilder sb = new StringBuilder();
             StringTokenizer st = new StringTokenizer(ipAddress, " .", false);
             while (st.hasMoreTokens()) {
                 sb.insert(0, st.nextToken() + ".");
@@ -210,8 +198,7 @@ public class DNSRBLHandler implements RcptHook {
      * Check if the given ipaddress is resolvable. 
      * 
      * This implementation use {@link InetAddress#getByName(String)}. Sub-classes may override this with a more performant solution
-     * 
-     * @param ip
+     *
      * @return canResolve
      */
     protected boolean resolve(String ip) {
@@ -227,8 +214,7 @@ public class DNSRBLHandler implements RcptHook {
      * Return a {@link Collection} which holds all TXT records for the ip. This is most times used to add details for a RBL entry.
      * 
      * This implementation always returns an empty {@link Collection}. Sub-classes may override this.
-     * 
-     * @param ip
+     *
      * @return txtRecords
      */
     protected Collection<String> resolveTXTRecords(String ip) {

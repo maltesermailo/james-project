@@ -21,7 +21,10 @@ package org.apache.james.mailrepository.memory;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+
+import javax.mail.MessagingException;
 
 import org.apache.james.mailrepository.api.MailKey;
 import org.apache.james.mailrepository.api.MailRepository;
@@ -38,7 +41,7 @@ public class MemoryMailRepository implements MailRepository {
     @Override
     public MailKey store(Mail mail) {
         MailKey mailKey = MailKey.forMail(mail);
-        mails.put(mailKey, mail);
+        mails.put(mailKey, cloneMail(mail));
         return mailKey;
     }
 
@@ -49,12 +52,14 @@ public class MemoryMailRepository implements MailRepository {
 
     @Override
     public Mail retrieve(MailKey key) {
-        return mails.get(key);
+        return Optional.ofNullable(mails.get(key))
+            .map(this::cloneMail)
+            .orElse(null);
     }
 
     @Override
     public void remove(Mail mail) {
-        mails.remove(MailKey.forMail(mail));
+        remove(MailKey.forMail(mail));
     }
 
     @Override
@@ -68,16 +73,6 @@ public class MemoryMailRepository implements MailRepository {
     }
 
     @Override
-    public boolean lock(MailKey key) {
-        return false;
-    }
-
-    @Override
-    public boolean unlock(MailKey key) {
-        return false;
-    }
-
-    @Override
     public long size() {
         return mails.size();
     }
@@ -85,5 +80,16 @@ public class MemoryMailRepository implements MailRepository {
     @Override
     public void removeAll() {
         mails.clear();
+    }
+
+    private Mail cloneMail(Mail mail) {
+        try {
+            Mail newMail = mail.duplicate();
+            newMail.setName(mail.getName());
+            newMail.setState(mail.getState());
+            return newMail;
+        } catch (MessagingException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

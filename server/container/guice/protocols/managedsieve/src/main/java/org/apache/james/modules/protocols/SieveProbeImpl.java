@@ -18,14 +18,10 @@
  ****************************************************************/
 package org.apache.james.modules.protocols;
 
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import javax.inject.Inject;
 
-import org.apache.commons.io.IOUtils;
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.probe.SieveProbe;
 import org.apache.james.sieverepository.api.ScriptContent;
 import org.apache.james.sieverepository.api.ScriptName;
@@ -49,7 +45,7 @@ public class SieveProbeImpl implements GuiceProbe, SieveProbe {
 
     @Override
     public void setSieveQuota(long quota) throws Exception {
-        sieveRepository.setDefaultQuota(QuotaSize.size(quota));
+        sieveRepository.setDefaultQuota(QuotaSizeLimit.size(quota));
     }
 
     @Override
@@ -59,30 +55,23 @@ public class SieveProbeImpl implements GuiceProbe, SieveProbe {
 
     @Override
     public long getSieveQuota(String user) throws Exception {
-        return sieveRepository.getQuota(User.fromUsername(user)).asLong();
+        return sieveRepository.getQuota(Username.of(user)).asLong();
     }
 
     @Override
     public void setSieveQuota(String user, long quota) throws Exception {
-        sieveRepository.setQuota(User.fromUsername(user), QuotaSize.size(quota));
+        sieveRepository.setQuota(Username.of(user), QuotaSizeLimit.size(quota));
     }
 
     @Override
     public void removeSieveQuota(String user) throws Exception {
-        sieveRepository.removeQuota(User.fromUsername(user));
+        sieveRepository.removeQuota(Username.of(user));
     }
 
     @Override
     public void addActiveSieveScript(String userName, String name, String script) throws Exception {
-        User user = User.fromUsername(userName);
-        sieveRepository.putScript(user, new ScriptName(name), new ScriptContent(script));
-        sieveRepository.setActive(user, new ScriptName(name));
-    }
-
-    @Override
-    public void addActiveSieveScriptFromFile(String userName, String name, String path) throws Exception {
-        try (InputStream scriptFileAsStream = new FileInputStream(path)) {
-            addActiveSieveScript(userName, name, IOUtils.toString(scriptFileAsStream, StandardCharsets.UTF_8));
-        }
+        Username username = Username.of(userName);
+        sieveRepository.putScript(username, new ScriptName(name), new ScriptContent(script));
+        sieveRepository.setActive(username, new ScriptName(name));
     }
 }

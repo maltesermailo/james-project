@@ -21,17 +21,18 @@ package org.apache.james.imap.decode.parser;
 
 import java.util.Optional;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.GetAnnotationRequest;
 import org.apache.james.imap.message.request.GetAnnotationRequest.Depth;
 import org.apache.james.mailbox.model.MailboxAnnotationKey;
-import org.apache.james.protocols.imap.DecodingException;
 
 import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableSet;
@@ -43,22 +44,22 @@ public class GetAnnotationCommandParser extends AbstractImapCommandParser {
     private static final String DEPTH = "DEPTH";
     private static final boolean STOP_ON_PAREN = true;
 
-    public GetAnnotationCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.GETANNOTATION_COMMAND_NAME));
+    public GetAnnotationCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.GETANNOTATION_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader requestReader, String tag, ImapSession session)
+    protected ImapMessage decode(ImapRequestLineReader requestReader, Tag tag, ImapSession session)
         throws DecodingException {
         try {
-            return buildAnnotationRequest(command, requestReader, tag);
+            return buildAnnotationRequest(requestReader, tag);
         } catch (NullPointerException | IllegalArgumentException | IllegalStateException e) {
             throw new DecodingException(HumanReadableText.ILLEGAL_ARGUMENTS, e.getMessage(), e);
         }
     }
 
-    private ImapMessage buildAnnotationRequest(ImapCommand command, ImapRequestLineReader requestReader, String tag) throws DecodingException {
-        GetAnnotationRequest.Builder builder = GetAnnotationRequest.builder().tag(tag).command(command);
+    private ImapMessage buildAnnotationRequest(ImapRequestLineReader requestReader, Tag tag) throws DecodingException {
+        GetAnnotationRequest.Builder builder = GetAnnotationRequest.builder().tag(tag);
         builder.mailboxName(requestReader.mailbox());
 
         consumeOptionsAndKeys(requestReader, builder);

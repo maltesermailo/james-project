@@ -21,35 +21,27 @@ package org.apache.james.imap.encode;
 import java.io.IOException;
 import java.util.Set;
 
-import org.apache.james.imap.api.ImapMessage;
-import org.apache.james.imap.api.process.ImapSession;
-import org.apache.james.imap.encode.base.AbstractChainedImapEncoder;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.message.response.EnableResponse;
 
 /**
  * Encodes <code>Enable</code> response.
  */
-public class EnableResponseEncoder extends AbstractChainedImapEncoder {
-
-    public EnableResponseEncoder(ImapEncoder next) {
-        super(next);
+public class EnableResponseEncoder implements ImapResponseEncoder<EnableResponse> {
+    @Override
+    public Class<EnableResponse> acceptableMessages() {
+        return EnableResponse.class;
     }
 
     @Override
-    protected void doEncode(ImapMessage acceptableMessage, ImapResponseComposer composer, ImapSession session) throws IOException {
-        final EnableResponse response = (EnableResponse) acceptableMessage;
-        Set<String> capabilities = response.getCapabilities();
+    public void encode(EnableResponse response, ImapResponseComposer composer) throws IOException {
+        Set<Capability> capabilities = response.getCapabilities();
         composer.untagged();
         // Return ENABLED capabilities. See IMAP-323
         composer.message("ENABLED");
-        for (String capability : capabilities) {
-            composer.message(capability);
+        for (Capability capability : capabilities) {
+            composer.message(capability.asString());
         }
         composer.end();
-    }
-    
-    @Override
-    protected boolean isAcceptable(ImapMessage message) {
-        return (message instanceof EnableResponse);
     }
 }

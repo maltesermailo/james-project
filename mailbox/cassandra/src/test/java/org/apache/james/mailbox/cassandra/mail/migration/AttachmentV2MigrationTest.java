@@ -19,8 +19,10 @@
 
 package org.apache.james.mailbox.cassandra.mail.migration;
 
+import static org.apache.james.blob.api.BlobStore.StoragePolicy.LOW_COST;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -28,7 +30,6 @@ import java.nio.charset.StandardCharsets;
 
 import org.apache.james.backends.cassandra.CassandraCluster;
 import org.apache.james.backends.cassandra.CassandraClusterExtension;
-import org.apache.james.backends.cassandra.CassandraRestartExtension;
 import org.apache.james.backends.cassandra.components.CassandraModule;
 import org.apache.james.backends.cassandra.init.configuration.CassandraConfiguration;
 import org.apache.james.blob.api.BucketName;
@@ -43,13 +44,11 @@ import org.apache.james.mailbox.model.AttachmentId;
 import org.apache.james.task.Task;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-@ExtendWith(CassandraRestartExtension.class)
 class AttachmentV2MigrationTest {
     private static final AttachmentId ATTACHMENT_ID = AttachmentId.from("id1");
     private static final AttachmentId ATTACHMENT_ID_2 = AttachmentId.from("id2");
@@ -155,7 +154,7 @@ class AttachmentV2MigrationTest {
         when(attachmentDAO.retrieveAll()).thenReturn(Flux.just(
             attachment1,
             attachment2));
-        when(blobsStore.save(any(BucketName.class), any(byte[].class))).thenThrow(new RuntimeException());
+        when(blobsStore.save(any(BucketName.class), any(byte[].class), eq(LOW_COST))).thenThrow(new RuntimeException());
 
         assertThat(migration.asTask().run()).isEqualTo(Task.Result.PARTIAL);
     }
@@ -170,9 +169,9 @@ class AttachmentV2MigrationTest {
         when(attachmentDAO.retrieveAll()).thenReturn(Flux.just(
             attachment1,
             attachment2));
-        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment1.getBytes()))
+        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment1.getBytes(), LOW_COST))
             .thenReturn(Mono.just(BLOB_ID_FACTORY.forPayload(attachment1.getBytes())));
-        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment2.getBytes()))
+        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment2.getBytes(), LOW_COST))
             .thenReturn(Mono.just(BLOB_ID_FACTORY.forPayload(attachment2.getBytes())));
         when(attachmentDAOV2.storeAttachment(any())).thenThrow(new RuntimeException());
 
@@ -189,9 +188,9 @@ class AttachmentV2MigrationTest {
         when(attachmentDAO.retrieveAll()).thenReturn(Flux.just(
             attachment1,
             attachment2));
-        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment1.getBytes()))
+        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment1.getBytes(), LOW_COST))
             .thenReturn(Mono.just(BLOB_ID_FACTORY.forPayload(attachment1.getBytes())));
-        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment2.getBytes()))
+        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment2.getBytes(), LOW_COST))
             .thenReturn(Mono.just(BLOB_ID_FACTORY.forPayload(attachment2.getBytes())));
         when(attachmentDAOV2.storeAttachment(any())).thenReturn(Mono.empty());
         when(attachmentDAO.deleteAttachment(any())).thenThrow(new RuntimeException());
@@ -209,9 +208,9 @@ class AttachmentV2MigrationTest {
         when(attachmentDAO.retrieveAll()).thenReturn(Flux.just(
             attachment1,
             attachment2));
-        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment1.getBytes()))
+        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment1.getBytes(), LOW_COST))
             .thenReturn(Mono.just(BLOB_ID_FACTORY.forPayload(attachment1.getBytes())));
-        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment2.getBytes()))
+        when(blobsStore.save(blobsStore.getDefaultBucketName(), attachment2.getBytes(), LOW_COST))
             .thenThrow(new RuntimeException());
         when(attachmentDAOV2.storeAttachment(any())).thenReturn(Mono.empty());
         when(attachmentDAO.deleteAttachment(any())).thenReturn(Mono.empty());

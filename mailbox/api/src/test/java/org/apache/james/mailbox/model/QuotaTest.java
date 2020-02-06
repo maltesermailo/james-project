@@ -22,95 +22,96 @@ package org.apache.james.mailbox.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
-import org.junit.Test;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
+import org.junit.jupiter.api.Test;
 
-public class QuotaTest {
-
+class QuotaTest {
 
     @Test
-    public void isOverQuotaShouldReturnFalseWhenQuotaIsNotExceeded() {
-        Quota<QuotaCount> quota = Quota.<QuotaCount>builder().used(QuotaCount.count(36)).computedLimit(QuotaCount.count(360)).build();
+    void isOverQuotaShouldReturnFalseWhenQuotaIsNotExceeded() {
+        Quota<QuotaCountLimit, QuotaCountUsage> quota = Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(36)).computedLimit(QuotaCountLimit.count(360)).build();
         assertThat(quota.isOverQuota()).isFalse();
     }
 
     @Test
-    public void isOverQuotaShouldReturnFalseWhenMaxValueIsUnlimited() {
-        Quota<QuotaCount> quota = Quota.<QuotaCount>builder().used(QuotaCount.count(36)).computedLimit(QuotaCount.unlimited()).build();
+    void isOverQuotaShouldReturnFalseWhenMaxValueIsUnlimited() {
+        Quota<QuotaCountLimit, QuotaCountUsage> quota = Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(36)).computedLimit(QuotaCountLimit.unlimited()).build();
         assertThat(quota.isOverQuota()).isFalse();
     }
 
     @Test
-    public void isOverQuotaShouldReturnTrueWhenQuotaIsExceeded() {
-        Quota<QuotaCount> quota = Quota.<QuotaCount>builder().used(QuotaCount.count(360)).computedLimit(QuotaCount.count(36)).build();
+    void isOverQuotaShouldReturnTrueWhenQuotaIsExceeded() {
+        Quota<QuotaCountLimit, QuotaCountUsage> quota = Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(360)).computedLimit(QuotaCountLimit.count(36)).build();
         assertThat(quota.isOverQuota()).isTrue();
     }
 
     @Test
-    public void isOverQuotaWithAdditionalValueShouldReturnTrueWhenOverLimit() {
-        Quota<QuotaCount> quota = Quota.<QuotaCount>builder().used(QuotaCount.count(36)).computedLimit(QuotaCount.count(36)).build();
+    void isOverQuotaWithAdditionalValueShouldReturnTrueWhenOverLimit() {
+        Quota<QuotaCountLimit, QuotaCountUsage> quota = Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(36)).computedLimit(QuotaCountLimit.count(36)).build();
         assertThat(quota.isOverQuotaWithAdditionalValue(1)).isTrue();
     }
 
     @Test
-    public void isOverQuotaWithAdditionalValueShouldReturnTrueWhenUnderLimit() {
-        Quota<QuotaCount> quota = Quota.<QuotaCount>builder().used(QuotaCount.count(34)).computedLimit(QuotaCount.count(36)).build();
+    void isOverQuotaWithAdditionalValueShouldReturnTrueWhenUnderLimit() {
+        Quota<QuotaCountLimit, QuotaCountUsage> quota = Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(34)).computedLimit(QuotaCountLimit.count(36)).build();
         assertThat(quota.isOverQuotaWithAdditionalValue(1)).isFalse();
     }
 
     @Test
-    public void isOverQuotaWithAdditionalValueShouldReturnFalseWhenAtLimit() {
-        Quota<QuotaCount> quota = Quota.<QuotaCount>builder().used(QuotaCount.count(36)).computedLimit(QuotaCount.count(36)).build();
+    void isOverQuotaWithAdditionalValueShouldReturnFalseWhenAtLimit() {
+        Quota<QuotaCountLimit, QuotaCountUsage> quota = Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(36)).computedLimit(QuotaCountLimit.count(36)).build();
         assertThat(quota.isOverQuotaWithAdditionalValue(0)).isFalse();
     }
 
     @Test
-    public void isOverQuotaWithAdditionalValueShouldThrowOnNegativeValue() {
-        Quota<QuotaCount> quota = Quota.<QuotaCount>builder().used(QuotaCount.count(25)).computedLimit(QuotaCount.count(36)).build();
+    void isOverQuotaWithAdditionalValueShouldThrowOnNegativeValue() {
+        Quota<QuotaCountLimit, QuotaCountUsage> quota = Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(25)).computedLimit(QuotaCountLimit.count(36)).build();
         assertThatThrownBy(() -> quota.isOverQuotaWithAdditionalValue(-1)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    public void buildShouldThrowOnMissingUsedValue() {
+    void buildShouldThrowOnMissingUsedValue() {
         assertThatThrownBy(
-            () -> Quota.<QuotaCount>builder().computedLimit(QuotaCount.count(1)).build())
+            () -> Quota.<QuotaCountLimit, QuotaCountUsage>builder().computedLimit(QuotaCountLimit.count(1)).build())
             .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
-    public void buildShouldThrowOnMissingComputedLimitValue() {
+    void buildShouldThrowOnMissingComputedLimitValue() {
         assertThatThrownBy(
-            () -> Quota.<QuotaCount>builder().used(QuotaCount.count(1)).build())
+            () -> Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(1)).build())
             .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
-    public void buildShouldCreateValidObjectGivenMandatoryFields() {
-        Quota<QuotaCount> actual = Quota.<QuotaCount>builder()
-            .used(QuotaCount.count(1))
-            .computedLimit(QuotaCount.count(2))
+    void buildShouldCreateValidObjectGivenMandatoryFields() {
+        Quota<QuotaCountLimit, QuotaCountUsage> actual = Quota.<QuotaCountLimit, QuotaCountUsage>builder()
+            .used(QuotaCountUsage.count(1))
+            .computedLimit(QuotaCountLimit.count(2))
             .build();
         assertThat(actual).isNotNull();
     }
 
     @Test
-    public void getRatioShouldReturnUsedDividedByLimit() {
+    void getRatioShouldReturnUsedDividedByLimit() {
         assertThat(
-            Quota.<QuotaSize>builder()
-                .used(QuotaSize.size(15))
-                .computedLimit(QuotaSize.size(60))
+            Quota.<QuotaSizeLimit, QuotaSizeUsage>builder()
+                .used(QuotaSizeUsage.size(15))
+                .computedLimit(QuotaSizeLimit.size(60))
                 .build()
                 .getRatio())
             .isEqualTo(0.25);
     }
 
     @Test
-    public void getRatioShouldReturnZeroWhenUnlimited() {
+    void getRatioShouldReturnZeroWhenUnlimited() {
         assertThat(
-            Quota.<QuotaSize>builder()
-                .used(QuotaSize.size(15))
-                .computedLimit(QuotaSize.unlimited())
+            Quota.<QuotaSizeLimit, QuotaSizeUsage>builder()
+                .used(QuotaSizeUsage.size(15))
+                .computedLimit(QuotaSizeLimit.unlimited())
                 .build()
                 .getRatio())
             .isEqualTo(0);

@@ -35,8 +35,6 @@ import org.apache.james.protocols.api.handler.WiringException;
 
 /**
  * Handler which will gather statistics for {@link ConnectHandler}'s
- * 
- * @param <S>
  */
 public abstract class AbstractConnectHandlerResultJMXMonitor<R extends Response, S extends ProtocolSession> implements ProtocolHandlerResultHandler<R,S>, ExtensibleHandler, ProtocolHandler {
 
@@ -54,8 +52,6 @@ public abstract class AbstractConnectHandlerResultJMXMonitor<R extends Response,
             connectHandlerStats.dispose();
         }
     }
-
-
 
     @Override
     public Response onResponse(ProtocolSession session, Response response, long executionTime, ProtocolHandler handler) {
@@ -94,8 +90,6 @@ public abstract class AbstractConnectHandlerResultJMXMonitor<R extends Response,
 
     /**
      * Return the default JMXName to use if none is configured
-     * 
-     * @return defaultJMXName
      */
     protected abstract String getDefaultJMXName();
 }

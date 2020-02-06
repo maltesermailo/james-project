@@ -22,12 +22,13 @@ package org.apache.james.imap.processor;
 import java.io.Closeable;
 import java.util.List;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
-import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
@@ -54,7 +55,7 @@ import com.google.common.collect.ImmutableList;
  */
 public class GetQuotaRootProcessor extends AbstractMailboxProcessor<GetQuotaRootRequest> implements CapabilityImplementingProcessor {
 
-    private static final List<String> CAPABILITIES = ImmutableList.of(ImapConstants.SUPPORTS_QUOTA);
+    private static final List<Capability> CAPABILITIES = ImmutableList.of(ImapConstants.SUPPORTS_QUOTA);
     private final QuotaRootResolver quotaRootResolver;
     private final QuotaManager quotaManager;
 
@@ -66,51 +67,51 @@ public class GetQuotaRootProcessor extends AbstractMailboxProcessor<GetQuotaRoot
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         return CAPABILITIES;
     }
 
     @Override
-    protected void doProcess(GetQuotaRootRequest message, ImapSession session, String tag, ImapCommand command, Responder responder) {
-        final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
+    protected void processRequest(GetQuotaRootRequest request, ImapSession session, Responder responder) {
+        final MailboxSession mailboxSession = session.getMailboxSession();
         final MailboxManager mailboxManager = getMailboxManager();
 
-        final MailboxPath mailboxPath = PathConverter.forSession(session).buildFullPath(message.getMailboxName());
+        final MailboxPath mailboxPath = PathConverter.forSession(session).buildFullPath(request.getMailboxName());
 
         // First check mailbox exists
         try {
             if (mailboxManager.hasRight(mailboxPath, MailboxACL.Right.Read, mailboxSession)) {
                 QuotaRoot quotaRoot = quotaRootResolver.getQuotaRoot(mailboxPath);
-                Quota<QuotaCount> messageQuota = quotaManager.getMessageQuota(quotaRoot);
-                Quota<QuotaSize> storageQuota = quotaManager.getStorageQuota(quotaRoot);
-                responder.respond(new QuotaRootResponse(message.getMailboxName(), quotaRoot.getValue()));
+                Quota<QuotaCountLimit, QuotaCountUsage> messageQuota = quotaManager.getMessageQuota(quotaRoot);
+                Quota<QuotaSizeLimit, QuotaSizeUsage> storageQuota = quotaManager.getStorageQuota(quotaRoot);
+                responder.respond(new QuotaRootResponse(request.getMailboxName(), quotaRoot.getValue()));
                 if (messageQuota.getLimit().isLimited()) {
                     responder.respond(new QuotaResponse(ImapConstants.MESSAGE_QUOTA_RESOURCE, quotaRoot.getValue(), messageQuota));
                 }
                 if (storageQuota.getLimit().isLimited()) {
                     responder.respond(new QuotaResponse(ImapConstants.STORAGE_QUOTA_RESOURCE, quotaRoot.getValue(), storageQuota));
                 }
-                okComplete(command, tag, responder);
+                okComplete(request, responder);
             } else {
                 Object[] params = new Object[]{
                         MailboxACL.Right.Read.toString(),
-                        command.getName(),
-                        message.getMailboxName()
+                        request.getCommand().getName(),
+                        request.getMailboxName()
                 };
                 HumanReadableText humanReadableText = new HumanReadableText(HumanReadableText.UNSUFFICIENT_RIGHTS_KEY, HumanReadableText.UNSUFFICIENT_RIGHTS_DEFAULT_VALUE, params);
-                no(command, tag, responder, humanReadableText);
+                no(request, responder, humanReadableText);
             }
         } catch (MailboxException me) {
-            taggedBad(command, tag, responder, HumanReadableText.FAILURE_NO_SUCH_MAILBOX);
+            taggedBad(request, responder, HumanReadableText.FAILURE_NO_SUCH_MAILBOX);
         }
 
     }
 
     @Override
-    protected Closeable addContextToMDC(GetQuotaRootRequest message) {
+    protected Closeable addContextToMDC(GetQuotaRootRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "GET_QUOTA_ROOT")
-            .addContext("mailbox", message.getMailboxName())
+            .addContext("mailbox", request.getMailboxName())
             .build();
     }
 }

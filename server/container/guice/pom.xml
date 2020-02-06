@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.james</groupId>
         <artifactId>james-server</artifactId>
-        <version>3.4.0</version>
+        <version>3.5.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
@@ -33,6 +33,7 @@
     <name>Apache James :: Server :: Guice</name>
 
     <modules>
+        <module>activemq</module>
         <module>blob-api-guice</module>
         <module>blob-export-guice</module>
         <module>blob-memory-guice</module>
@@ -42,7 +43,6 @@
         <module>cassandra-rabbitmq-guice</module>
         <module>cassandra-rabbitmq-ldap-guice</module>
         <module>configuration</module>
-        <module>custom-mailets</module>
         <module>es-metric-reporter</module>
         <module>guice-common</module>
         <module>guice-utils</module>
@@ -59,7 +59,7 @@
         <module>memory-guice</module>
         <module>onami</module>
         <module>protocols/imap</module>
-        <module>protocols/jmap</module>
+        <module>protocols/jmap-draft</module>
         <module>protocols/lmtp</module>
         <module>protocols/managedsieve</module>
         <module>protocols/netty</module>
@@ -69,12 +69,15 @@
         <module>protocols/webadmin-cassandra</module>
         <module>protocols/webadmin-cassandra-data</module>
         <module>protocols/webadmin-data</module>
+        <module>protocols/webadmin-jmap</module>
         <module>protocols/webadmin-mailbox</module>
         <module>protocols/webadmin-mailqueue</module>
         <module>protocols/webadmin-mailrepository</module>
         <module>protocols/webadmin-swagger</module>
-        <module>activemq</module>
         <module>rabbitmq</module>
+        <module>testing</module>
+        <module>sieve-file</module>
+        <module>sieve-jpa</module>
     </modules>
 
     <dependencyManagement>
@@ -103,12 +106,12 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
-                <artifactId>james-server-guice-jmap</artifactId>
+                <artifactId>james-server-guice-jmap-draft</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
-                <artifactId>james-server-guice-jmap</artifactId>
+                <artifactId>james-server-guice-jmap-draft</artifactId>
                 <version>${project.version}</version>
                 <type>test-jar</type>
             </dependency>
@@ -159,6 +162,16 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-guice-sieve-file</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-guice-sieve-jpa</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
                 <artifactId>james-server-guice-smtp</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -180,6 +193,11 @@
             <dependency>
                 <groupId>${james.groupId}</groupId>
                 <artifactId>james-server-guice-webadmin-data</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-guice-webadmin-jmap</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

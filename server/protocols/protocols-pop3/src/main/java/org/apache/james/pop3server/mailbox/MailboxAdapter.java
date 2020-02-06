@@ -22,10 +22,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.james.mailbox.MailboxManager;
@@ -33,9 +31,9 @@ import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.MessageUid;
 import org.apache.james.mailbox.exception.MailboxException;
+import org.apache.james.mailbox.model.FetchGroup;
 import org.apache.james.mailbox.model.MessageRange;
 import org.apache.james.mailbox.model.MessageResult;
-import org.apache.james.mailbox.model.MessageResult.FetchGroup;
 import org.apache.james.protocols.pop3.mailbox.Mailbox;
 import org.apache.james.protocols.pop3.mailbox.MessageMetaData;
 
@@ -43,47 +41,10 @@ import com.github.steveash.guavate.Guavate;
 import com.google.common.collect.ImmutableList;
 
 public class MailboxAdapter implements Mailbox {
-
-    private abstract static class POP3FetchGroup implements FetchGroup {
-        @Override
-        public Set<PartContentDescriptor> getPartContentDescriptors() {
-            return new HashSet<>();
-        }
-    }
-
-    private static final FetchGroup FULL_GROUP = new POP3FetchGroup() {
-
-        @Override
-        public int content() {
-            return BODY_CONTENT | HEADERS;
-        }
-
-    };
-
-    private static final FetchGroup BODY_GROUP = new POP3FetchGroup() {
-
-        @Override
-        public int content() {
-            return BODY_CONTENT;
-        }
-
-    };
-
-    private static final FetchGroup HEADERS_GROUP = new POP3FetchGroup() {
-
-        @Override
-        public int content() {
-            return HEADERS;
-        }
-    };
-
-    private static final FetchGroup METADATA_GROUP = new POP3FetchGroup() {
-
-        @Override
-        public int content() {
-            return MINIMAL;
-        }
-    };
+    private static final FetchGroup FULL_GROUP = FetchGroup.FULL_CONTENT;
+    private static final FetchGroup BODY_GROUP = FetchGroup.BODY_CONTENT;
+    private static final FetchGroup HEADERS_GROUP = FetchGroup.HEADERS;
+    private static final FetchGroup METADATA_GROUP = FetchGroup.MINIMAL;
 
     private final MessageManager manager;
     private final MailboxSession session;
@@ -100,7 +61,7 @@ public class MailboxAdapter implements Mailbox {
     public InputStream getMessageBody(String uid) throws IOException {
         try {
             mailboxManager.startProcessingRequest(session);
-            Iterator<MessageResult> results = manager.getMessages(MessageUid.of(Long.valueOf(uid)).toRange(), BODY_GROUP, session);
+            Iterator<MessageResult> results = manager.getMessages(MessageUid.of(Long.parseLong(uid)).toRange(), BODY_GROUP, session);
             if (results.hasNext()) {
                 return results.next().getBody().getInputStream();
             } else {
@@ -117,7 +78,7 @@ public class MailboxAdapter implements Mailbox {
     public InputStream getMessageHeaders(String uid) throws IOException {
         try {
             mailboxManager.startProcessingRequest(session);
-            Iterator<MessageResult> results = manager.getMessages(MessageUid.of(Long.valueOf(uid)).toRange(), HEADERS_GROUP,
+            Iterator<MessageResult> results = manager.getMessages(MessageUid.of(Long.parseLong(uid)).toRange(), HEADERS_GROUP,
                     session);
             if (results.hasNext()) {
                 return results.next().getHeaders().getInputStream();
@@ -135,7 +96,7 @@ public class MailboxAdapter implements Mailbox {
     public InputStream getMessage(String uid) throws IOException {
         try {
             mailboxManager.startProcessingRequest(session);
-            Iterator<MessageResult> results = manager.getMessages(MessageUid.of(Long.valueOf(uid)).toRange(), FULL_GROUP, session);
+            Iterator<MessageResult> results = manager.getMessages(MessageUid.of(Long.parseLong(uid)).toRange(), FULL_GROUP, session);
             if (results.hasNext()) {
                 return results.next().getFullContent().getInputStream();
             } else {
@@ -170,7 +131,7 @@ public class MailboxAdapter implements Mailbox {
     @Override
     public void remove(String... uids) throws IOException {
         List<MessageUid> uidList = Arrays.stream(uids)
-            .map(uid -> MessageUid.of(Long.valueOf(uid)))
+            .map(uid -> MessageUid.of(Long.parseLong(uid)))
             .collect(Guavate.toImmutableList());
 
         try {
@@ -192,7 +153,7 @@ public class MailboxAdapter implements Mailbox {
     public String getIdentifier() throws IOException {
         try {
             mailboxManager.startProcessingRequest(session);
-            long validity = manager.getMetaData(false, session, MessageManager.MetaData.FetchGroup.NO_COUNT)
+            long validity = manager.getMailboxEntity()
                     .getUidValidity();
             return Long.toString(validity);
         } catch (MailboxException e) {
@@ -205,9 +166,7 @@ public class MailboxAdapter implements Mailbox {
     @Override
     public void close() throws IOException {
         try {
-            mailboxManager.logout(session, true);
-        } catch (MailboxException e) {
-            throw new IOException("Unable to close mailbox", e);
+            mailboxManager.logout(session);
         } finally {
             mailboxManager.endProcessingRequest(session);
         }

@@ -18,35 +18,87 @@
  ****************************************************************/
 package org.apache.james.mailbox.store;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.mail.Flags;
+import javax.mail.util.SharedByteArrayInputStream;
 
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.model.MessageAttachment;
 import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.mailbox.model.TestId;
 import org.apache.james.mailbox.store.mail.model.DefaultMessageId;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
+import org.apache.james.mailbox.store.mail.model.impl.PropertyBuilder;
+import org.apache.james.mailbox.store.mail.model.impl.SimpleMailboxMessage;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.primitives.Bytes;
 
 public class MessageBuilder {
-    
-    public TestId mailboxId = TestId.of(113);
-    public MessageUid uid = MessageUid.of(776);
-    public Date internalDate = new Date();
-    public int size = 8867;
-    public Flags flags = new Flags();
-    public byte[] body = {};
-    public final Map<String, String> headers = new HashMap<>();
-    public int lineNumber = 0;
+    private static final char[] NEW_LINE = { 0x0D, 0x0A };
+    private static final ImmutableList<MessageAttachment> NO_ATTACHMENTS = ImmutableList.of();
+
+    private TestId mailboxId = TestId.of(113);
+    private MessageUid uid = MessageUid.of(776);
+    private Date internalDate = new Date();
+    private int size = 8867;
+    private Flags flags = new Flags();
+    private byte[] body = {};
+    private final Map<String, String> headers = new HashMap<>();
+
+    public MessageBuilder mailboxId(TestId testId) {
+        this.mailboxId = testId;
+        return this;
+    }
+
+    public MessageBuilder uid(MessageUid uid) {
+        this.uid = uid;
+        return this;
+    }
+
+    public MessageBuilder internalDate(Date internalDate) {
+        this.internalDate = internalDate;
+        return this;
+    }
+
+    public MessageBuilder body(byte[] body) {
+        this.body = body;
+        return this;
+    }
     
     public MailboxMessage build() throws Exception {
         return build(new DefaultMessageId());
     }
 
     public MailboxMessage build(MessageId messageId) throws Exception {
-        return new SimpleMailboxMembership(messageId, mailboxId, uid, -1,  internalDate, size, flags, body, headers);
+        byte[] headerContent = getHeaderContent();
+        SimpleMailboxMessage mailboxMessage = new SimpleMailboxMessage(messageId, internalDate, size, headerContent.length,
+            new SharedByteArrayInputStream(Bytes.concat(headerContent, body)), flags, new PropertyBuilder(), mailboxId, NO_ATTACHMENTS);
+        mailboxMessage.setUid(uid);
+        return mailboxMessage;
+    }
+
+    private byte[] getHeaderContent() throws IOException {
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        final Writer writer = new OutputStreamWriter(baos, StandardCharsets.US_ASCII);
+
+        for (Map.Entry<String, String> header : headers.entrySet()) {
+            writer.write(header.getKey());
+            writer.write(": ");
+            writer.write(header.getValue());
+            writer.write(NEW_LINE);
+        }
+        writer.write(NEW_LINE);
+        writer.flush();
+        return baos.toByteArray();
     }
 
     public MessageBuilder size(int size) {
@@ -54,8 +106,14 @@ public class MessageBuilder {
         return this;
     }
 
-    public void header(String field, String value) {
+    public MessageBuilder header(String field, String value) {
         headers.put(field, value);
+        return this;
+    }
+
+    public MessageBuilder headers(Map<String, String> headers) {
+        this.headers.putAll(headers);
+        return this;
     }
 
     public void setKey(int mailboxId, MessageUid uid) {
@@ -83,5 +141,10 @@ public class MessageBuilder {
         if (recent) {
             flags.add(Flags.Flag.RECENT);
         }
+    }
+
+    public MessageBuilder flags(Flags flags) {
+        this.flags = flags;
+        return this;
     }
 }

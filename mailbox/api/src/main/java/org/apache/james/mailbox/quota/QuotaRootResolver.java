@@ -23,6 +23,7 @@ import java.util.List;
 
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.exception.MailboxException;
+import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.QuotaRoot;
@@ -34,11 +35,10 @@ public interface QuotaRootResolver extends QuotaRootDeserializer {
      *
      * @param mailboxPath The name of the mailbox
      * @return QuotaRoot ruling this mailbox ( we uses user owning this mailbox name )
-     * @throws MailboxException
      */
     QuotaRoot getQuotaRoot(MailboxPath mailboxPath) throws MailboxException;
 
     QuotaRoot getQuotaRoot(MailboxId mailboxId) throws MailboxException;
 
-    List<MailboxPath> retrieveAssociatedMailboxes(QuotaRoot quotaRoot, MailboxSession mailboxSession) throws MailboxException;
+    List<Mailbox> retrieveAssociatedMailboxes(QuotaRoot quotaRoot, MailboxSession mailboxSession) throws MailboxException;
 }

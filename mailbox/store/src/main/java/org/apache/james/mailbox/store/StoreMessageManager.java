@@ -51,7 +51,7 @@ import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.MessageUid;
 import org.apache.james.mailbox.MetadataWithMailboxId;
-import org.apache.james.mailbox.acl.UnionMailboxACLResolver;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.events.EventBus;
 import org.apache.james.mailbox.events.MailboxIdRegistrationKey;
 import org.apache.james.mailbox.events.MailboxListener;
@@ -59,6 +59,7 @@ import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.ReadOnlyException;
 import org.apache.james.mailbox.exception.UnsupportedRightException;
 import org.apache.james.mailbox.model.ComposedMessageId;
+import org.apache.james.mailbox.model.FetchGroup;
 import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxACL;
 import org.apache.james.mailbox.model.MailboxCounters;
@@ -70,7 +71,6 @@ import org.apache.james.mailbox.model.MessageId.Factory;
 import org.apache.james.mailbox.model.MessageMetaData;
 import org.apache.james.mailbox.model.MessageMoves;
 import org.apache.james.mailbox.model.MessageRange;
-import org.apache.james.mailbox.model.MessageResult.FetchGroup;
 import org.apache.james.mailbox.model.MessageResultIterator;
 import org.apache.james.mailbox.model.SearchQuery;
 import org.apache.james.mailbox.model.UpdatedFlags;
@@ -104,6 +104,7 @@ import com.github.steveash.guavate.Guavate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -115,16 +116,8 @@ import reactor.core.scheduler.Schedulers;
  * This base class take care of dispatching events to the registered
  * {@link MailboxListener} and so help with handling concurrent
  * {@link MailboxSession}'s.
- * 
- * 
- * 
  */
 public class StoreMessageManager implements MessageManager {
-    private static final MailboxCounters ZERO_MAILBOX_COUNTERS = MailboxCounters.builder()
-        .count(0)
-        .unseen(0)
-        .build();
-
     /**
      * The minimal Permanent flags the {@link MessageManager} must support. <br>
      * 
@@ -188,24 +181,8 @@ public class StoreMessageManager implements MessageManager {
         this.preDeletionHooks = preDeletionHooks;
     }
 
-    protected Factory getMessageIdFactory() {
-        return messageIdFactory;
-    }
-    
-    /**
-     * Return the {@link MailboxPathLocker}
-     * 
-     * @return locker
-     */
-    protected MailboxPathLocker getLocker() {
-        return locker;
-    }
-
     /**
      * Return the underlying {@link Mailbox}
-     * 
-     * @return mailbox
-     * @throws MailboxException
      */
 
     public Mailbox getMailboxEntity() throws MailboxException {
@@ -224,9 +201,6 @@ public class StoreMessageManager implements MessageManager {
      * override this method and add {@link Flag#USER} to the list of returned
      * {@link Flags}. If only a special set of user flags / keywords should be
      * allowed just add them directly.
-     * 
-     * @param session
-     * @return flags
      */
     protected Flags getPermanentFlags(MailboxSession session) {
 
@@ -243,7 +217,11 @@ public class StoreMessageManager implements MessageManager {
         if (storeRightManager.hasRight(mailbox, MailboxACL.Right.Read, mailboxSession)) {
             return mapperFactory.createMessageMapper(mailboxSession).getMailboxCounters(mailbox);
         }
-        return ZERO_MAILBOX_COUNTERS;
+        return MailboxCounters.builder()
+            .mailboxId(mailbox.getMailboxId())
+            .unseen(0)
+            .count(0)
+            .build();
     }
 
     /**
@@ -253,11 +231,6 @@ public class StoreMessageManager implements MessageManager {
      * 
      * In this implementation, all permanent flags are shared, ergo we simply
      * return {@link #getPermanentFlags(MailboxSession)}
-     *
-     * @see UnionMailboxACLResolver#isReadWrite(MailboxACLRights, Flags)
-     * 
-     * @param session
-     * @return
      */
     protected Flags getSharedPermanentFlags(MailboxSession session) {
         return getPermanentFlags(session);
@@ -479,7 +452,7 @@ public class StoreMessageManager implements MessageManager {
 
             new QuotaChecker(quotaManager, quotaRootResolver, mailbox).tryAddition(1, size);
 
-            return locker.executeWithLock(mailboxSession, getMailboxPath(), () -> {
+            return locker.executeWithLock(getMailboxPath(), () -> {
                 MessageMetaData data = appendMessageToStore(message, attachments, mailboxSession);
 
                 Mailbox mailbox = getMailboxEntity();
@@ -493,7 +466,7 @@ public class StoreMessageManager implements MessageManager {
                     new MailboxIdRegistrationKey(mailbox.getMailboxId()))
                     .block();
                 return new ComposedMessageId(mailbox.getMailboxId(), data.getMessageId(), data.getUid());
-            }, true);
+            }, MailboxPathLocker.LockType.Write);
         }
     }
 
@@ -565,7 +538,7 @@ public class StoreMessageManager implements MessageManager {
         MessageUid uidNext = mapperFactory.getMessageMapper(mailboxSession).getLastUid(mailbox)
                 .map(MessageUid::next)
                 .orElse(MessageUid.MIN_VALUE);
-        long highestModSeq = mapperFactory.getMessageMapper(mailboxSession).getHighestModSeq(mailbox);
+        ModSeq highestModSeq = mapperFactory.getMessageMapper(mailboxSession).getHighestModSeq(mailbox);
         long messageCount;
         long unseenCount;
         MessageUid firstUnseen;
@@ -618,9 +591,6 @@ public class StoreMessageManager implements MessageManager {
      * {@link Flag#RECENT} flag.
      * 
      * This flag is never removed!
-     * 
-     * @param flags
-     * @param session
      */
     private void trimFlags(Flags flags, MailboxSession session) {
 
@@ -675,30 +645,20 @@ public class StoreMessageManager implements MessageManager {
 
     /**
      * Copy the {@link MessageRange} to the {@link StoreMessageManager}
-     * 
-     * @param set
-     * @param toMailbox
-     * @param session
-     * @throws MailboxException
      */
     public List<MessageRange> copyTo(final MessageRange set, final StoreMessageManager toMailbox, final MailboxSession session) throws MailboxException {
         if (!toMailbox.isWriteable(session)) {
             throw new ReadOnlyException(toMailbox.getMailboxPath());
         }
 
-        return locker.executeWithLock(session, toMailbox.getMailboxPath(), () -> {
+        return locker.executeWithLock(toMailbox.getMailboxPath(), () -> {
             SortedMap<MessageUid, MessageMetaData> copiedUids = copy(set, toMailbox, session);
             return MessageRange.toRanges(new ArrayList<>(copiedUids.keySet()));
-        }, true);
+        }, MailboxPathLocker.LockType.Write);
     }
 
     /**
      * Move the {@link MessageRange} to the {@link StoreMessageManager}
-     * 
-     * @param set
-     * @param toMailbox
-     * @param session
-     * @throws MailboxException
      */
     public List<MessageRange> moveTo(final MessageRange set, final StoreMessageManager toMailbox, final MailboxSession session) throws MailboxException {
         if (!isWriteable(session)) {
@@ -709,10 +669,10 @@ public class StoreMessageManager implements MessageManager {
         }
 
         //TODO lock the from mailbox too, in a non-deadlocking manner - how?
-        return locker.executeWithLock(session, toMailbox.getMailboxPath(), () -> {
+        return locker.executeWithLock(toMailbox.getMailboxPath(), () -> {
             SortedMap<MessageUid, MessageMetaData> movedUids = move(set, toMailbox, session);
             return MessageRange.toRanges(new ArrayList<>(movedUids.keySet()));
-        }, true);
+        }, MailboxPathLocker.LockType.Write);
     }
 
     protected MessageMetaData appendMessageToStore(final MailboxMessage message, final List<MessageAttachment> messageAttachments, MailboxSession session) throws MailboxException {

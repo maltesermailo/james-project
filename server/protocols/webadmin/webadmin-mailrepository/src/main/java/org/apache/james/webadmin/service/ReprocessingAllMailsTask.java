@@ -19,41 +19,39 @@
 
 package org.apache.james.webadmin.service;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 
 import javax.mail.MessagingException;
 
-import org.apache.james.json.DTOModule;
 import org.apache.james.mailrepository.api.MailKey;
 import org.apache.james.mailrepository.api.MailRepositoryPath;
 import org.apache.james.mailrepository.api.MailRepositoryStore;
-import org.apache.james.server.task.json.dto.TaskDTO;
-import org.apache.james.server.task.json.dto.TaskDTOModule;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
-
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.james.task.TaskType;
 
 public class ReprocessingAllMailsTask implements Task {
 
-    public static final String TYPE = "reprocessingAllTask";
+    public static final TaskType TYPE = TaskType.of("reprocessing-all");
 
     public static class AdditionalInformation implements TaskExecutionDetails.AdditionalInformation {
         private final MailRepositoryPath repositoryPath;
         private final String targetQueue;
         private final Optional<String> targetProcessor;
         private final long initialCount;
-        private final AtomicLong processedCount;
+        private final long remainingCount;
+        private final Instant timestamp;
 
-        public AdditionalInformation(MailRepositoryPath repositoryPath, String targetQueue, Optional<String> targetProcessor, long initialCount) {
+        public AdditionalInformation(MailRepositoryPath repositoryPath, String targetQueue, Optional<String> targetProcessor, long initialCount, long remainingCount, Instant timestamp) {
             this.repositoryPath = repositoryPath;
             this.targetQueue = targetQueue;
             this.targetProcessor = targetProcessor;
             this.initialCount = initialCount;
-            this.processedCount = new AtomicLong(0);
+            this.remainingCount = remainingCount;
+            this.timestamp = timestamp;
         }
 
         public String getTargetQueue() {
@@ -69,16 +67,16 @@ public class ReprocessingAllMailsTask implements Task {
         }
 
         public long getRemainingCount() {
-            return initialCount - processedCount.get();
+            return remainingCount;
         }
 
         public long getInitialCount() {
             return initialCount;
         }
 
-        @JsonIgnore
-        public void notifyProgress(MailKey key) {
-            processedCount.incrementAndGet();
+        @Override
+        public Instant timestamp() {
+            return timestamp;
         }
     }
 
@@ -96,90 +94,12 @@ public class ReprocessingAllMailsTask implements Task {
         }
     }
 
-    private static class ReprocessingAllMailsTaskDTO implements TaskDTO {
-
-        public static ReprocessingAllMailsTaskDTO toDTO(ReprocessingAllMailsTask domainObject, String typeName) {
-            try {
-                return new ReprocessingAllMailsTaskDTO(
-                    typeName,
-                    domainObject.additionalInformation.initialCount,
-                    domainObject.repositoryPath.urlEncoded(),
-                    domainObject.targetQueue,
-                    domainObject.targetProcessor
-                );
-            } catch (Exception e) {
-                throw new UrlEncodingFailureSerializationException(domainObject.repositoryPath);
-            }
-        }
-
-        private final String type;
-        private final long repositorySize;
-        private final String repositoryPath;
-        private final String targetQueue;
-        private final Optional<String> targetProcessor;
-
-        public ReprocessingAllMailsTaskDTO(@JsonProperty("type") String type,
-                                           @JsonProperty("repositorySize") long repositorySize,
-                                           @JsonProperty("repositoryPath") String repositoryPath,
-                                           @JsonProperty("targetQueue") String targetQueue,
-                                           @JsonProperty("targetProcessor") Optional<String> targetProcessor) {
-            this.type = type;
-            this.repositorySize = repositorySize;
-            this.repositoryPath = repositoryPath;
-            this.targetQueue = targetQueue;
-            this.targetProcessor = targetProcessor;
-        }
-
-        public ReprocessingAllMailsTask fromDTO(ReprocessingService reprocessingService) {
-            try {
-                return new ReprocessingAllMailsTask(
-                    reprocessingService,
-                    repositorySize,
-                    MailRepositoryPath.fromEncoded(repositoryPath),
-                    targetQueue,
-                    targetProcessor
-                );
-            } catch (Exception e) {
-                throw new InvalidMailRepositoryPathDeserializationException(repositoryPath);
-            }
-        }
-
-        @Override
-        public String getType() {
-            return type;
-        }
-
-        public long getRepositorySize() {
-            return repositorySize;
-        }
-
-        public String getRepositoryPath() {
-            return repositoryPath;
-        }
-
-        public String getTargetQueue() {
-            return targetQueue;
-        }
-
-        public Optional<String> getTargetProcessor() {
-            return targetProcessor;
-        }
-    }
-
-    public static final Function<ReprocessingService, TaskDTOModule<ReprocessingAllMailsTask, ReprocessingAllMailsTaskDTO>> MODULE = (reprocessingService) ->
-        DTOModule
-            .forDomainObject(ReprocessingAllMailsTask.class)
-            .convertToDTO(ReprocessingAllMailsTaskDTO.class)
-            .toDomainObjectConverter(dto -> dto.fromDTO(reprocessingService))
-            .toDTOConverter(ReprocessingAllMailsTaskDTO::toDTO)
-            .typeName(TYPE)
-            .withFactory(TaskDTOModule::new);
-
     private final ReprocessingService reprocessingService;
     private final MailRepositoryPath repositoryPath;
     private final String targetQueue;
     private final Optional<String> targetProcessor;
-    private final AdditionalInformation additionalInformation;
+    private final long repositorySize;
+    private final AtomicLong processedCount;
 
     public ReprocessingAllMailsTask(ReprocessingService reprocessingService, long repositorySize,
                                     MailRepositoryPath repositoryPath, String targetQueue, Optional<String> targetProcessor) {
@@ -187,14 +107,18 @@ public class ReprocessingAllMailsTask implements Task {
         this.repositoryPath = repositoryPath;
         this.targetQueue = targetQueue;
         this.targetProcessor = targetProcessor;
-        this.additionalInformation = new AdditionalInformation(
-            repositoryPath, targetQueue, targetProcessor, repositorySize);
+        this.repositorySize = repositorySize;
+        this.processedCount = new AtomicLong(0);
+    }
+
+    private void notifyProgress(MailKey key) {
+        processedCount.incrementAndGet();
     }
 
     @Override
     public Result run() {
         try {
-            reprocessingService.reprocessAll(repositoryPath, targetProcessor, targetQueue, additionalInformation::notifyProgress);
+            reprocessingService.reprocessAll(repositoryPath, targetProcessor, targetQueue, this::notifyProgress);
             return Result.COMPLETED;
         } catch (MessagingException | MailRepositoryStore.MailRepositoryStoreException e) {
             LOGGER.error("Encountered error while reprocessing repository", e);
@@ -202,14 +126,32 @@ public class ReprocessingAllMailsTask implements Task {
         }
     }
 
+    MailRepositoryPath getRepositoryPath() {
+        return repositoryPath;
+    }
+
+    long getRepositorySize() {
+        return repositorySize;
+    }
+
+    Optional<String> getTargetProcessor() {
+        return targetProcessor;
+    }
+
+    String getTargetQueue() {
+        return targetQueue;
+    }
+
     @Override
-    public String type() {
+    public TaskType type() {
         return TYPE;
     }
 
     @Override
     public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-        return Optional.of(additionalInformation);
+        return Optional.of(new AdditionalInformation(
+            repositoryPath, targetQueue, targetProcessor, repositorySize, repositorySize - processedCount.get(),
+            Clock.systemUTC().instant()));
     }
 
 }

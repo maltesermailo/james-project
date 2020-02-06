@@ -18,6 +18,7 @@
  ****************************************************************/
 package org.apache.james.mailbox.model;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxUtil;
 
@@ -30,7 +31,7 @@ import com.google.common.base.Objects;
 public class Mailbox {
     private MailboxId id = null;
     private String namespace;
-    private String user;
+    private Username user;
     private String name;
     private final long uidValidity;
     private MailboxACL acl = MailboxACL.EMPTY;
@@ -84,7 +85,7 @@ public class Mailbox {
      * Gets the current user for this mailbox.
      * @return not null
      */
-    public String getUser() {
+    public Username getUser() {
         return user;
     }
 
@@ -92,7 +93,7 @@ public class Mailbox {
      * Sets the current user for this mailbox.
      * @param user not null
      */
-    public void setUser(String user) {
+    public void setUser(Username user) {
         this.user = user;
     }
 
@@ -131,8 +132,6 @@ public class Mailbox {
 
     /**
      * Gets the current ACL for this mailbox.
-     *
-     * @return ACL
      */
     public MailboxACL getACL() {
         return acl;
@@ -140,8 +139,6 @@ public class Mailbox {
 
     /**
      * Sets the current ACL for this mailbox.
-     *
-     * @param acl
      */
     public void setACL(MailboxACL acl) {
         this.acl = acl;

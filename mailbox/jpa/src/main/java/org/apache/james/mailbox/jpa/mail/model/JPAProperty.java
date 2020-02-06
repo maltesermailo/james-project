@@ -18,6 +18,8 @@
  ****************************************************************/
 package org.apache.james.mailbox.jpa.mail.model;
 
+import java.util.Objects;
+
 import javax.persistence.Basic;
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -30,7 +32,7 @@ import org.apache.openjpa.persistence.jdbc.Index;
 
 @Entity(name = "Property")
 @Table(name = "JAMES_MAIL_PROPERTY")
-public class JPAProperty implements Property {
+public class JPAProperty {
 
     /** The system unique key */
     @Id
@@ -94,78 +96,23 @@ public class JPAProperty implements Property {
         this(property.getNamespace(), property.getLocalName(), property.getValue(), order);
     }
 
-    /**
-     * Create a copy of the give JPAProperty
-     * 
-     * @param property
-     */
-    public JPAProperty(JPAProperty property) {
-        this(property.getNamespace(), property.getLocalName(), property.getValue(), property.getOrder());
-    }
-
-    /**
-     * Gets the order of this property.
-     * 
-     * @return order of this property
-     */
-    public int getOrder() {
-        return line;
-    }
-
-    /**
-     * Gets the local part of the name of the property.
-     * 
-     * @return not null
-     */
-    @Override
-    public String getLocalName() {
-        return localName;
-    }
-
-    /**
-     * Gets the namespace for the name.
-     * 
-     * @return not null
-     */
-    @Override
-    public String getNamespace() {
-        return namespace;
-    }
-
-    /**
-     * Gets the value for this property.
-     * 
-     * @return not null
-     */
-    @Override
-    public String getValue() {
-        return value;
+    public Property toProperty() {
+        return new Property(namespace, localName, value);
     }
 
     @Override
-    public int hashCode() {
-        final int PRIME = 31;
-        int result = 1;
-        result = PRIME * result + (int) (id ^ (id >>> 32));
-        return result;
-    }
+    public final boolean equals(Object o) {
+        if (o instanceof JPAProperty) {
+            JPAProperty that = (JPAProperty) o;
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
+            return Objects.equals(this.id, that.id);
         }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final JPAProperty other = (JPAProperty) obj;
-        if (id != other.id) {
-            return false;
-        }
-        return true;
+        return false;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(id);
     }
 
     /**

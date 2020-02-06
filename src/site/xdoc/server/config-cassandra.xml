@@ -35,11 +35,30 @@
         <dt><strong>cassandra.nodes</strong></dt>
         <dd>List of some nodes of the cassandra's cluster in following format host:port or host, if the port is not specified we use 9042</dd>
 
+        <dt><strong>cassandra.keyspace.create</strong></dt>
+        <dd>Indicate if the keyspace should be created by James. Optional, default value: <b>false</b><br />
+            If set to true James will attempt to create the keyspace when starting up.<br />
+        </dd>
+
         <dt><strong>cassandra.keyspace</strong></dt>
-        <dd>Is the name of the keyspace used by James.</dd>
+        <dd>Is the name of the keyspace used by James. Optional, default value: <b>apache_james</b></dd>
+
+        <dt><strong>cassandra.user</strong></dt>
+        <dd>Username used as a credential for contacting Cassandra cluster. Optional, default is absent,
+          required if <strong>cassandra.password</strong> is supplied</dd>
+
+        <dt><strong>cassandra.password</strong></dt>
+        <dd>Password used as a credential for contacting Cassandra cluster. Optional, default is absent,
+          required if <strong>cassandra.user</strong> is supplied</dd>
+
+        <dt><strong>cassandra.ssl</strong></dt>
+        <dd>Whether SSL should be enabled on the communications with Cassandra cluster. Optional, defaults to false.<br/>
+        The keystore used for trusting SSL server socket can be set via JSSE system properties as explained on
+        <a href="https://docs.datastax.com/en/developer/java-driver/3.7/manual/ssl/">Cassandra driver manual</a>.</dd>
 
         <dt><strong>cassandra.replication.factor</strong></dt>
-        <dd>Is the replication factor. (should be 1, as cluster is not yet supported)</dd>
+        <dd>Is the replication factor used upon keyspace creation. Modifying this property while the keyspace already exists
+        will have no effect. Optional. Default value 1.</dd>
 
         <dt><strong>cassandra.query.logger.constant.threshold</strong></dt>
         <dd>Optional.
@@ -67,16 +86,17 @@
         <dd>Optional.
           If specified defines the Cassandra <a href="https://docs.datastax.com/en/developer/java-driver/3.5/manual/socket_options/">driver read timeout</a>.</dd>
 
-        # Read com.datastax.driver.core.PoolingOptions for knowing defaults value
-        # No value here will default to driver's default value
 
-        # cassandra.pooling.local.max.connections=8
-        # cassandra.pooling.local.max.requests=128
-        ## In ms. Should be higher than socket read timeout
-        # cassandra.pooling.timeout=5000
-        ## In seconds.
-        # cassandra.pooling.heartbeat.timeout=30
-        # cassandra.pooling.max.queue.size=256
+        <pre><code># Read com.datastax.driver.core.PoolingOptions for knowing defaults value
+# No value here will default to driver's default value
+
+# cassandra.pooling.local.max.connections=8
+# cassandra.pooling.local.max.requests=128
+## In ms. Should be higher than socket read timeout
+# cassandra.pooling.timeout=5000
+## In seconds.
+# cassandra.pooling.heartbeat.timeout=30
+# cassandra.pooling.max.queue.size=256</code></pre>
 
         <dt><strong>cassandra.pooling.local.max.connections</strong></dt>
         <dd>Optional. Defaults to 8.<br/>
@@ -201,6 +221,21 @@
         <dt><strong>message.attachmentids.read.timeout</strong></dt>
         <dd>Optional. Defaults to one day.<br/> Controls how many milliseconds before the read attachment ids on message time out.</dd>
       </dl>
+
+    </subsection>
+
+    <subsection name="From V5 to V6">
+
+      <p>Goal is to no longer rely on an UDT partition key for mailboxPath tables. Entries will be migrated to mailboxPathV2 table relying on a composite primary key</p>
+
+    </subsection>
+
+    <subsection name="From V6 to V7">
+
+      <p>Goal is to populate mapping_sources projection table. This table allows finding the source of a given redirection, which is
+      handy for things like mail aliases (I want to list aliases rewritting things to bob). Without this projection table being available,
+      (ie we rely on schema version 6 or less) such information is obtained through a full table scan, unoptimized. From schema version 7,
+      the optimized projection can safely be used.</p>
 
     </subsection>
 

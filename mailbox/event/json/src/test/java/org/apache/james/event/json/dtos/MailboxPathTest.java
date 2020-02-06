@@ -23,6 +23,7 @@ import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.apache.james.event.json.SerializerFixture.DTO_JSON_SERIALIZE;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.apache.james.core.Username;
 import org.apache.james.event.json.DTOs;
 import org.apache.james.mailbox.model.MailboxConstants;
 import org.apache.james.mailbox.model.MailboxPath;
@@ -33,7 +34,8 @@ import play.api.libs.json.Json;
 
 class MailboxPathTest {
     private static final String MAILBOX_NAME = "mailboxName";
-    private static final MailboxPath MAILBOX_PATH = new MailboxPath(MailboxConstants.USER_NAMESPACE, "user", MAILBOX_NAME);
+    public static final Username USER = Username.of("user");
+    private static final MailboxPath MAILBOX_PATH = new MailboxPath(MailboxConstants.USER_NAMESPACE, USER, MAILBOX_NAME);
 
     @Test
     void mailboxPathShouldBeWellSerialized() {
@@ -47,20 +49,9 @@ class MailboxPathTest {
     }
 
     @Test
-    void mailboxPathWithNullUserShouldBeWellSerialized() {
-        assertThatJson(DTO_JSON_SERIALIZE.mailboxPathWrites().writes(DTOs.MailboxPath$.MODULE$.fromJava(
-            new MailboxPath(MailboxConstants.USER_NAMESPACE, null, MAILBOX_NAME))).toString())
-            .isEqualTo(
-                "{" +
-                "  \"namespace\":\"#private\"," +
-                "  \"name\":\"mailboxName\"" +
-                "}");
-    }
-
-    @Test
     void mailboxPathWithEmptyNamespaceShouldBeWellSerialized() {
         assertThatJson(DTO_JSON_SERIALIZE.mailboxPathWrites().writes(DTOs.MailboxPath$.MODULE$.fromJava(
-            new MailboxPath("", "user", MAILBOX_NAME))).toString())
+            new MailboxPath("", USER, MAILBOX_NAME))).toString())
             .isEqualTo(
                 "{" +
                 "  \"namespace\":\"#private\"," +
@@ -77,28 +68,7 @@ class MailboxPathTest {
             "  \"name\":\"mailboxName\"" +
             "}")).get())
             .isEqualTo(DTOs.MailboxPath$.MODULE$.fromJava(
-                new MailboxPath(MailboxConstants.USER_NAMESPACE, "user", MAILBOX_NAME)));
-    }
-
-    @Test
-    void mailboxPathWithNullUserShouldBeWellDeSerialized() {
-        assertThat(DTO_JSON_SERIALIZE.mailboxPathReads().reads(Json.parse("{" +
-            "  \"namespace\":\"#private\"," +
-            "  \"user\":null," +
-            "  \"name\":\"mailboxName\"" +
-            "}")).get())
-            .isEqualTo(DTOs.MailboxPath$.MODULE$.fromJava(
-                new MailboxPath(MailboxConstants.USER_NAMESPACE, null, MAILBOX_NAME)));
-    }
-
-    @Test
-    void mailboxPathWithNoUserShouldBeWellDeSerialized() {
-        assertThat(DTO_JSON_SERIALIZE.mailboxPathReads().reads(Json.parse("{" +
-            "  \"namespace\":\"#private\"," +
-            "  \"name\":\"mailboxName\"" +
-            "}")).get())
-            .isEqualTo(DTOs.MailboxPath$.MODULE$.fromJava(
-                new MailboxPath(MailboxConstants.USER_NAMESPACE, null, MAILBOX_NAME)));
+                new MailboxPath(MailboxConstants.USER_NAMESPACE, USER, MAILBOX_NAME)));
     }
 
     @Test
@@ -108,7 +78,7 @@ class MailboxPathTest {
             "  \"name\":\"mailboxName\"" +
             "}"))
             .get().toJava())
-            .isEqualTo(new MailboxPath(MailboxConstants.USER_NAMESPACE, "user", MAILBOX_NAME));
+            .isEqualTo(new MailboxPath(MailboxConstants.USER_NAMESPACE, USER, MAILBOX_NAME));
     }
 
     @Test
@@ -119,7 +89,7 @@ class MailboxPathTest {
             "  \"name\":\"mailboxName\"" +
             "}"))
             .get().toJava())
-            .isEqualTo(new MailboxPath(MailboxConstants.USER_NAMESPACE, "user", MAILBOX_NAME));
+            .isEqualTo(new MailboxPath(MailboxConstants.USER_NAMESPACE, USER, MAILBOX_NAME));
     }
 
     @Test

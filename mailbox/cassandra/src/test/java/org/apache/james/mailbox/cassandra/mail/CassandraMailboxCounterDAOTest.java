@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.apache.james.backends.cassandra.CassandraCluster;
 import org.apache.james.backends.cassandra.CassandraClusterExtension;
-import org.apache.james.backends.cassandra.CassandraRestartExtension;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.cassandra.ids.CassandraId;
 import org.apache.james.mailbox.cassandra.modules.CassandraMailboxCounterModule;
 import org.apache.james.mailbox.model.Mailbox;
@@ -31,10 +31,8 @@ import org.apache.james.mailbox.model.MailboxCounters;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-@ExtendWith(CassandraRestartExtension.class)
 class CassandraMailboxCounterDAOTest {
     private static final int UID_VALIDITY = 15;
     private static final CassandraId MAILBOX_ID = CassandraId.timeBased();
@@ -49,7 +47,7 @@ class CassandraMailboxCounterDAOTest {
     void setUp(CassandraCluster cassandra) {
         testee = new CassandraMailboxCounterDAO(cassandra.getConf());
 
-        mailbox = new Mailbox(MailboxPath.forUser("user", "name"), UID_VALIDITY, MAILBOX_ID);
+        mailbox = new Mailbox(MailboxPath.forUser(Username.of("user"), "name"), UID_VALIDITY, MAILBOX_ID);
     }
 
     @Test
@@ -64,7 +62,7 @@ class CassandraMailboxCounterDAOTest {
 
     @Test
     void retrieveMailboxCounterShouldReturnEmptyByDefault() throws Exception {
-        assertThat(testee.retrieveMailboxCounters(mailbox).hasElement().block()).isFalse();
+        assertThat(testee.retrieveMailboxCounters(MAILBOX_ID).hasElement().block()).isFalse();
     }
 
     @Test
@@ -85,8 +83,9 @@ class CassandraMailboxCounterDAOTest {
     void incrementUnseenShouldAddOneWhenAbsentOnMailboxCounters() throws Exception {
         testee.incrementUnseen(MAILBOX_ID).block();
 
-        assertThat(testee.retrieveMailboxCounters(mailbox).block())
+        assertThat(testee.retrieveMailboxCounters(MAILBOX_ID).block())
             .isEqualTo(MailboxCounters.builder()
+                .mailboxId(MAILBOX_ID)
                 .count(0L)
                 .unseen(1L)
                 .build());
@@ -96,8 +95,9 @@ class CassandraMailboxCounterDAOTest {
     void incrementCountShouldAddOneWhenAbsentOnMailboxCounters() throws Exception {
         testee.incrementCount(MAILBOX_ID).block();
 
-        assertThat(testee.retrieveMailboxCounters(mailbox).block())
+        assertThat(testee.retrieveMailboxCounters(MAILBOX_ID).block())
             .isEqualTo(MailboxCounters.builder()
+                .mailboxId(MAILBOX_ID)
                 .count(1L)
                 .unseen(0L)
                 .build());
@@ -108,8 +108,9 @@ class CassandraMailboxCounterDAOTest {
         testee.incrementCount(MAILBOX_ID).block();
         testee.incrementUnseen(MAILBOX_ID).block();
 
-        assertThat(testee.retrieveMailboxCounters(mailbox).block())
+        assertThat(testee.retrieveMailboxCounters(MAILBOX_ID).block())
             .isEqualTo(MailboxCounters.builder()
+                .mailboxId(MAILBOX_ID)
                 .count(1L)
                 .unseen(1L)
                 .build());

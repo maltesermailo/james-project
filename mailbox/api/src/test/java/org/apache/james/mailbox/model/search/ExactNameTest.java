@@ -22,44 +22,51 @@ package org.apache.james.mailbox.model.search;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import nl.jqno.equalsverifier.EqualsVerifier;
 
 public class ExactNameTest {
-
     public static final String NAME = "toto";
 
     @Test
-    public void constructorShouldThrowOnNullName() {
+    void shouldMatchBeanContract() {
+        EqualsVerifier.forClass(ExactName.class)
+            .verify();
+    }
+
+    @Test
+    void constructorShouldThrowOnNullName() {
         assertThatThrownBy(() -> new ExactName(null))
             .isInstanceOf(NullPointerException.class);
     }
 
     @Test
-    public void isWildShouldReturnFalse() {
+    void isWildShouldReturnFalse() {
         assertThat(new ExactName(NAME).isWild())
             .isFalse();
     }
 
     @Test
-    public void getCombinedNameShouldReturnName() {
+    void getCombinedNameShouldReturnName() {
         assertThat(new ExactName(NAME).getCombinedName())
             .isEqualTo(NAME);
     }
 
     @Test
-    public void isExpressionMatchShouldReturnTrueWhenName() {
+    void isExpressionMatchShouldReturnTrueWhenName() {
         assertThat(new ExactName(NAME).isExpressionMatch(NAME))
             .isTrue();
     }
 
     @Test
-    public void isExpressionMatchShouldReturnFalseWhenOtherValue() {
+    void isExpressionMatchShouldReturnFalseWhenOtherValue() {
         assertThat(new ExactName(NAME).isExpressionMatch("other"))
             .isFalse();
     }
 
     @Test
-    public void isExpressionMatchShouldThrowOnNullValue() {
+    void isExpressionMatchShouldThrowOnNullValue() {
         assertThatThrownBy(() -> new ExactName(NAME).isExpressionMatch(null))
             .isInstanceOf(NullPointerException.class);
     }

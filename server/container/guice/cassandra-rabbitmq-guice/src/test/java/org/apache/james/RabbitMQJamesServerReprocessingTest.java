@@ -22,6 +22,7 @@ package org.apache.james;
 import static io.restassured.config.ParamConfig.UpdateStrategy.REPLACE;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.apache.james.jmap.draft.JmapJamesServerContract;
 import org.apache.james.mailrepository.api.MailRepositoryUrl;
 import org.apache.james.modules.RabbitMQExtension;
 import org.apache.james.modules.TestJMAPServerModule;
@@ -55,7 +56,7 @@ class RabbitMQJamesServerReprocessingTest {
         .server(configuration -> GuiceJamesServer
             .forConfiguration(configuration)
             .combineWith(CassandraRabbitMQJamesServerMain.MODULES)
-            .overrideWith(new TestJMAPServerModule(10))
+            .overrideWith(TestJMAPServerModule.limitToTenMessages())
             .overrideWith(binder -> binder.bind(WebAdminConfiguration.class).toInstance(WebAdminConfiguration.TEST_CONFIGURATION))
             .overrideWith(JmapJamesServerContract.DOMAIN_LIST_CONFIGURATION_MODULE))
         .build();

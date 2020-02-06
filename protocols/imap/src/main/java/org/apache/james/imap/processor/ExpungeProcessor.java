@@ -19,14 +19,15 @@
 
 package org.apache.james.imap.processor;
 
+import static org.apache.james.imap.api.ImapConstants.SUPPORTS_UIDPLUS;
+
 import java.io.Closeable;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.response.StatusResponse.ResponseCode;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
@@ -53,7 +54,7 @@ import com.google.common.collect.ImmutableList;
 public class ExpungeProcessor extends AbstractMailboxProcessor<ExpungeRequest> implements CapabilityImplementingProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(ExpungeProcessor.class);
 
-    private static final List<String> UIDPLUS = ImmutableList.of("UIDPLUS");
+    private static final List<Capability> UIDPLUS = ImmutableList.of(SUPPORTS_UIDPLUS);
 
     public ExpungeProcessor(ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
             MetricFactory metricFactory) {
@@ -61,16 +62,16 @@ public class ExpungeProcessor extends AbstractMailboxProcessor<ExpungeRequest> i
     }
 
     @Override
-    protected void doProcess(ExpungeRequest request, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void processRequest(ExpungeRequest request, ImapSession session, Responder responder) {
         try {
             final MessageManager mailbox = getSelectedMailbox(session);
-            final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
+            final MailboxSession mailboxSession = session.getMailboxSession();
 
             int expunged = 0;
             MetaData mdata = mailbox.getMetaData(false, mailboxSession, FetchGroup.NO_COUNT);
 
             if (!mdata.isWriteable()) {
-                no(command, tag, responder, HumanReadableText.MAILBOX_IS_READ_ONLY);
+                no(request, responder, HumanReadableText.MAILBOX_IS_READ_ONLY);
             } else {
                 IdRange[] ranges = request.getUidSet();
                 if (ranges == null) {
@@ -94,17 +95,17 @@ public class ExpungeProcessor extends AbstractMailboxProcessor<ExpungeRequest> i
                 //
                 // See RFC5162 3.3 EXPUNGE Command 3.5. UID EXPUNGE Command
                 if (EnableProcessor.getEnabledCapabilities(session).contains(ImapConstants.SUPPORTS_QRESYNC)  && expunged > 0) {
-                    okComplete(command, tag, ResponseCode.highestModSeq(mdata.getHighestModSeq()), responder);
+                    okComplete(request, ResponseCode.highestModSeq(mdata.getHighestModSeq()), responder);
                 } else {
-                    okComplete(command, tag, responder);
+                    okComplete(request, responder);
                 }
             }
         } catch (MessageRangeException e) {
             LOGGER.debug("Expunge failed", e);
-            taggedBad(command, tag, responder, HumanReadableText.INVALID_MESSAGESET);
+            taggedBad(request, responder, HumanReadableText.INVALID_MESSAGESET);
         } catch (MailboxException e) {
             LOGGER.error("Expunge failed for mailbox {}", session.getSelected().getMailboxId(), e);
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
         }
     }
 
@@ -123,15 +124,15 @@ public class ExpungeProcessor extends AbstractMailboxProcessor<ExpungeRequest> i
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         return UIDPLUS;
     }
 
     @Override
-    protected Closeable addContextToMDC(ExpungeRequest message) {
+    protected Closeable addContextToMDC(ExpungeRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "EXPUNGE")
-            .addContext("uidSet", IdRange.toString(message.getUidSet()))
+            .addContext("uidSet", IdRange.toString(request.getUidSet()))
             .build();
     }
 }

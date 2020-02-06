@@ -29,14 +29,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.james.protocols.api.BaseRequest;
 import org.apache.james.protocols.api.ProtocolSession;
 import org.apache.james.protocols.api.Request;
 import org.apache.james.protocols.api.Response;
-import org.apache.james.protocols.api.future.FutureResponse;
-import org.apache.james.protocols.api.future.FutureResponseImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,16 +58,6 @@ public class CommandDispatcher<SessionT extends ProtocolSession> implements Exte
     
     public CommandDispatcher() {
         this(Collections.<String>emptyList());
-    }
-
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
     }
 
     /**
@@ -164,9 +150,6 @@ public class CommandDispatcher<SessionT extends ProtocolSession> implements Exte
     /**
      * Dispatch the {@link CommandHandler}'s for the given {@link Request} and return a {@link Response} or <code>null</code> if non should get written
      * back to the client
-     * 
-     * @param session
-     * @param request
      * @return response
      */
     protected Response dispatchCommandHandlers(SessionT session, Request request) {
@@ -195,36 +178,16 @@ public class CommandDispatcher<SessionT extends ProtocolSession> implements Exte
     private Response executeResultHandlers(final SessionT session, Response responseFuture, final long executionTime, final CommandHandler<SessionT> cHandler, final Iterator<ProtocolHandlerResultHandler<Response, SessionT>> resultHandlers) {
         // Check if the there is a ResultHandler left to execute if not just return the response
         if (resultHandlers.hasNext()) {
-            // Special handling of FutureResponse
-            // See PROTOCOLS-37
-            if (responseFuture instanceof FutureResponse) {
-                final FutureResponseImpl futureResponse = new FutureResponseImpl();
-                ((FutureResponse) responseFuture).addListener(response -> {
-                    Response r = resultHandlers.next().onResponse(session, response, executionTime, cHandler);
+            responseFuture = resultHandlers.next().onResponse(session, responseFuture, executionTime, cHandler);
 
-                    // call the next ResultHandler
-                    r = executeResultHandlers(session, r, executionTime, cHandler, resultHandlers);
-
-                    // notify the FutureResponse that we are ready
-                    futureResponse.setResponse(r);
-                });
-                
-                // just return the new FutureResponse which will get notified once its ready
-                return futureResponse;
-            }  else {
-                responseFuture = resultHandlers.next().onResponse(session, responseFuture, executionTime, cHandler);
-                
-                // call the next ResultHandler 
-                return executeResultHandlers(session, responseFuture, executionTime, cHandler, resultHandlers);
-            }
+            // call the next ResultHandler
+            return executeResultHandlers(session, responseFuture, executionTime, cHandler, resultHandlers);
         }
         return responseFuture;
     }
     
     /**
      * Parse the line into a {@link Request}
-     *
-     * @throws Exception
      */
     protected Request parseRequest(SessionT session, ByteBuffer buffer) throws Exception {
         String curCommandName;

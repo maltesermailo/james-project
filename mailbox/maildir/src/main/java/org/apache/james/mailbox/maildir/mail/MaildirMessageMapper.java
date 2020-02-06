@@ -24,6 +24,7 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -35,14 +36,17 @@ import javax.mail.Flags;
 import javax.mail.Flags.Flag;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.maildir.MaildirFolder;
 import org.apache.james.mailbox.maildir.MaildirMessageName;
 import org.apache.james.mailbox.maildir.MaildirStore;
 import org.apache.james.mailbox.maildir.mail.model.MaildirMailboxMessage;
 import org.apache.james.mailbox.model.Mailbox;
+import org.apache.james.mailbox.model.MailboxCounters;
 import org.apache.james.mailbox.model.MessageMetaData;
 import org.apache.james.mailbox.model.MessageRange;
 import org.apache.james.mailbox.model.MessageRange.Type;
@@ -98,7 +102,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
     public void delete(Mailbox mailbox, MailboxMessage message) throws MailboxException {
         MaildirFolder folder = maildirStore.createMaildirFolder(mailbox);
         try {
-            folder.delete(mailboxSession, message.getUid());
+            folder.delete(message.getUid());
         } catch (MailboxException e) {
             throw new MailboxException("Unable to delete MailboxMessage " + message + " in Mailbox " + mailbox, e);
         }
@@ -133,7 +137,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
     @Override
     public List<MessageUid> findRecentMessageUidsInMailbox(Mailbox mailbox) throws MailboxException {
         MaildirFolder folder = maildirStore.createMaildirFolder(mailbox);
-        SortedMap<MessageUid, MaildirMessageName> recentMessageNames = folder.getRecentMessages(mailboxSession);
+        SortedMap<MessageUid, MaildirMessageName> recentMessageNames = folder.getRecentMessages();
         return new ArrayList<>(recentMessageNames.keySet());
 
     }
@@ -149,6 +153,13 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
     }
 
     @Override
+    public List<MailboxCounters> getMailboxCounters(Collection<Mailbox> mailboxes) throws MailboxException {
+        return mailboxes.stream()
+            .map(Throwing.<Mailbox, MailboxCounters>function(this::getMailboxCounters).sneakyThrow())
+            .collect(Guavate.toImmutableList());
+    }
+
+    @Override
     public Iterator<UpdatedFlags> updateFlags(Mailbox mailbox, FlagsUpdateCalculator flagsUpdateCalculator, MessageRange set) throws MailboxException {
         final List<UpdatedFlags> updatedFlags = new ArrayList<>();
         final MaildirFolder folder = maildirStore.createMaildirFolder(mailbox);
@@ -161,7 +172,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
             Flags newFlags = member.createFlags();
 
             try {
-                MaildirMessageName messageName = folder.getMessageNameByUid(mailboxSession, member.getUid());
+                MaildirMessageName messageName = folder.getMessageNameByUid(member.getUid());
                 if (messageName != null) {
                     File messageFile = messageName.getFile();
                     messageName.setFlags(member.createFlags());
@@ -188,7 +199,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
                     } else {
                         modSeq = messageFile.lastModified();
                     }
-                    member.setModSeq(modSeq);
+                    member.setModSeq(ModSeq.of(modSeq));
 
                     updatedFlags.add(UpdatedFlags.builder()
                         .uid(member.getUid())
@@ -198,7 +209,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
                         .build());
 
                     MessageUid uid = member.getUid();
-                    folder.update(mailboxSession, uid, newMessageName);
+                    folder.update(uid, newMessageName);
                 }
             } catch (IOException e) {
                 throw new MailboxException("Failure while save MailboxMessage " + member + " in Mailbox " + mailbox, e);
@@ -264,7 +275,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
     }
 
     @Override
-    protected MessageMetaData copy(Mailbox mailbox, MessageUid uid, long modSeq, MailboxMessage original)
+    protected MessageMetaData copy(Mailbox mailbox, MessageUid uid, ModSeq modSeq, MailboxMessage original)
             throws MailboxException {
         SimpleMailboxMessage theCopy = SimpleMailboxMessage.copyWithoutAttachments(mailbox.getMailboxId(), original);
         Flags flags = theCopy.createFlags();
@@ -299,11 +310,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
             }
             try (FileOutputStream fos = new FileOutputStream(messageFile);
                 InputStream input = message.getFullContent()) {
-                byte[] b = new byte[BUF_SIZE];
-                int len = 0;
-                while ((len = input.read(b)) != -1) {
-                    fos.write(b, 0, len);
-                }
+                IOUtils.copy(input, fos, BUF_SIZE);
             }
         } catch (IOException ioe) {
             throw new MailboxException("Failure while save MailboxMessage " + message + " in Mailbox " + mailbox, ioe);
@@ -326,9 +333,9 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
             throw new MailboxException("Failure while save MailboxMessage " + message + " in Mailbox " + mailbox, e);
         }
         try {
-            uid = folder.appendMessage(mailboxSession, newMessageFile.getName());
+            uid = folder.appendMessage(newMessageFile.getName());
             message.setUid(uid);
-            message.setModSeq(newMessageFile.lastModified());
+            message.setModSeq(ModSeq.of(newMessageFile.lastModified()));
             return message.metaData();
         } catch (MailboxException e) {
             throw new MailboxException("Failure while save MailboxMessage " + message + " in Mailbox " + mailbox, e);
@@ -353,7 +360,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
             throws MailboxException {
         MaildirFolder folder = maildirStore.createMaildirFolder(mailbox);
         try {
-            MaildirMessageName messageName = folder.getMessageNameByUid(mailboxSession, from);
+            MaildirMessageName messageName = folder.getMessageNameByUid(from);
 
             ArrayList<MailboxMessage> messages = new ArrayList<>();
             if (messageName != null && messageName.getFile().exists()) {
@@ -375,7 +382,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
             if (filter != null) {
                 uidMap = folder.getUidMap(mailboxSession, filter, from, to);
             } else {
-                uidMap = folder.getUidMap(mailboxSession, from, to);
+                uidMap = folder.getUidMap(from, to);
             }
 
             ArrayList<MailboxMessage> messages = new ArrayList<>();
@@ -399,7 +406,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
             throws MailboxException {
         MaildirFolder folder = maildirStore.createMaildirFolder(mailbox);
         try {
-            SortedMap<MessageUid, MaildirMessageName> uidMap = folder.getUidMap(mailboxSession, filter, limit);
+            SortedMap<MessageUid, MaildirMessageName> uidMap = folder.getUidMap(filter, limit);
 
             ArrayList<MailboxMessage> filtered = new ArrayList<>(uidMap.size());
             for (Entry<MessageUid, MaildirMessageName> entry : uidMap.entrySet()) {
@@ -416,7 +423,7 @@ public class MaildirMessageMapper extends AbstractMessageMapper {
             throws MailboxException {
         MaildirFolder folder = maildirStore.createMaildirFolder(mailbox);
         try {
-            MaildirMessageName messageName = folder.getMessageNameByUid(mailboxSession, uid);
+            MaildirMessageName messageName = folder.getMessageNameByUid(uid);
             ArrayList<MailboxMessage> messages = new ArrayList<>();
             if (MaildirMessageName.FILTER_DELETED_MESSAGES.accept(null, messageName.getFullName())) {
                 messages.add(new MaildirMailboxMessage(mailbox, uid, messageName));

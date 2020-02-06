@@ -22,38 +22,36 @@ package org.apache.james.mailbox.jpa;
 import java.util.Optional;
 
 import org.apache.james.backends.jpa.JpaTestCluster;
-import org.apache.james.mailbox.MailboxManagerStressTest;
+import org.apache.james.mailbox.MailboxManagerStressContract;
 import org.apache.james.mailbox.events.EventBus;
 import org.apache.james.mailbox.jpa.openjpa.OpenJPAMailboxManager;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
-public class JpaMailboxManagerStressTest extends MailboxManagerStressTest<OpenJPAMailboxManager> {
+class JpaMailboxManagerStressTest implements MailboxManagerStressContract<OpenJPAMailboxManager> {
 
-    private static final JpaTestCluster JPA_TEST_CLUSTER = JpaTestCluster.create(JPAMailboxFixture.MAILBOX_PERSISTANCE_CLASSES);
-    private Optional<OpenJPAMailboxManager> openJPAMailboxManager = Optional.empty();
+    static final JpaTestCluster JPA_TEST_CLUSTER = JpaTestCluster.create(JPAMailboxFixture.MAILBOX_PERSISTANCE_CLASSES);
+    Optional<OpenJPAMailboxManager> openJPAMailboxManager = Optional.empty();
 
     @Override
-    @Before
-    public void setUp() throws Exception {
-        super.setUp();
-    }
-    
-    @Override
-    protected OpenJPAMailboxManager provideManager() {
-        if (!openJPAMailboxManager.isPresent()) {
-            openJPAMailboxManager = Optional.of(JpaMailboxManagerProvider.provideMailboxManager(JPA_TEST_CLUSTER));
-        }
+    public OpenJPAMailboxManager getManager() {
         return openJPAMailboxManager.get();
     }
 
     @Override
-    protected EventBus retrieveEventBus(OpenJPAMailboxManager mailboxManager) {
-        return mailboxManager.getEventBus();
+    public EventBus retrieveEventBus() {
+        return getManager().getEventBus();
     }
 
-    @After
-    public void tearDown() {
+    @BeforeEach
+    void setUp() {
+        if (!openJPAMailboxManager.isPresent()) {
+            openJPAMailboxManager = Optional.of(JpaMailboxManagerProvider.provideMailboxManager(JPA_TEST_CLUSTER));
+        }
+    }
+
+    @AfterEach
+    void tearDown() {
         JPA_TEST_CLUSTER.clear(JPAMailboxFixture.MAILBOX_TABLE_NAMES);
     }
 }

@@ -23,8 +23,6 @@ package org.apache.james.protocols.smtp.core;
 
 import java.util.Collection;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.james.protocols.api.Request;
 import org.apache.james.protocols.api.Response;
 import org.apache.james.protocols.api.handler.CommandHandler;
@@ -50,7 +48,6 @@ public class NoopCmdHandler implements CommandHandler<SMTPSession> {
     /**
      * Handler method called upon receipt of a NOOP command.
      * Just sends back an OK and logs the command.
-     *
      */
     @Override
     public Response onCommand(SMTPSession session, Request request) {
@@ -60,15 +57,5 @@ public class NoopCmdHandler implements CommandHandler<SMTPSession> {
     @Override
     public Collection<String> getImplCommands() {
         return COMMANDS;
-    }
-
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
     }
 }

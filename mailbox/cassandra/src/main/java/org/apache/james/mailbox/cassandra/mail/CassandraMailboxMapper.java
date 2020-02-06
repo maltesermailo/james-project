@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 import javax.inject.Inject;
 
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.acl.ACLDiff;
 import org.apache.james.mailbox.cassandra.ids.CassandraId;
 import org.apache.james.mailbox.exception.MailboxException;
@@ -39,6 +40,7 @@ import org.apache.james.mailbox.model.MailboxACL;
 import org.apache.james.mailbox.model.MailboxACL.Right;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxPath;
+import org.apache.james.mailbox.model.search.MailboxQuery;
 import org.apache.james.mailbox.store.mail.MailboxMapper;
 import org.apache.james.util.ReactorUtils;
 import org.slf4j.Logger;
@@ -134,9 +136,9 @@ public class CassandraMailboxMapper implements MailboxMapper {
     }
 
     @Override
-    public List<Mailbox> findMailboxWithPathLike(MailboxPath path) {
-        List<Mailbox> mailboxesV2 = toMailboxes(path, mailboxPathV2DAO.listUserMailboxes(path.getNamespace(), path.getUser()));
-        List<Mailbox> mailboxesV1 = toMailboxes(path, mailboxPathDAO.listUserMailboxes(path.getNamespace(), path.getUser()));
+    public List<Mailbox> findMailboxWithPathLike(MailboxQuery.UserBound query) {
+        List<Mailbox> mailboxesV2 = toMailboxes(query, mailboxPathV2DAO.listUserMailboxes(query.getFixedNamespace(), query.getFixedUser()));
+        List<Mailbox> mailboxesV1 = toMailboxes(query, mailboxPathDAO.listUserMailboxes(query.getFixedNamespace(), query.getFixedUser()));
 
         List<Mailbox> mailboxesV1NotInV2 = mailboxesV1.stream()
             .filter(mailboxV1 -> mailboxesV2.stream()
@@ -150,12 +152,10 @@ public class CassandraMailboxMapper implements MailboxMapper {
             .build();
     }
 
-    private List<Mailbox> toMailboxes(MailboxPath path, Flux<CassandraIdAndPath> listUserMailboxes) {
-        Pattern regex = Pattern.compile(constructEscapedRegexForMailboxNameMatching(path));
-
+    private List<Mailbox> toMailboxes(MailboxQuery.UserBound query, Flux<CassandraIdAndPath> listUserMailboxes) {
         return listUserMailboxes
-                .filter(idAndPath -> regex.matcher(idAndPath.getMailboxPath().getName()).matches())
-                .flatMap(this::retrieveMailbox)
+                .filter(idAndPath -> query.isPathMatch(idAndPath.getMailboxPath()))
+                .concatMap(this::retrieveMailbox)
                 .collectList()
                 .block();
     }
@@ -261,7 +261,7 @@ public class CassandraMailboxMapper implements MailboxMapper {
     }
 
     @Override
-    public List<Mailbox> findNonPersonalMailboxes(String userName, Right right) {
+    public List<Mailbox> findNonPersonalMailboxes(Username userName, Right right) {
         return userMailboxRightsDAO.listRightsForUser(userName)
             .filter(mailboxId -> authorizedMailbox(mailboxId.getRight(), right))
             .map(Pair::getLeft)

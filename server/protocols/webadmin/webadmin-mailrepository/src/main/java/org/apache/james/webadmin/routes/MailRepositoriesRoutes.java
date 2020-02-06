@@ -22,6 +22,7 @@ package org.apache.james.webadmin.routes;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -42,7 +43,6 @@ import org.apache.james.mailrepository.api.MailRepositoryPath;
 import org.apache.james.mailrepository.api.MailRepositoryStore;
 import org.apache.james.queue.api.MailQueueFactory;
 import org.apache.james.task.Task;
-import org.apache.james.task.TaskId;
 import org.apache.james.task.TaskManager;
 import org.apache.james.util.streams.Limit;
 import org.apache.james.util.streams.Offset;
@@ -52,11 +52,14 @@ import org.apache.james.webadmin.dto.ExtendedMailRepositoryResponse;
 import org.apache.james.webadmin.dto.InaccessibleFieldException;
 import org.apache.james.webadmin.dto.MailDto;
 import org.apache.james.webadmin.dto.MailDto.AdditionalField;
-import org.apache.james.webadmin.dto.TaskIdDto;
 import org.apache.james.webadmin.service.MailRepositoryStoreService;
 import org.apache.james.webadmin.service.ReprocessingAllMailsTask;
 import org.apache.james.webadmin.service.ReprocessingOneMailTask;
 import org.apache.james.webadmin.service.ReprocessingService;
+import org.apache.james.webadmin.tasks.TaskFromRequest;
+import org.apache.james.webadmin.tasks.TaskFromRequestRegistry;
+import org.apache.james.webadmin.tasks.TaskIdDto;
+import org.apache.james.webadmin.tasks.TaskRegistrationKey;
 import org.apache.james.webadmin.utils.ErrorResponder;
 import org.apache.james.webadmin.utils.ErrorResponder.ErrorType;
 import org.apache.james.webadmin.utils.JsonTransformer;
@@ -84,6 +87,8 @@ import spark.Service;
 public class MailRepositoriesRoutes implements Routes {
 
     public static final String MAIL_REPOSITORIES = "mailRepositories";
+    private static final TaskRegistrationKey REPROCESS_ACTION = TaskRegistrationKey.of("reprocess");
+    private static final String ACTION_PARAMETER = "action";
 
     private final JsonTransformer jsonTransformer;
     private final MailRepositoryStoreService repositoryStoreService;
@@ -150,12 +155,19 @@ public class MailRepositoriesRoutes implements Routes {
             try {
                 repositoryStoreService.createMailRepository(path, protocol);
                 return Responses.returnNoContent(response);
+            } catch (MailRepositoryStore.UnsupportedRepositoryStoreException e) {
+                throw ErrorResponder.builder()
+                    .statusCode(HttpStatus.BAD_REQUEST_400)
+                    .type(ErrorType.INVALID_ARGUMENT)
+                    .cause(e)
+                    .message("'%s' is an unsupported protocol", protocol)
+                    .haltError();
             } catch (MailRepositoryStore.MailRepositoryStoreException e) {
                 throw ErrorResponder.builder()
                     .statusCode(HttpStatus.INTERNAL_SERVER_ERROR_500)
                     .type(ErrorResponder.ErrorType.SERVER_ERROR)
                     .cause(e)
-                    .message(String.format("Error while creating a mail repository with path '%s' and protocol '%s'", path.asString(), protocol))
+                    .message("Error while creating a mail repository with path '%s' and protocol '%s'", path.asString(), protocol)
                     .haltError();
             }
         }, jsonTransformer);
@@ -283,7 +295,7 @@ public class MailRepositoriesRoutes implements Routes {
             .statusCode(HttpStatus.INTERNAL_SERVER_ERROR_500)
             .type(ErrorType.SERVER_ERROR)
             .cause(e)
-            .message("The field '" + e.getField().getName() + "' requested in additionalFields parameter can't be accessed")
+            .message("The field '%s' requested in additionalFields parameter can't be accessed", e.getField().getName())
             .haltError();
     }
 
@@ -292,7 +304,7 @@ public class MailRepositoriesRoutes implements Routes {
             .statusCode(HttpStatus.BAD_REQUEST_400)
             .type(ErrorType.INVALID_ARGUMENT)
             .cause(e)
-            .message("The field '" + e.getMessage() + "' can't be requested in additionalFields parameter")
+            .message("The field '%s' can't be requested in additionalFields parameter", e.getMessage())
             .haltError();
     }
 
@@ -300,7 +312,7 @@ public class MailRepositoriesRoutes implements Routes {
         return () -> ErrorResponder.builder()
             .statusCode(HttpStatus.NOT_FOUND_404)
             .type(ErrorResponder.ErrorType.NOT_FOUND)
-            .message("Could not retrieve " + mailKey.asString())
+            .message("Could not retrieve %s", mailKey.asString())
             .haltError();
     }
 
@@ -308,7 +320,7 @@ public class MailRepositoriesRoutes implements Routes {
         return ErrorResponder.builder()
             .statusCode(HttpStatus.NOT_FOUND_404)
             .type(ErrorType.NOT_FOUND)
-            .message("The repository '" + encodedPath + "' (decoded value: '" + path.asString() + "') does not exist")
+            .message("The repository '%s' (decoded value: '%s') does not exist", encodedPath, path.asString())
             .haltError();
     }
 
@@ -381,12 +393,10 @@ public class MailRepositoriesRoutes implements Routes {
         @ApiResponse(code = HttpStatus.BAD_REQUEST_400, message = "Bad request - unknown action")
     })
     public void defineDeleteAll() {
-        service.delete(MAIL_REPOSITORIES + "/:encodedPath/mails", (request, response) -> {
+        TaskFromRequest taskFromRequest = request -> {
             MailRepositoryPath path = decodedRepositoryPath(request);
             try {
-                Task task = repositoryStoreService.createClearMailRepositoryTask(path);
-                TaskId taskId = taskManager.submit(task);
-                return TaskIdDto.respond(response, taskId);
+                return repositoryStoreService.createClearMailRepositoryTask(path);
             } catch (MailRepositoryStore.MailRepositoryStoreException | MessagingException e) {
                 throw ErrorResponder.builder()
                     .statusCode(HttpStatus.INTERNAL_SERVER_ERROR_500)
@@ -395,7 +405,8 @@ public class MailRepositoriesRoutes implements Routes {
                     .message("Error while deleting all mails")
                     .haltError();
             }
-        }, jsonTransformer);
+        };
+        service.delete(MAIL_REPOSITORIES + "/:encodedPath/mails", taskFromRequest.asRoute(taskManager), jsonTransformer);
     }
 
     @PATCH
@@ -433,18 +444,16 @@ public class MailRepositoriesRoutes implements Routes {
         @ApiResponse(code = HttpStatus.BAD_REQUEST_400, message = "Bad request - unknown action")
     })
     public void defineReprocessAll() {
-        service.patch(MAIL_REPOSITORIES + "/:encodedPath/mails", (request, response) -> {
-            Task task = toAllMailReprocessingTask(request);
-            TaskId taskId = taskManager.submit(task);
-            return TaskIdDto.respond(response, taskId);
-        }, jsonTransformer);
+        service.patch(MAIL_REPOSITORIES + "/:encodedPath/mails",
+            TaskFromRequestRegistry.of(REPROCESS_ACTION, this::reprocessAll)
+                .asRoute(taskManager),
+            jsonTransformer);
     }
 
-    private Task toAllMailReprocessingTask(Request request) throws UnsupportedEncodingException, MailRepositoryStore.MailRepositoryStoreException, MessagingException {
+    private Task reprocessAll(Request request) throws UnsupportedEncodingException, MailRepositoryStore.MailRepositoryStoreException {
         MailRepositoryPath path = decodedRepositoryPath(request);
-        enforceActionParameter(request);
-        Optional<String> targetProcessor = Optional.ofNullable(request.queryParams("processor"));
-        String targetQueue = Optional.ofNullable(request.queryParams("queue")).orElse(MailQueueFactory.SPOOL);
+        Optional<String> targetProcessor = parseTargetProcessor(request);
+        String targetQueue = parseTargetQueue(request);
 
         Long repositorySize = repositoryStoreService.size(path).orElse(0L);
         return new ReprocessingAllMailsTask(reprocessingService, repositorySize, path, targetQueue, targetProcessor);
@@ -485,32 +494,20 @@ public class MailRepositoriesRoutes implements Routes {
         @ApiResponse(code = HttpStatus.BAD_REQUEST_400, message = "Bad request - unknown action")
     })
     public void defineReprocessOne() {
-        service.patch(MAIL_REPOSITORIES + "/:encodedPath/mails/:key", (request, response) -> {
-            Task task = toOneMailReprocessingTask(request);
-            TaskId taskId = taskManager.submit(task);
-            return TaskIdDto.respond(response, taskId);
-        }, jsonTransformer);
+        service.patch(MAIL_REPOSITORIES + "/:encodedPath/mails/:key",
+            TaskFromRequestRegistry.of(REPROCESS_ACTION, this::reprocessOne)
+                .asRoute(taskManager),
+            jsonTransformer);
     }
 
-    private Task toOneMailReprocessingTask(Request request) throws UnsupportedEncodingException {
+    private Task reprocessOne(Request request) throws UnsupportedEncodingException {
         MailRepositoryPath path = decodedRepositoryPath(request);
         MailKey key = new MailKey(request.params("key"));
-        enforceActionParameter(request);
-        Optional<String> targetProcessor = Optional.ofNullable(request.queryParams("processor"));
-        String targetQueue = Optional.ofNullable(request.queryParams("queue")).orElse(MailQueueFactory.SPOOL);
 
-        return new ReprocessingOneMailTask(reprocessingService, path, targetQueue, key, targetProcessor);
-    }
+        Optional<String> targetProcessor = parseTargetProcessor(request);
+        String targetQueue = parseTargetQueue(request);
 
-    private void enforceActionParameter(Request request) {
-        String action = request.queryParams("action");
-        if (!"reprocess".equals(action)) {
-            throw ErrorResponder.builder()
-                .statusCode(HttpStatus.BAD_REQUEST_400)
-                .type(ErrorType.INVALID_ARGUMENT)
-                .message("action query parameter is mandatory. The only supported value is `reprocess`")
-                .haltError();
-        }
+        return new ReprocessingOneMailTask(reprocessingService, path, targetQueue, key, targetProcessor, Clock.systemUTC());
     }
 
     private Set<AdditionalField> extractAdditionalFields(String additionalFieldsParam) throws IllegalArgumentException {
@@ -522,6 +519,14 @@ public class MailRepositoriesRoutes implements Routes {
             .stream()
             .map((field) -> AdditionalField.find(field).orElseThrow(() -> new IllegalArgumentException(field)))
             .collect(Guavate.toImmutableSet());
+    }
+
+    private Optional<String> parseTargetProcessor(Request request) {
+        return Optional.ofNullable(request.queryParams("processor"));
+    }
+
+    private String parseTargetQueue(Request request) {
+        return Optional.ofNullable(request.queryParams("queue")).orElse(MailQueueFactory.SPOOL);
     }
 
     private MailRepositoryPath decodedRepositoryPath(Request request) throws UnsupportedEncodingException {

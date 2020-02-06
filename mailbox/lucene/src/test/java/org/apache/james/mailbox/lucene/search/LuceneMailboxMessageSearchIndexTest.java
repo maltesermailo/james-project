@@ -20,7 +20,7 @@ package org.apache.james.mailbox.lucene.search;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
@@ -32,6 +32,7 @@ import java.util.stream.Stream;
 import javax.mail.Flags;
 import javax.mail.Flags.Flag;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
 import org.apache.james.mailbox.MessageUid;
@@ -47,53 +48,55 @@ import org.apache.james.mailbox.model.SearchQuery.Sort.SortClause;
 import org.apache.james.mailbox.model.TestId;
 import org.apache.james.mailbox.model.TestMessageId;
 import org.apache.james.mailbox.store.MessageBuilder;
-import org.apache.james.mailbox.store.SimpleMailboxMembership;
 import org.apache.lucene.store.RAMDirectory;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableList;
 
-public class LuceneMailboxMessageSearchIndexTest {
+class LuceneMailboxMessageSearchIndexTest {
+    static final long LIMIT = 100L;
+    static final TestId TEST_ID_1 = TestId.of(0);
+    static final TestId TEST_ID_2 = TestId.of(1);
+    static final TestId TEST_ID_3 = TestId.of(2);
 
-    public static final long LIMIT = 100L;
-    private LuceneMessageSearchIndex index;
-    
-    private Mailbox mailbox = new Mailbox(MailboxPath.forUser("bob", "box"), 18, TestId.of(0));
-    private Mailbox mailbox2 = new Mailbox(MailboxPath.forUser("bob", "box"), 19, TestId.of(1));
-    private Mailbox mailbox3 = new Mailbox(MailboxPath.forUser("bob", "box"), 12, TestId.of(2));
-    private MailboxSession session;
+    static final Username BOB = Username.of("bob");
+    Mailbox mailbox = new Mailbox(MailboxPath.forUser(BOB, "box"), 18, TEST_ID_1);
+    Mailbox mailbox2 = new Mailbox(MailboxPath.forUser(BOB, "box"), 19, TEST_ID_2);
+    Mailbox mailbox3 = new Mailbox(MailboxPath.forUser(BOB, "box"), 12, TEST_ID_3);
+    LuceneMessageSearchIndex index;
+    MailboxSession session;
 
-    private static final String FROM_ADDRESS = "Harry <harry@example.org>";
+    static final String FROM_ADDRESS = "Harry <harry@example.org>";
 
-    private static final String SUBJECT_PART = "Mixed";
+    static final String SUBJECT_PART = "Mixed";
 
-    private static final String CUSTARD = "CUSTARD";
+    static final String CUSTARD = "CUSTARD";
 
-    private static final String RHUBARD = "Rhubard";
+    static final String RHUBARD = "Rhubard";
 
-    private static final String BODY = "This is a simple email\r\n "
+    static final String BODY = "This is a simple email\r\n "
             + "It has " + RHUBARD + ".\r\n" + "It has " + CUSTARD + ".\r\n"
             + "It needs naught else.\r\n";
 
-    private MessageUid uid1;
-    private MessageUid uid2;
-    private MessageUid uid3;
-    private MessageUid uid4;
-    private MessageUid uid5;
-    private MessageId id1;
-    private MessageId id2;
-    private MessageId id3;
-    private MessageId id4;
-    private MessageId id5;
+    MessageUid uid1;
+    MessageUid uid2;
+    MessageUid uid3;
+    MessageUid uid4;
+    MessageUid uid5;
+    MessageId id1;
+    MessageId id2;
+    MessageId id3;
+    MessageId id4;
+    MessageId id5;
 
     protected boolean useLenient() {
         return true;
     }
     
-    @Before
-    public void setUp() throws Exception {
-        session = MailboxSessionUtil.create("username");
+    @BeforeEach
+    void setUp() throws Exception {
+        session = MailboxSessionUtil.create(Username.of("username"));
         TestMessageId.Factory factory = new TestMessageId.Factory();
         id1 = factory.generate();
         id2 = factory.generate();
@@ -121,24 +124,52 @@ public class LuceneMailboxMessageSearchIndexTest {
         headersTestSubject.put("Cc", "test211 <test21@localhost>, test6 <test6@foobar>");
         
         uid1 = MessageUid.of(1);
-        SimpleMailboxMembership m = new SimpleMailboxMembership(id1, (TestId) mailbox.getMailboxId(), uid1, 0, new Date(), 200, new Flags(Flag.ANSWERED), "My Body".getBytes(), headersSubject);
-        index.add(session, mailbox, m);
+        MessageBuilder builder1 = new MessageBuilder()
+            .headers(headersSubject)
+            .flags(new Flags(Flag.ANSWERED))
+            .mailboxId(TEST_ID_1)
+            .uid(uid1)
+            .internalDate(new Date())
+            .body("My Body".getBytes(StandardCharsets.UTF_8))
+            .size(200);
+        index.add(session, mailbox, builder1.build(id1));
 
         uid2 = MessageUid.of(1);
-        SimpleMailboxMembership m2 = new SimpleMailboxMembership(id2, (TestId) mailbox2.getMailboxId(), uid2, 0, new Date(), 20, new Flags(Flag.ANSWERED), "My Body".getBytes(), headersSubject);
-        index.add(session, mailbox2, m2);
+        MessageBuilder builder2 = new MessageBuilder()
+            .headers(headersSubject)
+            .flags(new Flags(Flag.ANSWERED))
+            .mailboxId(TEST_ID_2)
+            .uid(uid2)
+            .internalDate(new Date())
+            .body("My Body".getBytes(StandardCharsets.UTF_8))
+            .size(20);
+        index.add(session, mailbox2, builder2.build(id2));
         
         uid3 = MessageUid.of(2);
         Calendar cal = Calendar.getInstance();
         cal.set(1980, 2, 10);
-        SimpleMailboxMembership m3 = new SimpleMailboxMembership(id3, (TestId) mailbox.getMailboxId(), uid3, 0, cal.getTime(), 20, new Flags(Flag.DELETED), "My Otherbody".getBytes(), headersTest);
-        index.add(session, mailbox, m3);
+        MessageBuilder builder3 = new MessageBuilder()
+            .headers(headersTest)
+            .flags(new Flags(Flag.DELETED))
+            .mailboxId(TEST_ID_1)
+            .uid(uid3)
+            .internalDate(cal.getTime())
+            .body("My Otherbody".getBytes(StandardCharsets.UTF_8))
+            .size(20);
+        index.add(session, mailbox, builder3.build(id3));
         
         uid4 = MessageUid.of(3);
         Calendar cal2 = Calendar.getInstance();
         cal2.set(8000, 2, 10);
-        SimpleMailboxMembership m4 = new SimpleMailboxMembership(id4, (TestId) mailbox.getMailboxId(), uid4, 0, cal2.getTime(), 20, new Flags(Flag.DELETED), "My Otherbody2".getBytes(), headersTestSubject);
-        index.add(session, mailbox, m4);
+        MessageBuilder builder4 = new MessageBuilder()
+            .headers(headersTestSubject)
+            .flags(new Flags(Flag.DELETED))
+            .mailboxId(TEST_ID_1)
+            .uid(uid4)
+            .internalDate(cal2.getTime())
+            .body("My Otherbody2".getBytes(StandardCharsets.UTF_8))
+            .size(20);
+        index.add(session, mailbox, builder4.build(id4));
         
         uid5 = MessageUid.of(10);
         MessageBuilder builder = new MessageBuilder();
@@ -146,18 +177,15 @@ public class LuceneMailboxMessageSearchIndexTest {
         builder.header("To", FROM_ADDRESS);
         builder.header("Subject", "A " + SUBJECT_PART + " Multipart Mail");
         builder.header("Date", "Thu, 14 Feb 2008 12:00:00 +0000 (GMT)");
-        builder.body = Charset.forName("us-ascii").encode(BODY).array();
-        builder.uid = uid5;
-        builder.mailboxId = (TestId) mailbox3.getMailboxId();
-        
+        builder.body(StandardCharsets.US_ASCII.encode(BODY).array());
+        builder.uid(uid5);
+        builder.mailboxId(TEST_ID_3);
         index.add(session, mailbox3, builder.build(id5));
 
     }
-    
-
 
     @Test
-    public void bodySearchShouldMatchPhraseInBody() throws Exception {
+    void bodySearchShouldMatchPhraseInBody() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.bodyContains(CUSTARD));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -165,7 +193,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void bodySearchShouldNotMatchAbsentPhraseInBody() throws Exception {
+    void bodySearchShouldNotMatchAbsentPhraseInBody() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.bodyContains(CUSTARD + CUSTARD));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -173,7 +201,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void bodySearchShouldBeCaseInsensitive() throws Exception {
+    void bodySearchShouldBeCaseInsensitive() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.bodyContains(RHUBARD));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -181,7 +209,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void bodySearchNotMatchPhraseOnlyInFrom() throws Exception {
+    void bodySearchNotMatchPhraseOnlyInFrom() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.bodyContains(FROM_ADDRESS));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -189,7 +217,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void bodySearchShouldNotMatchPhraseOnlyInSubject() throws Exception {
+    void bodySearchShouldNotMatchPhraseOnlyInSubject() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.bodyContains(SUBJECT_PART));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -197,7 +225,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void textSearchShouldMatchPhraseInBody() throws Exception {
+    void textSearchShouldMatchPhraseInBody() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.mailContains(CUSTARD));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -205,7 +233,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void textSearchShouldNotAbsentMatchPhraseInBody() throws Exception {
+    void textSearchShouldNotAbsentMatchPhraseInBody() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.mailContains(CUSTARD + CUSTARD));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -213,7 +241,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void textSearchMatchShouldBeCaseInsensitive() throws Exception {
+    void textSearchMatchShouldBeCaseInsensitive() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.mailContains(RHUBARD.toLowerCase(Locale.US)));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -221,7 +249,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void addressSearchShouldMatchToFullAddress() throws Exception {
+    void addressSearchShouldMatchToFullAddress() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.address(AddressType.To,FROM_ADDRESS));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -229,7 +257,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void addressSearchShouldMatchToDisplayName() throws Exception {
+    void addressSearchShouldMatchToDisplayName() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.address(AddressType.To,"Harry"));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -237,7 +265,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void addressSearchShouldMatchToEmail() throws Exception {
+    void addressSearchShouldMatchToEmail() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.address(AddressType.To,"Harry@example.org"));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -245,7 +273,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void addressSearchShouldMatchFrom() throws Exception {
+    void addressSearchShouldMatchFrom() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.address(AddressType.From,"ser-from@domain.or"));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -253,7 +281,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void textSearchShouldMatchPhraseOnlyInToHeader() throws Exception {
+    void textSearchShouldMatchPhraseOnlyInToHeader() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.mailContains(FROM_ADDRESS));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -261,7 +289,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void textSearchShouldMatchPhraseOnlyInSubjectHeader() throws Exception {
+    void textSearchShouldMatchPhraseOnlyInSubjectHeader() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.mailContains(SUBJECT_PART));
         Stream<MessageUid> result = index.search(session, mailbox3, query);
@@ -269,7 +297,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void searchAllShouldMatchAllMailboxEmails() throws Exception {
+    void searchAllShouldMatchAllMailboxEmails() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.all());
         Stream<MessageUid> result = index.search(session, mailbox2, query);
@@ -277,7 +305,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void searchBodyInAllMailboxesShouldMatch() throws Exception {
+    void searchBodyInAllMailboxesShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.bodyContains("My Body"));
 
@@ -287,7 +315,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void searchBodyInSpecificMailboxesShouldMatch() throws Exception {
+    void searchBodyInSpecificMailboxesShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.bodyContains("My Body"));
 
@@ -300,7 +328,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void searchAllShouldMatchAllUserEmails() throws Exception {
+    void searchAllShouldMatchAllUserEmails() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.all());
 
@@ -311,7 +339,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void searchAllShouldLimitTheSize() throws Exception {
+    void searchAllShouldLimitTheSize() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.all());
 
@@ -322,7 +350,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void flagSearchShouldMatch() throws Exception {
+    void flagSearchShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.flagIsSet(Flag.DELETED));
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -330,7 +358,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void bodySearchShouldMatchSeveralEmails() throws Exception {    
+    void bodySearchShouldMatchSeveralEmails() throws Exception {    
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.bodyContains("body"));
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -338,7 +366,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void textSearchShouldMatchSeveralEmails() throws Exception {    
+    void textSearchShouldMatchSeveralEmails() throws Exception {    
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.mailContains("body"));
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -346,7 +374,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void headerSearchShouldMatch() throws Exception {
+    void headerSearchShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.headerContains("Subject", "test"));
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -354,7 +382,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void headerExistsShouldMatch() throws Exception {
+    void headerExistsShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.headerExists("Subject"));
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -362,7 +390,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void flagUnsetShouldMatch() throws Exception {
+    void flagUnsetShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.flagIsUnSet(Flag.DRAFT));
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -370,7 +398,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void internalDateBeforeShouldMatch() throws Exception {
+    void internalDateBeforeShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         Calendar cal = Calendar.getInstance();
         cal.setTime(new Date());
@@ -382,7 +410,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     
     
     @Test
-    public void internalDateAfterShouldMatch() throws Exception {
+    void internalDateAfterShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         Calendar cal = Calendar.getInstance();
         cal.setTime(new Date());
@@ -394,7 +422,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     
     
     @Test
-    public void internalDateOnShouldMatch() throws Exception {
+    void internalDateOnShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         Calendar cal = Calendar.getInstance();
         cal.setTime(new Date());
@@ -404,7 +432,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void uidSearchShouldMatch() throws Exception {
+    void uidSearchShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         Calendar cal = Calendar.getInstance();
         cal.setTime(new Date());
@@ -414,7 +442,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void uidRangeSearchShouldMatch() throws Exception {
+    void uidRangeSearchShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         Calendar cal = Calendar.getInstance();
         cal.setTime(new Date());
@@ -424,7 +452,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sizeEqualsShouldMatch() throws Exception {
+    void sizeEqualsShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.sizeEquals(200));
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -432,7 +460,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sizeLessThanShouldMatch() throws Exception {
+    void sizeLessThanShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.sizeLessThan(200));
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -440,7 +468,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sizeGreaterThanShouldMatch() throws Exception {
+    void sizeGreaterThanShouldMatch() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.sizeGreaterThan(6));
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -448,7 +476,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void uidShouldBeSorted() throws Exception {
+    void uidShouldBeSorted() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.all());
         Stream<MessageUid> result = index.search(session, mailbox, query);
@@ -456,7 +484,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void uidReverseSortShouldReturnWellOrderedResults() throws Exception {
+    void uidReverseSortShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.Uid, Order.REVERSE)));
 
@@ -465,7 +493,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sortOnSentDateShouldReturnWellOrderedResults() throws Exception {
+    void sortOnSentDateShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.SentDate, Order.NATURAL)));
 
@@ -474,7 +502,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void reverseSortOnSentDateShouldReturnWellOrderedResults() throws Exception {
+    void reverseSortOnSentDateShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.SentDate, Order.REVERSE)));
 
@@ -483,7 +511,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
 
     @Test
-    public void sortOnSubjectShouldReturnWellOrderedResults() throws Exception {
+    void sortOnSubjectShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.BaseSubject, Order.NATURAL)));
 
@@ -492,7 +520,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void reverseSortOnSubjectShouldReturnWellOrderedResults() throws Exception {
+    void reverseSortOnSubjectShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.BaseSubject, Order.REVERSE)));
 
@@ -501,7 +529,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sortOnMailboxFromShouldReturnWellOrderedResults() throws Exception {
+    void sortOnMailboxFromShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.MailboxFrom, Order.NATURAL)));
 
@@ -510,7 +538,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void reverseSortOnMailboxFromShouldReturnWellOrderedResults() throws Exception {
+    void reverseSortOnMailboxFromShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.MailboxFrom, Order.REVERSE)));
 
@@ -519,7 +547,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sortOnMailboxCCShouldReturnWellOrderedResults() throws Exception {
+    void sortOnMailboxCCShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.MailboxCc, Order.NATURAL)));
 
@@ -528,7 +556,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void reverseSortOnMailboxCCShouldReturnWellOrderedResults() throws Exception {
+    void reverseSortOnMailboxCCShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.MailboxCc, Order.REVERSE)));
 
@@ -537,7 +565,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sortOnMailboxToShouldReturnWellOrderedResults() throws Exception {
+    void sortOnMailboxToShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.MailboxTo, Order.NATURAL)));
 
@@ -546,7 +574,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void reverseSortOnMailboxToShouldReturnWellOrderedResults() throws Exception {
+    void reverseSortOnMailboxToShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.MailboxTo, Order.REVERSE)));
 
@@ -555,7 +583,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sortOnDisplayToShouldReturnWellOrderedResults() throws Exception {
+    void sortOnDisplayToShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.DisplayTo, Order.NATURAL)));
 
@@ -564,7 +592,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void reverseSortOnDisplayToShouldReturnWellOrderedResults() throws Exception {
+    void reverseSortOnDisplayToShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.DisplayTo, Order.REVERSE)));
 
@@ -573,7 +601,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sortOnDisplayFromShouldReturnWellOrderedResults() throws Exception {
+    void sortOnDisplayFromShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.DisplayFrom, Order.NATURAL)));
 
@@ -582,7 +610,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void reverseSortOnDisplayFromShouldReturnWellOrderedResults() throws Exception {
+    void reverseSortOnDisplayFromShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.DisplayFrom, Order.REVERSE)));
 
@@ -591,7 +619,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sortOnArrivalDateShouldReturnWellOrderedResults() throws Exception {
+    void sortOnArrivalDateShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.Arrival, Order.NATURAL)));
 
@@ -600,7 +628,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void reverseSortOnArrivalDateShouldReturnWellOrderedResults() throws Exception {
+    void reverseSortOnArrivalDateShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.Arrival, Order.REVERSE)));
 
@@ -609,7 +637,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void sortOnSizeShouldReturnWellOrderedResults() throws Exception {
+    void sortOnSizeShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.Size, Order.NATURAL)));
 
@@ -618,7 +646,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void reverseSortOnSizeShouldReturnWellOrderedResults() throws Exception {
+    void reverseSortOnSizeShouldReturnWellOrderedResults() throws Exception {
         SearchQuery query = new SearchQuery(SearchQuery.all());
         query.setSorts(ImmutableList.of(new Sort(SortClause.Size, Order.REVERSE)));
 
@@ -627,7 +655,7 @@ public class LuceneMailboxMessageSearchIndexTest {
     }
     
     @Test
-    public void notOperatorShouldReverseMatching() throws Exception {
+    void notOperatorShouldReverseMatching() throws Exception {
         SearchQuery query = new SearchQuery();
         query.andCriteria(SearchQuery.not(SearchQuery.uid(new SearchQuery.UidRange[] { new SearchQuery.UidRange(uid1)})));
 

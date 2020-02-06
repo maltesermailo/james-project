@@ -22,27 +22,28 @@ package org.apache.james.imap.decode.parser;
 import java.util.Optional;
 import java.util.function.Function;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.SetAnnotationRequest;
 import org.apache.james.mailbox.model.MailboxAnnotation;
 import org.apache.james.mailbox.model.MailboxAnnotationKey;
-import org.apache.james.protocols.imap.DecodingException;
 
 import com.google.common.collect.ImmutableList;
 
 public class SetAnnotationCommandParser extends AbstractImapCommandParser {
-    public SetAnnotationCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.SETANNOTATION_COMMAND_NAME));
+    public SetAnnotationCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.SETANNOTATION_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session)
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session)
             throws DecodingException {
         String mailboxName = request.mailbox();
         ImmutableList.Builder<MailboxAnnotation> listMailboxAnnotations = ImmutableList.<MailboxAnnotation>builder();
@@ -58,7 +59,7 @@ public class SetAnnotationCommandParser extends AbstractImapCommandParser {
         }
         request.eol();
 
-        return new SetAnnotationRequest(tag, command, mailboxName, listMailboxAnnotations.build());
+        return new SetAnnotationRequest(tag, mailboxName, listMailboxAnnotations.build());
     }
 
     private MailboxAnnotation readNextAnnotation(ImapRequestLineReader request) throws DecodingException {

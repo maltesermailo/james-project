@@ -19,6 +19,7 @@
 
 package org.apache.james.mailbox.jpa.mail;
 
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,7 @@ import javax.mail.Flags;
 
 import org.apache.commons.lang3.NotImplementedException;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxCounters;
@@ -54,6 +56,7 @@ public class TransactionalMessageMapper implements MessageMapper {
     @Override
     public MailboxCounters getMailboxCounters(Mailbox mailbox) throws MailboxException {
         return MailboxCounters.builder()
+            .mailboxId(mailbox.getMailboxId())
             .count(countMessagesInMailbox(mailbox))
             .unseen(countUnseenMessagesInMailbox(mailbox))
             .build();
@@ -143,12 +146,17 @@ public class TransactionalMessageMapper implements MessageMapper {
     }
 
     @Override
-    public long getHighestModSeq(Mailbox mailbox) throws MailboxException {
+    public ModSeq getHighestModSeq(Mailbox mailbox) throws MailboxException {
         return messageMapper.getHighestModSeq(mailbox);
     }
 
     @Override
     public Flags getApplicableFlag(Mailbox mailbox) throws MailboxException {
         return messageMapper.getApplicableFlag(mailbox);
+    }
+
+    @Override
+    public List<MailboxCounters> getMailboxCounters(Collection<Mailbox> mailboxes) throws MailboxException {
+        return messageMapper.getMailboxCounters(mailboxes);
     }
 }

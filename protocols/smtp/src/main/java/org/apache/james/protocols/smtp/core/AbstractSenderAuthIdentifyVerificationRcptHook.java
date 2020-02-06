@@ -18,11 +18,10 @@
  ****************************************************************/
 package org.apache.james.protocols.smtp.core;
 
-import java.util.Locale;
-
 import org.apache.james.core.Domain;
 import org.apache.james.core.MailAddress;
 import org.apache.james.core.MaybeSender;
+import org.apache.james.core.Username;
 import org.apache.james.protocols.api.ProtocolSession;
 import org.apache.james.protocols.smtp.SMTPRetCode;
 import org.apache.james.protocols.smtp.SMTPSession;
@@ -46,7 +45,7 @@ public abstract class AbstractSenderAuthIdentifyVerificationRcptHook implements 
     
     @Override
     public HookResult doRcpt(SMTPSession session, MaybeSender sender, MailAddress rcpt) {
-        if (session.getUser() != null) {
+        if (session.getUsername() != null) {
             MaybeSender senderAddress = (MaybeSender) session.getAttachment(SMTPSession.SENDER, ProtocolSession.State.Transaction);
             
             // Check if the sender address is the same as the user which was used to authenticate.
@@ -68,10 +67,11 @@ public abstract class AbstractSenderAuthIdentifyVerificationRcptHook implements 
     private boolean senderMatchSessionUser(MaybeSender maybeSender, SMTPSession session) {
         Preconditions.checkArgument(!maybeSender.isNullSender());
 
-        String authUser = session.getUser().toLowerCase(Locale.US);
-        String username = getUser(maybeSender.get());
+        Username authUser = session.getUsername();
+        Username sender = getUser(maybeSender.get());
+        Username username = getUser(maybeSender.get());
 
-        return username.equals(authUser);
+        return isSenderAllowed(authUser, sender);
     }
 
     private boolean belongsToLocalDomain(MaybeSender maybeSender) {
@@ -81,8 +81,7 @@ public abstract class AbstractSenderAuthIdentifyVerificationRcptHook implements 
 
     /**
      * Return true if the given domain is a local domain for this server
-     * 
-     * @param domain
+     *
      * @return isLocal
      */
     protected abstract boolean isLocalDomain(Domain domain);
@@ -92,6 +91,10 @@ public abstract class AbstractSenderAuthIdentifyVerificationRcptHook implements 
      * 
      * @return username corresponding to the mail address
      */
-    protected abstract String getUser(MailAddress mailAddress);
+    protected abstract Username getUser(MailAddress mailAddress);
 
+    /**
+     * Is a given sender allowed for a user
+     */
+    protected abstract boolean isSenderAllowed(Username user, Username sender);
 }

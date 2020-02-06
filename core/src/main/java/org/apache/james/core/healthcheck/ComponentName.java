@@ -19,6 +19,10 @@
 
 package org.apache.james.core.healthcheck;
 
+import java.util.Objects;
+
+import com.google.common.base.MoreObjects;
+
 public class ComponentName {
     private final String name;
 
@@ -28,5 +32,27 @@ public class ComponentName {
 
     public String getName() {
         return name;
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (o instanceof ComponentName) {
+            ComponentName that = (ComponentName) o;
+
+            return Objects.equals(this.name, that.name);
+        }
+        return false;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(name);
+    }
+
+    @Override
+    public String toString() {
+        return MoreObjects.toStringHelper(this)
+            .add("name", name)
+            .toString();
     }
 }

@@ -24,56 +24,46 @@ import java.util.List;
 import java.util.Optional;
 
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapMessage;
-import org.apache.james.imap.api.process.ImapSession;
-import org.apache.james.imap.encode.base.AbstractChainedImapEncoder;
 import org.apache.james.imap.message.response.AnnotationResponse;
 import org.apache.james.mailbox.model.MailboxAnnotation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class AnnotationResponseEncoder extends AbstractChainedImapEncoder {
+public class AnnotationResponseEncoder implements ImapResponseEncoder<AnnotationResponse> {
     private static final Logger LOGGER = LoggerFactory.getLogger(AnnotationResponseEncoder.class);
 
-    public AnnotationResponseEncoder(ImapEncoder next) {
-        super(next);
+    @Override
+    public Class<AnnotationResponse> acceptableMessages() {
+        return AnnotationResponse.class;
     }
 
     @Override
-    protected void doEncode(ImapMessage acceptableMessage, final ImapResponseComposer composer, ImapSession session) throws IOException {
-
-        AnnotationResponse response = (AnnotationResponse) acceptableMessage;
-
+    public void encode(AnnotationResponse response, ImapResponseComposer composer) throws IOException {
         composer.untagged();
-        composer.commandName(ImapConstants.ANNOTATION_RESPONSE_NAME);
+        composer.message(ImapConstants.ANNOTATION_RESPONSE_NAME);
 
         composer.quote(Optional.ofNullable(response.getMailboxName()).orElse(""));
-        composeAnnotations(composer, session, response.getMailboxAnnotations());
+        composeAnnotations(composer, response.getMailboxAnnotations());
 
         composer.end();
     }
 
-    private void composeAnnotations(ImapResponseComposer composer, ImapSession session, List<MailboxAnnotation> annotations) throws IOException {
+    private void composeAnnotations(ImapResponseComposer composer, List<MailboxAnnotation> annotations) throws IOException {
         if (!annotations.isEmpty()) {
             composer.openParen();
             for (MailboxAnnotation annotation : annotations) {
-                composeAnnotation(composer, session, annotation);
+                composeAnnotation(composer, annotation);
             }
             composer.closeParen();
         }
     }
 
-    private void composeAnnotation(ImapResponseComposer composer, ImapSession session, MailboxAnnotation annotation) throws IOException {
+    private void composeAnnotation(ImapResponseComposer composer, MailboxAnnotation annotation) throws IOException {
         if (annotation.isNil()) {
             LOGGER.warn("There is nil data of key {} on store: ", annotation.getKey().asString());
         } else {
             composer.message(annotation.getKey().asString());
             composer.quote(annotation.getValue().orElse(""));
         }
-    }
-
-    @Override
-    public boolean isAcceptable(ImapMessage message) {
-        return message instanceof AnnotationResponse;
     }
 }

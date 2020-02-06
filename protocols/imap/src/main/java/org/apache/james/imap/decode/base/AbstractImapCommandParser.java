@@ -21,12 +21,14 @@ package org.apache.james.imap.decode.base;
 
 import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.response.StatusResponse;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
+import org.apache.james.imap.decode.ImapCommandParser;
 import org.apache.james.imap.decode.ImapRequestLineReader;
-import org.apache.james.imap.decode.MessagingImapCommandParser;
-import org.apache.james.protocols.imap.DecodingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,31 +37,25 @@ import org.slf4j.LoggerFactory;
  * <strong>Note:</strong>
  * </p>
  */
-public abstract class AbstractImapCommandParser implements MessagingImapCommandParser {
+public abstract class AbstractImapCommandParser implements ImapCommandParser {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractImapCommandParser.class);
 
     private final ImapCommand command;
 
-    private StatusResponseFactory statusResponseFactory;
+    private final StatusResponseFactory statusResponseFactory;
 
-    public AbstractImapCommandParser(ImapCommand command) {
-        super();
+    public AbstractImapCommandParser(ImapCommand command, StatusResponseFactory statusResponseFactory) {
         this.command = command;
+        this.statusResponseFactory = statusResponseFactory;
     }
 
     public ImapCommand getCommand() {
         return command;
     }
 
-    @Override
-    public final StatusResponseFactory getStatusResponseFactory() {
-        return statusResponseFactory;
-    }
-
-    @Override
-    public final void setStatusResponseFactory(StatusResponseFactory statusResponseFactory) {
-        this.statusResponseFactory = statusResponseFactory;
+    protected StatusResponse taggedNo(Tag tag, ImapCommand command, HumanReadableText displayTextKey, StatusResponse.ResponseCode code) {
+        return statusResponseFactory.taggedNo(tag, command, displayTextKey, code);
     }
 
     /**
@@ -70,27 +66,21 @@ public abstract class AbstractImapCommandParser implements MessagingImapCommandP
      * @return <code>ImapCommandMessage</code>, not null
      */
     @Override
-    public final ImapMessage parse(ImapRequestLineReader request, String tag, ImapSession session) {
-        ImapMessage result;
-        if (!command.validForState(session.getState())) {
-            result = statusResponseFactory.taggedNo(tag, command, HumanReadableText.INVALID_COMMAND);
-        } else {
+    public final ImapMessage parse(ImapRequestLineReader request, Tag tag, ImapSession session) {
+        if (command.validForState(session.getState())) {
             try {
-
-                result = decode(command, request, tag, session);
+                return decode(request, tag, session);
             } catch (DecodingException e) {
                 LOGGER.debug("Cannot parse protocol ", e);
-                result = statusResponseFactory.taggedBad(tag, command, e.getKey());
+                return statusResponseFactory.taggedBad(tag, command, e.getKey());
             }
         }
-        return result;
+        return statusResponseFactory.taggedNo(tag, command, HumanReadableText.INVALID_COMMAND);
     }
 
     /**
      * Parses a request into a command message for later processing.
-     * 
-     * @param command
-     *            <code>ImapCommand</code> to be parsed, not null
+     *
      * @param request
      *            <code>ImapRequestLineReader</code>, not null
      * @param tag
@@ -101,6 +91,6 @@ public abstract class AbstractImapCommandParser implements MessagingImapCommandP
      * @throws DecodingException
      *             if the request cannot be parsed
      */
-    protected abstract ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException;
+    protected abstract ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException;
 
 }

@@ -23,12 +23,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.apache.james.mailbox.MessageUid;
 import org.apache.james.mailbox.store.MessageBuilder;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-public class DelegatingMailboxMessageTest {
+class DelegatingMailboxMessageTest {
     
     @Test
-    public void testShouldReturnPositiveWhenFirstGreaterThanSecond()
+    void testShouldReturnPositiveWhenFirstGreaterThanSecond()
             throws Exception {
         MailboxMessage one = buildMessage(100);
         MailboxMessage two = buildMessage(99);
@@ -36,13 +36,13 @@ public class DelegatingMailboxMessageTest {
     }
 
     private MailboxMessage buildMessage(int uid) throws Exception {
-        MessageBuilder builder = new MessageBuilder();
-        builder.uid = MessageUid.of(uid);
-        return builder.build();
+        return new MessageBuilder()
+            .uid(MessageUid.of(uid))
+            .build();
     }
 
     @Test
-    public void testShouldReturnNegativeWhenFirstLessThanSecond()
+    void testShouldReturnNegativeWhenFirstLessThanSecond()
             throws Exception {
         MailboxMessage one = buildMessage(98);
         MailboxMessage two = buildMessage(99);
@@ -50,7 +50,7 @@ public class DelegatingMailboxMessageTest {
     }
 
     @Test
-    public void testShouldReturnZeroWhenFirstEqualsSecond() throws Exception {
+    void testShouldReturnZeroWhenFirstEqualsSecond() throws Exception {
         MailboxMessage one = buildMessage(90);
         MailboxMessage two = buildMessage(90);
         assertThat(one.compareTo(two)).isEqualTo(0);

@@ -21,6 +21,7 @@ package org.apache.james.imap.processor;
 
 import java.util.List;
 
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
 
@@ -31,9 +32,8 @@ public interface CapabilityImplementingProcessor extends ImapProcessor {
 
     /**
      * Return a list of all Capabilities that are implemented by the Processor
-     * 
-     * @param session
+     *
      * @return list not null
      */
-    List<String> getImplementedCapabilities(ImapSession session);
+    List<Capability> getImplementedCapabilities(ImapSession session);
 }

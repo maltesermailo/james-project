@@ -24,6 +24,7 @@ import java.util.Optional;
 import javax.inject.Inject;
 import javax.inject.Named;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
@@ -49,10 +50,10 @@ import org.slf4j.LoggerFactory;
 public class PassCmdHandler extends AbstractPassCmdHandler  {
     private static final Logger LOGGER = LoggerFactory.getLogger(PassCmdHandler.class);
 
-    private MailboxManager manager;
+    private final MailboxManager manager;
 
     @Inject
-    public void setMailboxManager(@Named("mailboxmanager") MailboxManager manager) {
+    public PassCmdHandler(@Named("mailboxmanager") MailboxManager manager) {
         this.manager = manager;
     }
 
@@ -67,10 +68,10 @@ public class PassCmdHandler extends AbstractPassCmdHandler  {
 
 
     @Override
-    protected Mailbox auth(POP3Session session, String username, String password) throws Exception {
+    protected Mailbox auth(POP3Session session, Username username, String password) throws Exception {
         MailboxSession mSession = null;
         try {
-            mSession = manager.login(session.getUser(), password);
+            mSession = manager.login(session.getUsername(), password);
             manager.startProcessingRequest(mSession);
             MailboxPath inbox = MailboxPath.inbox(mSession);
             
@@ -84,7 +85,7 @@ public class PassCmdHandler extends AbstractPassCmdHandler  {
         } catch (BadCredentialsException e) {
             return null;
         } catch (MailboxException e) {
-            throw new IOException("Unable to access mailbox for user " + session.getUser(), e);
+            throw new IOException("Unable to access mailbox for user " + session.getUsername().asString(), e);
         } finally {
             if (mSession != null) {
                 manager.endProcessingRequest(mSession);

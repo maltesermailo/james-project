@@ -28,19 +28,17 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.sieverepository.api.SieveQuotaRepository;
 import org.apache.james.sieverepository.api.exception.QuotaNotFoundException;
+import org.apache.james.user.api.UsersRepository;
+import org.apache.james.user.api.UsersRepositoryException;
 import org.apache.james.webadmin.Routes;
 import org.apache.james.webadmin.utils.ErrorResponder;
-import org.apache.james.webadmin.utils.JsonExtractException;
-import org.apache.james.webadmin.utils.JsonExtractor;
 import org.apache.james.webadmin.utils.JsonTransformer;
 import org.apache.james.webadmin.utils.Responses;
 import org.eclipse.jetty.http.HttpStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Joiner;
 
@@ -63,17 +61,16 @@ public class SieveQuotaRoutes implements Routes {
     private static final String USER_ID = "userId";
     private static final String USER_SIEVE_QUOTA_PATH = Joiner.on(SEPARATOR).join(ROOT_PATH, "users", ":" + USER_ID);
     private static final String REQUESTED_SIZE = "requestedSize";
-    private static final Logger LOGGER = LoggerFactory.getLogger(SieveQuotaRoutes.class);
 
     private final SieveQuotaRepository sieveQuotaRepository;
+    private final UsersRepository usersRepository;
     private final JsonTransformer jsonTransformer;
-    private final JsonExtractor<Long> jsonExtractor;
 
     @Inject
-    public SieveQuotaRoutes(SieveQuotaRepository sieveQuotaRepository, JsonTransformer jsonTransformer) {
+    public SieveQuotaRoutes(SieveQuotaRepository sieveQuotaRepository, UsersRepository usersRepository, JsonTransformer jsonTransformer) {
         this.sieveQuotaRepository = sieveQuotaRepository;
+        this.usersRepository = usersRepository;
         this.jsonTransformer = jsonTransformer;
-        this.jsonExtractor = new JsonExtractor<>(Long.class);
     }
 
     @Override
@@ -102,7 +99,7 @@ public class SieveQuotaRoutes implements Routes {
     public void defineGetGlobalSieveQuota(Service service) {
         service.get(DEFAULT_QUOTA_PATH, (request, response) -> {
             try {
-                QuotaSize sieveQuota = sieveQuotaRepository.getDefaultQuota();
+                QuotaSizeLimit sieveQuota = sieveQuotaRepository.getDefaultQuota();
                 response.status(HttpStatus.OK_200);
                 return sieveQuota.asLong();
             } catch (QuotaNotFoundException e) {
@@ -123,19 +120,9 @@ public class SieveQuotaRoutes implements Routes {
     })
     public void defineUpdateGlobalSieveQuota(Service service) {
         service.put(DEFAULT_QUOTA_PATH, (request, response) -> {
-            try {
-                QuotaSize requestedSize = extractRequestedQuotaSizeFromRequest(request);
-                sieveQuotaRepository.setDefaultQuota(requestedSize);
-                return Responses.returnNoContent(response);
-            } catch (JsonExtractException e) {
-                LOGGER.info("Malformed JSON", e);
-                throw ErrorResponder.builder()
-                    .type(ErrorResponder.ErrorType.INVALID_ARGUMENT)
-                    .statusCode(HttpStatus.BAD_REQUEST_400)
-                    .message("Malformed JSON")
-                    .cause(e)
-                    .haltError();
-            }
+            QuotaSizeLimit requestedSize = extractRequestedQuotaSizeFromRequest(request);
+            sieveQuotaRepository.setDefaultQuota(requestedSize);
+            return Responses.returnNoContent(response);
         }, jsonTransformer);
     }
 
@@ -164,13 +151,14 @@ public class SieveQuotaRoutes implements Routes {
     @ApiResponses(value = {
             @ApiResponse(code = 200, message = "OK", response = Long.class),
             @ApiResponse(code = 204, message = "User sieve quota not set."),
+            @ApiResponse(code = 404, message = "The user name does not exist"),
             @ApiResponse(code = 500, message = "Internal server error - Something went bad on the server side.")
     })
     public void defineGetPerUserSieveQuota(Service service) {
         service.get(USER_SIEVE_QUOTA_PATH, (request, response) -> {
-            User userId = User.fromUsername(request.params(USER_ID));
+            Username userId = getUsername(request.params(USER_ID));
             try {
-                QuotaSize userQuota = sieveQuotaRepository.getQuota(userId);
+                QuotaSizeLimit userQuota = sieveQuotaRepository.getQuota(userId);
                 response.status(HttpStatus.OK_200);
                 return userQuota.asLong();
             } catch (QuotaNotFoundException e) {
@@ -188,24 +176,15 @@ public class SieveQuotaRoutes implements Routes {
     @ApiResponses(value = {
             @ApiResponse(code = 204, message = "OK", response = Long.class),
             @ApiResponse(code = 400, message = "The body is not a positive integer."),
+            @ApiResponse(code = 404, message = "The user name does not exist"),
             @ApiResponse(code = 500, message = "Internal server error - Something went bad on the server side.")
     })
     public void defineUpdatePerUserSieveQuota(Service service) {
         service.put(USER_SIEVE_QUOTA_PATH, (request, response) -> {
-            User userId = User.fromUsername(request.params(USER_ID));
-            try {
-                QuotaSize requestedSize = extractRequestedQuotaSizeFromRequest(request);
-                sieveQuotaRepository.setQuota(userId, requestedSize);
-                return Responses.returnNoContent(response);
-            } catch (JsonExtractException e) {
-                LOGGER.info("Malformed JSON", e);
-                throw ErrorResponder.builder()
-                    .type(ErrorResponder.ErrorType.INVALID_ARGUMENT)
-                    .statusCode(HttpStatus.BAD_REQUEST_400)
-                    .message("Malformed JSON")
-                    .cause(e)
-                    .haltError();
-            }
+            Username userId = getUsername(request.params(USER_ID));
+            QuotaSizeLimit requestedSize = extractRequestedQuotaSizeFromRequest(request);
+            sieveQuotaRepository.setQuota(userId, requestedSize);
+            return Responses.returnNoContent(response);
         }, jsonTransformer);
     }
 
@@ -216,13 +195,14 @@ public class SieveQuotaRoutes implements Routes {
     })
     @ApiResponses(value = {
             @ApiResponse(code = 204, message = "User sieve quota removed."),
+            @ApiResponse(code = 404, message = "The user name does not exist"),
             @ApiResponse(code = 500, message = "Internal server error - Something went bad on the server side.")
     })
     public void defineRemovePerUserSieveQuota(Service service) {
         service.delete(USER_SIEVE_QUOTA_PATH, (request, response) -> {
-            User userId = User.fromUsername(request.params(USER_ID));
+            Username usernameId = getUsername(request.params(USER_ID));
             try {
-                sieveQuotaRepository.removeQuota(userId);
+                sieveQuotaRepository.removeQuota(usernameId);
             } catch (QuotaNotFoundException e) {
                 // Do nothing
             }
@@ -230,8 +210,8 @@ public class SieveQuotaRoutes implements Routes {
         });
     }
 
-    private QuotaSize extractRequestedQuotaSizeFromRequest(Request request) throws JsonExtractException {
-        Long requestedSize = jsonExtractor.parse(request.body());
+    private QuotaSizeLimit extractRequestedQuotaSizeFromRequest(Request request) {
+        long requestedSize = extractNumberFromRequestBody(request);
         if (requestedSize < 0) {
             throw ErrorResponder.builder()
                 .type(ErrorResponder.ErrorType.INVALID_ARGUMENT)
@@ -239,6 +219,31 @@ public class SieveQuotaRoutes implements Routes {
                 .message("Requested quota size have to be a positive integer")
                 .haltError();
         }
-        return QuotaSize.size(requestedSize);
+        return QuotaSizeLimit.size(requestedSize);
+    }
+
+    private long extractNumberFromRequestBody(Request request) {
+        String body = request.body();
+        try {
+            return Long.parseLong(body);
+        } catch (NumberFormatException e) {
+            throw ErrorResponder.builder()
+                .type(ErrorResponder.ErrorType.INVALID_ARGUMENT)
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .message("unrecognized integer number '%s'", body)
+                .haltError();
+        }
+    }
+
+    private Username getUsername(String usernameParameter) throws UsersRepositoryException {
+        Username username = Username.of(usernameParameter);
+        if (!usersRepository.contains(username)) {
+            throw ErrorResponder.builder()
+                .statusCode(HttpStatus.NOT_FOUND_404)
+                .type(ErrorResponder.ErrorType.INVALID_ARGUMENT)
+                .message("User %s does not exist", username)
+                .haltError();
+        }
+        return username;
     }
 }

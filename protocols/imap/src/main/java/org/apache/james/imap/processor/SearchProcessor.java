@@ -29,10 +29,9 @@ import java.util.stream.Stream;
 
 import javax.mail.Flags.Flag;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
 import org.apache.james.imap.api.message.request.DayMonthYear;
@@ -53,9 +52,10 @@ import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.MessageManager.MetaData;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.MessageRangeException;
-import org.apache.james.mailbox.model.FetchGroupImpl;
+import org.apache.james.mailbox.model.FetchGroup;
 import org.apache.james.mailbox.model.MessageRange;
 import org.apache.james.mailbox.model.MessageResultIterator;
 import org.apache.james.mailbox.model.SearchQuery;
@@ -74,7 +74,7 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
     private static final Logger LOGGER = LoggerFactory.getLogger(SearchProcessor.class);
 
     protected static final String SEARCH_MODSEQ = "SEARCH_MODSEQ";
-    private static final List<String> CAPS = ImmutableList.of("WITHIN", "ESEARCH", "SEARCHRES");
+    private static final List<Capability> CAPS = ImmutableList.of(Capability.of("WITHIN"), Capability.of("ESEARCH"), Capability.of("SEARCHRES"));
     
     public SearchProcessor(ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
             MetricFactory metricFactory) {
@@ -82,7 +82,7 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
     }
 
     @Override
-    protected void doProcess(SearchRequest request, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void processRequest(SearchRequest request, ImapSession session, Responder responder) {
         final SearchOperation operation = request.getSearchOperation();
         final SearchKey searchKey = operation.getSearchKey();
         final boolean useUids = request.isUseUids();
@@ -93,7 +93,7 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
             final MessageManager mailbox = getSelectedMailbox(session);
 
             final SearchQuery query = toQuery(searchKey, session);
-            MailboxSession msession = ImapSessionUtils.getMailboxSession(session);
+            MailboxSession msession = session.getMailboxSession();
 
             final Collection<MessageUid> uids = performUidSearch(mailbox, query, msession);
             final Collection<Long> results = asResults(session, useUids, uids);
@@ -101,7 +101,7 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
             // Check if the search did contain the MODSEQ searchkey. If so we need to include the highest mod in the response.
             //
             // See RFC4551: 3.4. MODSEQ Search Criterion in SEARCH
-            final Long highestModSeq;
+            final ModSeq highestModSeq;
             if (session.getAttribute(SEARCH_MODSEQ) != null) {
                 MetaData metaData = mailbox.getMetaData(false, msession, MessageManager.MetaData.FetchGroup.NO_COUNT);
                 highestModSeq = findHighestModSeq(msession, mailbox, MessageRange.toRanges(uids), metaData.getHighestModSeq());
@@ -172,7 +172,7 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
                             SearchResUtil.saveSequenceSet(session, savedRanges.toArray(new IdRange[0]));
                         }
                     }
-                    response = new ESearchResponse(min, max, count, idRanges, uidRanges, highestModSeq, tag, useUids, resultOptions);
+                    response = new ESearchResponse(min, max, count, idRanges, uidRanges, highestModSeq, request.getTag(), useUids, resultOptions);
                 } else {
                     // Just save the returned sequence-set as this is not SEARCHRES + ESEARCH
                     SearchResUtil.saveSequenceSet(session, idRanges);
@@ -185,13 +185,13 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
 
             boolean omitExpunged = (!useUids);
             unsolicitedResponses(session, responder, omitExpunged, useUids);
-            okComplete(command, tag, responder);
+            okComplete(request, responder);
         } catch (MessageRangeException e) {
             LOGGER.debug("Search failed in mailbox {} because of an invalid sequence-set ", session.getSelected().getMailboxId(), e);
-            taggedBad(command, tag, responder, HumanReadableText.INVALID_MESSAGESET);
+            taggedBad(request, responder, HumanReadableText.INVALID_MESSAGESET);
         } catch (MailboxException e) {
             LOGGER.error("Search failed in mailbox {}", session.getSelected().getMailboxId(), e);
-            no(command, tag, responder, HumanReadableText.SEARCH_FAILED);
+            no(request, responder, HumanReadableText.SEARCH_FAILED);
             
             if (resultOptions.contains(SearchResultOption.SAVE)) {
                 // Reset the saved sequence-set on a BAD response if the SAVE option was used.
@@ -238,16 +238,16 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
      * @return highestModSeq
      * @throws MailboxException
      */
-    private Long findHighestModSeq(MailboxSession session, MessageManager mailbox, List<MessageRange> ranges, long currentHighest) throws MailboxException {
-        Long highestModSeq = null;
+    private ModSeq findHighestModSeq(MailboxSession session, MessageManager mailbox, List<MessageRange> ranges, ModSeq currentHighest) throws MailboxException {
+        ModSeq highestModSeq = null;
         
         // Reverse loop over the ranges as its more likely that we find a match at the end
         int size = ranges.size();
         for (int i = size - 1; i > 0; i--) {
-            MessageResultIterator results = mailbox.getMessages(ranges.get(i), FetchGroupImpl.MINIMAL, session);
+            MessageResultIterator results = mailbox.getMessages(ranges.get(i), FetchGroup.MINIMAL, session);
             while (results.hasNext()) {
-                long modSeq = results.next().getModSeq();
-                if (highestModSeq == null || modSeq > highestModSeq) {
+                ModSeq modSeq = results.next().getModSeq();
+                if (highestModSeq == null || modSeq.asLong() > highestModSeq.asLong()) {
                     highestModSeq = modSeq;
                 }
                 if (highestModSeq == currentHighest) {
@@ -499,16 +499,16 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         return CAPS;
     }
 
     @Override
-    protected Closeable addContextToMDC(SearchRequest message) {
+    protected Closeable addContextToMDC(SearchRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "SEARCH")
-            .addContext("useUid", message.isUseUids())
-            .addContext("searchOperation", message.getSearchOperation())
+            .addContext("useUid", request.isUseUids())
+            .addContext("searchOperation", request.getSearchOperation())
             .build();
     }
 }

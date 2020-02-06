@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.acl.ACLDiff;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.MailboxExistsException;
@@ -35,6 +36,7 @@ import org.apache.james.mailbox.model.MailboxACL.NameType;
 import org.apache.james.mailbox.model.MailboxACL.Right;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxPath;
+import org.apache.james.mailbox.model.search.MailboxQuery;
 import org.apache.james.mailbox.store.mail.MailboxMapper;
 
 import com.github.steveash.guavate.Guavate;
@@ -81,19 +83,12 @@ public class InMemoryMailboxMapper implements MailboxMapper {
     }
 
     @Override
-    public List<Mailbox> findMailboxWithPathLike(MailboxPath path) throws MailboxException {
-        final String regex = path.getName().replace("%", ".*");
+    public List<Mailbox> findMailboxWithPathLike(MailboxQuery.UserBound query) {
         return mailboxesByPath.values()
             .stream()
-            .filter(mailbox -> mailboxMatchesRegex(mailbox, path, regex))
+            .filter(query::matches)
             .map(Mailbox::new)
             .collect(Guavate.toImmutableList());
-    }
-
-    private boolean mailboxMatchesRegex(Mailbox mailbox, MailboxPath path, String regex) {
-        return Objects.equal(mailbox.getNamespace(), path.getNamespace())
-            && Objects.equal(mailbox.getUser(), path.getUser())
-            && mailbox.getName().matches(regex);
     }
 
     @Override
@@ -161,14 +156,14 @@ public class InMemoryMailboxMapper implements MailboxMapper {
     }
 
     @Override
-    public List<Mailbox> findNonPersonalMailboxes(String userName, Right right) throws MailboxException {
+    public List<Mailbox> findNonPersonalMailboxes(Username userName, Right right) throws MailboxException {
         return mailboxesByPath.values()
             .stream()
             .filter(mailbox -> hasRightOn(mailbox, userName, right))
             .collect(Guavate.toImmutableList());
     }
 
-    private Boolean hasRightOn(Mailbox mailbox, String userName, Right right) {
+    private Boolean hasRightOn(Mailbox mailbox, Username userName, Right right) {
         return Optional.ofNullable(
             mailbox.getACL()
                 .ofPositiveNameType(NameType.user)

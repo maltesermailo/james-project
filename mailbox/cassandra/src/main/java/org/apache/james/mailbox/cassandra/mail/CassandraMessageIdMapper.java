@@ -28,7 +28,6 @@ import javax.mail.Flags;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.james.backends.cassandra.init.configuration.CassandraConfiguration;
-import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.cassandra.ids.CassandraId;
 import org.apache.james.mailbox.cassandra.ids.CassandraMessageId;
@@ -67,14 +66,13 @@ public class CassandraMessageIdMapper implements MessageIdMapper {
     private final CassandraMessageDAO messageDAO;
     private final CassandraIndexTableHandler indexTableHandler;
     private final ModSeqProvider modSeqProvider;
-    private final MailboxSession mailboxSession;
     private final AttachmentLoader attachmentLoader;
     private final CassandraConfiguration cassandraConfiguration;
 
     public CassandraMessageIdMapper(MailboxMapper mailboxMapper, CassandraMailboxDAO mailboxDAO, CassandraAttachmentMapper attachmentMapper,
                                     CassandraMessageIdToImapUidDAO imapUidDAO, CassandraMessageIdDAO messageIdDAO,
                                     CassandraMessageDAO messageDAO, CassandraIndexTableHandler indexTableHandler,
-                                    ModSeqProvider modSeqProvider, MailboxSession mailboxSession, CassandraConfiguration cassandraConfiguration) {
+                                    ModSeqProvider modSeqProvider, CassandraConfiguration cassandraConfiguration) {
 
         this.mailboxMapper = mailboxMapper;
         this.mailboxDAO = mailboxDAO;
@@ -83,7 +81,6 @@ public class CassandraMessageIdMapper implements MessageIdMapper {
         this.messageDAO = messageDAO;
         this.indexTableHandler = indexTableHandler;
         this.modSeqProvider = modSeqProvider;
-        this.mailboxSession = mailboxSession;
         this.attachmentLoader = new AttachmentLoader(attachmentMapper);
         this.cassandraConfiguration = cassandraConfiguration;
     }
@@ -210,17 +207,16 @@ public class CassandraMessageIdMapper implements MessageIdMapper {
         return Flux.fromIterable(mailboxIds)
             .distinct()
             .map(mailboxId -> (CassandraId) mailboxId)
-            .filter(mailboxId -> haveMetaData(messageId, mailboxId))
-            .flatMap(mailboxId -> flagsUpdateWithRetry(newState, updateMode, mailboxId, messageId))
+            .filterWhen(mailboxId -> haveMetaData(messageId, mailboxId))
+            .concatMap(mailboxId -> flagsUpdateWithRetry(newState, updateMode, mailboxId, messageId))
             .flatMap(this::updateCounts)
             .collect(Guavate.toImmutableMap(Pair::getLeft, Pair::getRight))
             .block();
     }
 
-    private boolean haveMetaData(MessageId messageId, CassandraId mailboxId) {
+    private Mono<Boolean> haveMetaData(MessageId messageId, CassandraId mailboxId) {
         return imapUidDAO.retrieve((CassandraMessageId) messageId, Optional.of(mailboxId))
-            .hasElements()
-            .block();
+            .hasElements();
     }
 
     private Mono<Pair<MailboxId, UpdatedFlags>> flagsUpdateWithRetry(Flags newState, MessageManager.FlagsUpdateMode updateMode, MailboxId mailboxId, MessageId messageId) {
@@ -262,22 +258,24 @@ public class CassandraMessageIdMapper implements MessageIdMapper {
 
     private Mono<Pair<Flags, ComposedMessageIdWithMetaData>> updateFlags(MailboxId mailboxId, MessageId messageId, Flags newState, MessageManager.FlagsUpdateMode updateMode) throws MailboxException {
         CassandraId cassandraId = (CassandraId) mailboxId;
-        ComposedMessageIdWithMetaData oldComposedId = imapUidDAO.retrieve((CassandraMessageId) messageId, Optional.of(cassandraId))
-            .next()
-            .blockOptional()
-            .orElseThrow(MailboxDeleteDuringUpdateException::new);
+        return imapUidDAO.retrieve((CassandraMessageId) messageId, Optional.of(cassandraId))
+            .single()
+            .switchIfEmpty(Mono.error(MailboxDeleteDuringUpdateException::new))
+            .flatMap(oldComposedId -> updateFlags(newState, updateMode, cassandraId, oldComposedId));
+    }
 
+    private Mono<Pair<Flags, ComposedMessageIdWithMetaData>> updateFlags(Flags newState, MessageManager.FlagsUpdateMode updateMode, CassandraId cassandraId, ComposedMessageIdWithMetaData oldComposedId) {
         Flags newFlags = new FlagsUpdateCalculator(newState, updateMode).buildNewFlags(oldComposedId.getFlags());
         if (identicalFlags(oldComposedId, newFlags)) {
             return Mono.just(Pair.of(oldComposedId.getFlags(), oldComposedId));
+        } else {
+            return Mono
+                .fromCallable(() -> new ComposedMessageIdWithMetaData(
+                    oldComposedId.getComposedMessageId(),
+                    newFlags,
+                    modSeqProvider.nextModSeq(cassandraId)))
+            .flatMap(newComposedId -> updateFlags(oldComposedId, newComposedId));
         }
-
-        ComposedMessageIdWithMetaData newComposedId = new ComposedMessageIdWithMetaData(
-            oldComposedId.getComposedMessageId(),
-            newFlags,
-            modSeqProvider.nextModSeq(mailboxSession, cassandraId));
-
-        return updateFlags(oldComposedId, newComposedId);
     }
 
     private boolean identicalFlags(ComposedMessageIdWithMetaData oldComposedId, Flags newFlags) {

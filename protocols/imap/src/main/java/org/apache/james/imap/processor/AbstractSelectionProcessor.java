@@ -22,13 +22,13 @@ package org.apache.james.imap.processor;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
+import org.apache.james.imap.api.message.request.ImapRequest;
 import org.apache.james.imap.api.message.response.StatusResponse;
 import org.apache.james.imap.api.message.response.StatusResponse.ResponseCode;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
@@ -47,6 +47,7 @@ import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.MessageManager.MetaData;
 import org.apache.james.mailbox.MessageManager.MetaData.FetchGroup;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.events.EventBus;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.MailboxNotFoundException;
@@ -59,15 +60,15 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableList;
 
-abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequest> extends AbstractMailboxProcessor<M> implements PermitEnableCapabilityProcessor {
+abstract class AbstractSelectionProcessor<R extends AbstractMailboxSelectionRequest> extends AbstractMailboxProcessor<R> implements PermitEnableCapabilityProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractSelectionProcessor.class);
-    private static final List<String> CAPS = ImmutableList.of(ImapConstants.SUPPORTS_QRESYNC, ImapConstants.SUPPORTS_CONDSTORE);
+    private static final List<Capability> CAPS = ImmutableList.of(ImapConstants.SUPPORTS_QRESYNC, ImapConstants.SUPPORTS_CONDSTORE);
 
     private final StatusResponseFactory statusResponseFactory;
     private final boolean openReadOnly;
     private final EventBus eventBus;
     
-    public AbstractSelectionProcessor(Class<M> acceptableClass, ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory statusResponseFactory, boolean openReadOnly,
+    public AbstractSelectionProcessor(Class<R> acceptableClass, ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory statusResponseFactory, boolean openReadOnly,
                                       MetricFactory metricFactory, EventBus eventBus) {
         super(acceptableClass, next, mailboxManager, statusResponseFactory, metricFactory);
         this.statusResponseFactory = statusResponseFactory;
@@ -77,24 +78,24 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
     }
 
     @Override
-    protected void doProcess(M request, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void processRequest(R request, ImapSession session, Responder responder) {
         final String mailboxName = request.getMailboxName();
         try {
             final MailboxPath fullMailboxPath = PathConverter.forSession(session).buildFullPath(mailboxName);
 
-            respond(tag, command, session, fullMailboxPath, request, responder);
+            respond(session, fullMailboxPath, request, responder);
            
             
         } catch (MailboxNotFoundException e) {
             LOGGER.debug("Select failed as mailbox does not exist {}", mailboxName, e);
-            responder.respond(statusResponseFactory.taggedNo(tag, command, HumanReadableText.FAILURE_NO_SUCH_MAILBOX));
+            responder.respond(statusResponseFactory.taggedNo(request.getTag(), request.getCommand(), HumanReadableText.FAILURE_NO_SUCH_MAILBOX));
         } catch (MailboxException e) {
             LOGGER.error("Select failed for mailbox {}", mailboxName, e);
-            no(command, tag, responder, HumanReadableText.SELECT);
+            no(request, responder, HumanReadableText.SELECT);
         } 
     }
 
-    private void respond(String tag, ImapCommand command, ImapSession session, MailboxPath fullMailboxPath, AbstractMailboxSelectionRequest request, Responder responder) throws MailboxException, MessageRangeException {
+    private void respond(ImapSession session, MailboxPath fullMailboxPath, AbstractMailboxSelectionRequest request, Responder responder) throws MailboxException, MessageRangeException {
         
         Long lastKnownUidValidity = request.getLastKnownUidValidity();
         Long modSeq = request.getKnownModSeq();
@@ -111,7 +112,7 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
         //    and the client hasn't issued "ENABLE QRESYNC" in the current
         //    connection.
         if (lastKnownUidValidity != null && !EnableProcessor.getEnabledCapabilities(session).contains(ImapConstants.SUPPORTS_QRESYNC)) {
-            taggedBad(command, tag, responder, HumanReadableText.QRESYNC_NOT_ENABLED);
+            taggedBad(request, responder, HumanReadableText.QRESYNC_NOT_ENABLED);
             return;
         }
 
@@ -156,7 +157,7 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
             if (lastKnownUidValidity == metaData.getUidValidity()) {
                 
                 final MailboxManager mailboxManager = getMailboxManager();
-                final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
+                final MailboxSession mailboxSession = session.getMailboxSession();
                 final MessageManager mailbox = mailboxManager.getMailbox(fullMailboxPath, mailboxSession);
 
                 //  If the provided UIDVALIDITY matches that of the selected mailbox, the
@@ -298,13 +299,13 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
                     //
                     respondVanished(mailboxSession, mailbox, ranges, modSeq, metaData, responder);
                 }
-                taggedOk(responder, tag, command, metaData, HumanReadableText.SELECT);
+                taggedOk(responder, request, metaData, HumanReadableText.SELECT);
             } else {
                 
-                taggedOk(responder, tag, command, metaData, HumanReadableText.QRESYNC_UIDVALIDITY_MISMATCH);
+                taggedOk(responder, request, metaData, HumanReadableText.QRESYNC_UIDVALIDITY_MISMATCH);
             }
         } else {
-            taggedOk(responder, tag, command, metaData, HumanReadableText.SELECT);
+            taggedOk(responder, request, metaData, HumanReadableText.SELECT);
         }
 
         // Reset the saved sequence-set after successful SELECT / EXAMINE
@@ -317,7 +318,7 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
     private void highestModSeq(Responder responder, MetaData metaData, SelectedMailbox selected) {
         final StatusResponse untaggedOk;
         if (metaData.isModSeqPermanent()) {
-            final long highestModSeq = metaData.getHighestModSeq();
+            final ModSeq highestModSeq = metaData.getHighestModSeq();
             untaggedOk = statusResponseFactory.untaggedOk(HumanReadableText.HIGHEST_MOD_SEQ, ResponseCode.highestModSeq(highestModSeq));
         } else {
             untaggedOk = statusResponseFactory.untaggedOk(HumanReadableText.NO_MOD_SEQ, ResponseCode.noModSeq());
@@ -331,7 +332,7 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
         responder.respond(untaggedOk);
     }
 
-    private void taggedOk(Responder responder, String tag, ImapCommand command, MetaData metaData, HumanReadableText text) {
+    private void taggedOk(Responder responder, ImapRequest request, MetaData metaData, HumanReadableText text) {
         final boolean writeable = metaData.isWriteable() && !openReadOnly;
         final ResponseCode code;
         if (writeable) {
@@ -339,7 +340,7 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
         } else {
             code = ResponseCode.readOnly();
         }
-        final StatusResponse taggedOk = statusResponseFactory.taggedOk(tag, command, text, code);
+        final StatusResponse taggedOk = statusResponseFactory.taggedOk(request.getTag(), request.getCommand(), text, code);
         responder.respond(taggedOk);
     }
 
@@ -381,7 +382,7 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
 
     private MessageManager.MetaData selectMailbox(MailboxPath mailboxPath, ImapSession session) throws MailboxException {
         final MailboxManager mailboxManager = getMailboxManager();
-        final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
+        final MailboxSession mailboxSession = session.getMailboxSession();
         final MessageManager mailbox = mailboxManager.getMailbox(mailboxPath, mailboxSession);
 
         final SelectedMailbox sessionMailbox;
@@ -418,17 +419,17 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         return CAPS;
     }
 
     @Override
-    public List<String> getPermitEnableCapabilities(ImapSession session) {
+    public List<Capability> getPermitEnableCapabilities(ImapSession session) {
         return CAPS;
     }
 
     @Override
-    public void enable(ImapMessage message, Responder responder, ImapSession session, String capability) throws EnableException {
+    public void enable(ImapMessage message, Responder responder, ImapSession session, Capability capability) throws EnableException {
 
         if (EnableProcessor.getEnabledCapabilities(session).contains(capability) == false) {
             SelectedMailbox sm = session.getSelected();
@@ -436,18 +437,18 @@ abstract class AbstractSelectionProcessor<M extends AbstractMailboxSelectionRequ
             // QRESYNC or CONDSTORE
             //
             // See http://www.dovecot.org/list/dovecot/2008-March/029561.html
-            if (capability.equalsIgnoreCase(ImapConstants.SUPPORTS_CONDSTORE) || capability.equalsIgnoreCase(ImapConstants.SUPPORTS_QRESYNC)) {
+            if (capability.equals(ImapConstants.SUPPORTS_CONDSTORE) || capability.equals(ImapConstants.SUPPORTS_QRESYNC)) {
                 try {
                     MetaData metaData  = null;
                     boolean send = false;
                     if (sm != null) {
                         MessageManager mailbox = getSelectedMailbox(session);
-                        metaData = mailbox.getMetaData(false, ImapSessionUtils.getMailboxSession(session), FetchGroup.NO_COUNT);
+                        metaData = mailbox.getMetaData(false, session.getMailboxSession(), FetchGroup.NO_COUNT);
                         send = true;
                     }
                     condstoreEnablingCommand(session, responder, metaData, send);
                 } catch (MailboxException e) {
-                    throw new EnableException("Unable to enable " + capability, e);
+                    throw new EnableException("Unable to enable " + capability.asString(), e);
                 }
             }
             

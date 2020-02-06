@@ -21,6 +21,7 @@ package org.apache.james.container.spring.bean.factorypostprocessor;
 
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.container.spring.lifecycle.ConfigurationProvider;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.FatalBeanException;
@@ -42,15 +43,14 @@ public class MailboxConfigurationBeanFactoryPostProcessor implements BeanFactory
     private static final String JPA_MAILBOXMANAGER = "jpa-mailboxmanager";
     private static final String MEMORY_MAILBOX_MANAGER = "memory-mailboxManager";
     private static final String MAILDIR_MAILBOXMANAGER = "maildir-mailboxmanager";
-    private static final String CASSANDRA_MAILBOXMANAGER = "cassandra-mailboxmanager";
     private static final ImmutableSet<String> MAILBOX_MANAGER_IDS = ImmutableSet.of(JPA_MAILBOXMANAGER, MEMORY_MAILBOX_MANAGER,
-            MAILDIR_MAILBOXMANAGER, CASSANDRA_MAILBOXMANAGER);
+            MAILDIR_MAILBOXMANAGER);
 
     @Override
     public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
         ConfigurationProvider confProvider = beanFactory.getBean(ConfigurationProvider.class);
         try {
-            HierarchicalConfiguration config = confProvider.getConfiguration("mailbox");
+            HierarchicalConfiguration<ImmutableNode> config = confProvider.getConfiguration("mailbox");
             String provider = config.getString("provider", "jpa");
 
             BeanDefinitionRegistry registry = (BeanDefinitionRegistry) beanFactory;
@@ -77,12 +77,6 @@ public class MailboxConfigurationBeanFactoryPostProcessor implements BeanFactory
                 messageMapperFactory = "maildir-sessionMapperFactory";
                 mailboxIdDeserializer = "maildir-mailbox-id-deserializer";
                 mailboxIdFactory = "maildir-mailboxIdFactory";
-            } else if (provider.equalsIgnoreCase("cassandra")) {
-                mailbox = CASSANDRA_MAILBOXMANAGER;
-                subscription = "cassandra-subscriptionManager";
-                messageMapperFactory = "cassandra-sessionMapperFactory";
-                mailboxIdDeserializer = "cassandra-mailbox-id-deserializer";
-                mailboxIdFactory = "cassandra-mailboxIdFactory";
             }
 
             if (mailbox == null) {

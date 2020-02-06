@@ -19,30 +19,31 @@
 
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.DeleteACLRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * DELETEACL Parser
  */
 public class DeleteACLCommandParser extends AbstractImapCommandParser {
 
-    public DeleteACLCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.DELETEACL_COMMAND_NAME));
+    public DeleteACLCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.DELETEACL_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
         final String mailboxName = request.mailbox();
         final String identifier = request.astring();
         request.eol();
-        return new DeleteACLRequest(tag, command, mailboxName, identifier);
+        return new DeleteACLRequest(tag, mailboxName, identifier);
     }
 
 }

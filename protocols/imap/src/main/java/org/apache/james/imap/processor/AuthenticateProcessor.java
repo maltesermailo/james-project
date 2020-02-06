@@ -26,8 +26,10 @@ import java.util.Base64;
 import java.util.List;
 import java.util.StringTokenizer;
 
-import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.core.Username;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
+import org.apache.james.imap.api.message.request.ImapRequest;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
@@ -44,8 +46,6 @@ import com.google.common.collect.ImmutableList;
 
 /**
  * Processor which handles the AUTHENTICATE command. Only authtype of PLAIN is supported ATM.
- * 
- *
  */
 public class AuthenticateProcessor extends AbstractAuthProcessor<AuthenticateRequest> implements CapabilityImplementingProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuthenticateProcessor.class);
@@ -57,23 +57,23 @@ public class AuthenticateProcessor extends AbstractAuthProcessor<AuthenticateReq
     }
 
     @Override
-    protected void doProcess(AuthenticateRequest request, ImapSession session, final String tag, final ImapCommand command, final Responder responder) {
+    protected void processRequest(AuthenticateRequest request, ImapSession session, final Responder responder) {
         final String authType = request.getAuthType();
         if (authType.equalsIgnoreCase(PLAIN)) {
             // See if AUTH=PLAIN is allowed. See IMAP-304
             if (session.isPlainAuthDisallowed() && session.isTLSActive() == false) {
-                no(command, tag, responder, HumanReadableText.DISABLED_LOGIN);
+                no(request, responder, HumanReadableText.DISABLED_LOGIN);
             } else {
                 if (request instanceof IRAuthenticateRequest) {
                     IRAuthenticateRequest irRequest = (IRAuthenticateRequest) request;
-                    doPlainAuth(irRequest.getInitialClientResponse(), session, tag, command, responder);
+                    doPlainAuth(irRequest.getInitialClientResponse(), session, request, responder);
                 } else {
                     responder.respond(new AuthenticateResponse());
                     session.pushLineHandler((requestSession, data) -> {
                         // cut of the CRLF
                         String initialClientResponse = new String(data, 0, data.length - 2, Charset.forName("US-ASCII"));
 
-                        doPlainAuth(initialClientResponse, requestSession, tag, command, responder);
+                        doPlainAuth(initialClientResponse, requestSession, request, responder);
 
                         // remove the handler now
                         requestSession.popLineHandler();
@@ -82,25 +82,19 @@ public class AuthenticateProcessor extends AbstractAuthProcessor<AuthenticateReq
             }
         } else {
             LOGGER.debug("Unsupported authentication mechanism '{}'", authType);
-            no(command, tag, responder, HumanReadableText.UNSUPPORTED_AUTHENTICATION_MECHANISM);
+            no(request, responder, HumanReadableText.UNSUPPORTED_AUTHENTICATION_MECHANISM);
         }
     }
 
     /**
      * Parse the initialClientResponse and do a PLAIN AUTH with it
-     * 
-     * @param initialClientResponse
-     * @param session
-     * @param tag
-     * @param command
-     * @param responder
      */
-    protected void doPlainAuth(String initialClientResponse, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void doPlainAuth(String initialClientResponse, ImapSession session, ImapRequest request, Responder responder) {
         AuthenticationAttempt authenticationAttempt = parseDelegationAttempt(initialClientResponse);
         if (authenticationAttempt.isDelegation()) {
-            doAuthWithDelegation(authenticationAttempt, session, tag, command, responder, HumanReadableText.AUTHENTICATION_FAILED);
+            doAuthWithDelegation(authenticationAttempt, session, request, responder, HumanReadableText.AUTHENTICATION_FAILED);
         } else {
-            doAuth(authenticationAttempt, session, tag, command, responder, HumanReadableText.AUTHENTICATION_FAILED);
+            doAuth(authenticationAttempt, session, request, responder, HumanReadableText.AUTHENTICATION_FAILED);
         }
     }
 
@@ -112,7 +106,7 @@ public class AuthenticateProcessor extends AbstractAuthProcessor<AuthenticateReq
             String token1 = authTokenizer.nextToken();  // Authorization Identity
             token2 = authTokenizer.nextToken();                 // Authentication Identity
             try {
-                return delegation(token1, token2, authTokenizer.nextToken());
+                return delegation(Username.of(token1), Username.of(token2), authTokenizer.nextToken());
             } catch (java.util.NoSuchElementException ignored) {
                 // If we got here, this is what happened.  RFC 2595
                 // says that "the client may leave the authorization
@@ -129,7 +123,7 @@ public class AuthenticateProcessor extends AbstractAuthProcessor<AuthenticateReq
                 // elements, leading to the exception we just
                 // caught.  So we need to move the user to the
                 // password, and the authorize_id to the user.
-                return noDelegation(token1, token2);
+                return noDelegation(Username.of(token1), token2);
             } finally {
                 authTokenizer = null;
             }
@@ -141,23 +135,23 @@ public class AuthenticateProcessor extends AbstractAuthProcessor<AuthenticateReq
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
-        List<String> caps = new ArrayList<>();
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
+        List<Capability> caps = new ArrayList<>();
         // Only ounce AUTH=PLAIN if the session does allow plain auth or TLS is active.
         // See IMAP-304
         if (session.isPlainAuthDisallowed()  == false || session.isTLSActive()) {
-            caps.add("AUTH=PLAIN");
+            caps.add(Capability.of("AUTH=PLAIN"));
         }
         // Support for SASL-IR. See RFC4959
-        caps.add("SASL-IR");
+        caps.add(Capability.of("SASL-IR"));
         return ImmutableList.copyOf(caps);
     }
 
     @Override
-    protected Closeable addContextToMDC(AuthenticateRequest message) {
+    protected Closeable addContextToMDC(AuthenticateRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "AUTHENTICATE")
-            .addContext("authType", message.getAuthType())
+            .addContext("authType", request.getAuthType())
             .build();
     }
 }

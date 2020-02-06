@@ -27,6 +27,7 @@ import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.Statement;
+
 import net.javacrumbs.futureconverter.java8guava.FutureConverter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -48,8 +49,8 @@ public class CassandraAsyncExecutor {
     }
 
     public Mono<Boolean> executeReturnApplied(Statement statement) {
-        return executeSingleRow(statement)
-                .map(row -> row.getBool(CassandraConstants.LIGHTWEIGHT_TRANSACTION_APPLIED));
+        return execute(statement)
+                .map(row -> row.wasApplied());
     }
 
     public Mono<Void> executeVoid(Statement statement) {
@@ -59,7 +60,7 @@ public class CassandraAsyncExecutor {
 
     public Mono<Row> executeSingleRow(Statement statement) {
         return executeSingleRowOptional(statement)
-                .flatMap(Mono::justOrEmpty);
+                .handle((t, sink) -> t.ifPresent(sink::next));
     }
 
     public Flux<Row> executeRows(Statement statement) {

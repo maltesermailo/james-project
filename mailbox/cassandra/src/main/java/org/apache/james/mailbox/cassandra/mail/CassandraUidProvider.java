@@ -35,7 +35,6 @@ import javax.inject.Inject;
 
 import org.apache.james.backends.cassandra.init.configuration.CassandraConfiguration;
 import org.apache.james.backends.cassandra.utils.CassandraAsyncExecutor;
-import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageUid;
 import org.apache.james.mailbox.cassandra.ids.CassandraId;
 import org.apache.james.mailbox.exception.MailboxException;
@@ -43,8 +42,10 @@ import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.store.mail.UidProvider;
 
+import com.datastax.driver.core.ConsistencyLevel;
 import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.Session;
+
 import reactor.core.publisher.Mono;
 
 public class CassandraUidProvider implements UidProvider {
@@ -86,12 +87,12 @@ public class CassandraUidProvider implements UidProvider {
     }
 
     @Override
-    public MessageUid nextUid(MailboxSession mailboxSession, Mailbox mailbox) throws MailboxException {
-        return nextUid(mailboxSession, mailbox.getMailboxId());
+    public MessageUid nextUid(Mailbox mailbox) throws MailboxException {
+        return nextUid(mailbox.getMailboxId());
     }
 
     @Override
-    public MessageUid nextUid(MailboxSession session, MailboxId mailboxId) throws MailboxException {
+    public MessageUid nextUid(MailboxId mailboxId) throws MailboxException {
         CassandraId cassandraId = (CassandraId) mailboxId;
         return nextUid(cassandraId)
             .blockOptional()
@@ -110,7 +111,7 @@ public class CassandraUidProvider implements UidProvider {
     }
 
     @Override
-    public Optional<MessageUid> lastUid(MailboxSession mailboxSession, Mailbox mailbox) throws MailboxException {
+    public Optional<MessageUid> lastUid(Mailbox mailbox) {
         return findHighestUid((CassandraId) mailbox.getMailboxId())
                 .blockOptional();
     }
@@ -118,7 +119,8 @@ public class CassandraUidProvider implements UidProvider {
     private Mono<MessageUid> findHighestUid(CassandraId mailboxId) {
         return Mono.defer(() -> executor.executeSingleRow(
             selectStatement.bind()
-                .setUUID(MAILBOX_ID, mailboxId.asUuid()))
+                .setUUID(MAILBOX_ID, mailboxId.asUuid())
+                .setConsistencyLevel(ConsistencyLevel.SERIAL))
             .map(row -> MessageUid.of(row.getLong(NEXT_UID))));
     }
 
@@ -129,21 +131,21 @@ public class CassandraUidProvider implements UidProvider {
                         .setUUID(MAILBOX_ID, mailboxId.asUuid())
                         .setLong(CONDITION, uid.asLong())
                         .setLong(NEXT_UID, nextUid.asLong()))
-                .flatMap(success -> successToUid(nextUid, success)));
+                .handle((success, sink) -> successToUid(nextUid, success).ifPresent(sink::next)));
     }
 
     private Mono<MessageUid> tryInsert(CassandraId mailboxId) {
         return Mono.defer(() -> executor.executeReturnApplied(
             insertStatement.bind()
                 .setUUID(MAILBOX_ID, mailboxId.asUuid()))
-            .flatMap(success -> successToUid(MessageUid.MIN_VALUE, success)));
+            .handle((success, sink) -> successToUid(MessageUid.MIN_VALUE, success).ifPresent(sink::next)));
     }
 
-    private Mono<MessageUid> successToUid(MessageUid uid, Boolean success) {
+    private Optional<MessageUid> successToUid(MessageUid uid, Boolean success) {
         if (success) {
-            return Mono.just(uid);
+            return Optional.of(uid);
         }
-        return Mono.empty();
+        return Optional.empty();
     }
 
 }

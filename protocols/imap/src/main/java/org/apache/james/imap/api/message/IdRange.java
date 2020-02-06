@@ -26,121 +26,52 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
+import org.apache.james.mailbox.model.MessageRange;
+
 import com.google.common.collect.ImmutableList;
 
 /**
  * Represents a range of UID or MSN values.
  */
 public final class IdRange implements Iterable<Long>, Comparable<IdRange> {
-
-    public static String toString(IdRange[] ranges) {
-        return Optional.ofNullable(ranges)
-            .map(ImmutableList::copyOf)
-            .toString();
-    }
-
-    private long lowVal;
-
-    private long highVal;
-
-    public IdRange(long singleVal) {
-        lowVal = singleVal;
-        highVal = singleVal;
-    }
-
-    public IdRange(long lowVal, long highVal) {
-        if (lowVal > highVal) {
-            throw new IllegalArgumentException("LowVal must be <= HighVal");
-        }
-        this.lowVal = lowVal;
-        this.highVal = highVal;
-    }
-
-    public long getLowVal() {
-        return lowVal;
-    }
-
-    public long getHighVal() {
-        return highVal;
-    }
-
-    public void setLowVal(long lowVal) {
-        if (lowVal > highVal) {
-            throw new IllegalArgumentException("LowVal must be <= HighVal");
-        }
-        this.lowVal = lowVal;
-    }
-
-    public void setHighVal(long highVal) {
-        if (lowVal > highVal) {
-            throw new IllegalArgumentException("HighVal must be >= LowVal");
-        }
-        this.highVal = highVal;
-    }
-
     /**
-     * Return true if the {@link IdRange} includes the given value
-     * 
-     * @param value
-     * @return include
+     * {@link Iterator} of a range of msn/uid
      */
-    public boolean includes(long value) {
-        return lowVal <= value && value <= highVal;
-    }
+    private static final class RangeIterator implements Iterator<Long> {
 
-    @Override
-    public int hashCode() {
-        final int PRIME = 31;
-        int result = 1;
-        result = PRIME * result + (int) (highVal ^ (highVal >>> 32));
-        result = PRIME * result + (int) (lowVal ^ (lowVal >>> 32));
-        return result;
-    }
+        private final long to;
+        private long current;
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
+        RangeIterator(long from, long to) {
+            this.to = to;
+            this.current = from;
         }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final IdRange other = (IdRange) obj;
-        if (highVal != other.highVal) {
-            return false;
-        }
-        if (lowVal != other.lowVal) {
-            return false;
-        }
-        return true;
-    }
 
-    /**
-     * Renders text suitable for logging.
-     * 
-     * @return a <code>String</code> representation of this object.
-     */
-    public String toString() {
-        return "IdRange ( " + this.lowVal + "->" + this.highVal + " )";
-    }
-
-    public String getFormattedString() {
-        if (this.lowVal == this.highVal) {
-            return Long.toString(this.lowVal);
-        } else {
-            return this.lowVal + ":" + this.highVal;
+        @Override
+        public boolean hasNext() {
+            return current <= to;
         }
+
+        @Override
+        public Long next() {
+            if (hasNext()) {
+                return current++;
+            } else {
+                throw new NoSuchElementException("Highest id of " + to + " was reached before");
+            }
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException("Read-Only");
+        }
+
     }
 
     /**
      * Utility method which will copy the given {@link List} and try to merge
      * the {@link IdRange} in the copy before return it.
-     * 
-     * 
-     * @param ranges
+     *
      * @return mergedRanges
      */
     public static List<IdRange> mergeRanges(List<IdRange> ranges) {
@@ -174,14 +105,70 @@ public final class IdRange implements Iterable<Long>, Comparable<IdRange> {
 
         }
         return copy;
-
     }
 
+    public static String toString(IdRange[] ranges) {
+        return Optional.ofNullable(ranges)
+            .map(ImmutableList::copyOf)
+            .toString();
+    }
+
+    public static IdRange from(MessageRange messageRange) {
+        return new IdRange(
+            messageRange.getUidFrom().asLong(),
+            messageRange.getUidTo().asLong());
+    }
+
+    private final long lowVal;
+    private long highVal;
+
+    public IdRange(long singleVal) {
+        lowVal = singleVal;
+        highVal = singleVal;
+    }
+
+    public IdRange(long lowVal, long highVal) {
+        if (lowVal > highVal) {
+            throw new IllegalArgumentException("LowVal must be <= HighVal");
+        }
+        this.lowVal = lowVal;
+        this.highVal = highVal;
+    }
+
+    public long getLowVal() {
+        return lowVal;
+    }
+
+    public long getHighVal() {
+        return highVal;
+    }
+
+    private void setHighVal(long highVal) {
+        if (lowVal > highVal) {
+            throw new IllegalArgumentException("HighVal must be >= LowVal");
+        }
+        this.highVal = highVal;
+    }
+
+    /**
+     * Renders text suitable for logging.
+     * 
+     * @return a <code>String</code> representation of this object.
+     */
+    public String toString() {
+        return "IdRange ( " + this.lowVal + "->" + this.highVal + " )";
+    }
+
+    public String getFormattedString() {
+        if (this.lowVal == this.highVal) {
+            return Long.toString(this.lowVal);
+        } else {
+            return this.lowVal + ":" + this.highVal;
+        }
+    }
 
     /**
      * Return a read-only {@link Iterator} which contains all msn/uid which fail in the specified range.
-     * 
-     * @return rangeIt
      */
     @Override
     public Iterator<Long> iterator() {
@@ -191,41 +178,6 @@ public final class IdRange implements Iterable<Long>, Comparable<IdRange> {
         }
         long to = getHighVal();
         return new RangeIterator(from, to);
-    }
-    
-    /**
-     * {@link Iterator} of a range of msn/uid
-     *
-     */
-    private final class RangeIterator implements Iterator<Long> {
-
-        private final long to;
-        private long current;
-        
-        public RangeIterator(long from, long to) {
-            this.to = to;
-            this.current = from;
-        }
-        
-        @Override
-        public boolean hasNext() {
-            return current <= to;
-        }
-
-        @Override
-        public Long next() {
-            if (hasNext()) {
-                return current++;
-            } else {
-                throw new NoSuchElementException("Highest id of " + to + " was reached before");
-            }
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("Read-Only");
-        }
-        
     }
 
     @Override
@@ -241,6 +193,36 @@ public final class IdRange implements Iterable<Long>, Comparable<IdRange> {
         } else {
             return (int) (getLowVal() - range2.getLowVal());
         }
+    }
+
+    @Override
+    public int hashCode() {
+        final int PRIME = 31;
+        int result = 1;
+        result = PRIME * result + (int) (highVal ^ (highVal >>> 32));
+        result = PRIME * result + (int) (lowVal ^ (lowVal >>> 32));
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final IdRange other = (IdRange) obj;
+        if (highVal != other.highVal) {
+            return false;
+        }
+        if (lowVal != other.lowVal) {
+            return false;
+        }
+        return true;
     }
 
 }

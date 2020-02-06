@@ -33,16 +33,18 @@ import org.apache.commons.cli.ParseException;
 import org.apache.james.cli.exceptions.InvalidArgumentNumberException;
 import org.apache.james.cli.exceptions.MissingCommandException;
 import org.apache.james.cli.exceptions.UnrecognizedCommandException;
+import org.apache.james.cli.probe.impl.JmxDataProbe;
+import org.apache.james.cli.probe.impl.JmxMailboxProbe;
+import org.apache.james.cli.probe.impl.JmxQuotaProbe;
+import org.apache.james.cli.probe.impl.JmxSieveProbe;
 import org.apache.james.cli.type.CmdType;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.SerializableQuota;
-import org.apache.james.mailbox.model.SerializableQuotaValue;
-import org.apache.james.mailbox.probe.MailboxProbe;
-import org.apache.james.mailbox.probe.QuotaProbe;
-import org.apache.james.probe.DataProbe;
-import org.apache.james.probe.SieveProbe;
+import org.apache.james.mailbox.model.SerializableQuotaLimitValue;
 import org.apache.james.rrt.lib.MappingsImpl;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,19 +55,19 @@ public class ServerCmdTest {
 
     private static final String ADDITIONAL_ARGUMENT = "additionalArgument";
 
-    private DataProbe dataProbe;
-    private MailboxProbe mailboxProbe;
-    private QuotaProbe quotaProbe;
-    private SieveProbe sieveProbe;
+    private JmxDataProbe dataProbe;
+    private JmxMailboxProbe mailboxProbe;
+    private JmxQuotaProbe quotaProbe;
+    private JmxSieveProbe sieveProbe;
 
     private ServerCmd testee;
 
     @Before
     public void setup() {
-        dataProbe = mock(DataProbe.class);
-        mailboxProbe = mock(MailboxProbe.class);
-        quotaProbe = mock(QuotaProbe.class);
-        sieveProbe = mock(SieveProbe.class);
+        dataProbe = mock(JmxDataProbe.class);
+        mailboxProbe = mock(JmxMailboxProbe.class);
+        quotaProbe = mock(JmxQuotaProbe.class);
+        sieveProbe = mock(JmxSieveProbe.class);
         testee = new ServerCmd(dataProbe, mailboxProbe, quotaProbe, sieveProbe);
     }
 
@@ -324,7 +326,7 @@ public class ServerCmdTest {
         String[] arguments = { "-h", "127.0.0.1", "-p", "9999", CmdType.GETGLOBALMAXMESSAGECOUNTQUOTA.getCommand()};
         CommandLine commandLine = ServerCmd.parseCommandLine(arguments);
 
-        when(quotaProbe.getGlobalMaxMessageCount()).thenReturn(new SerializableQuotaValue<>(QuotaCount.count(1024L * 1024L)));
+        when(quotaProbe.getGlobalMaxMessageCount()).thenReturn(new SerializableQuotaLimitValue<>(QuotaCountLimit.count(1024L * 1024L)));
 
         testee.executeCommandLine(commandLine);
     }
@@ -334,7 +336,7 @@ public class ServerCmdTest {
         String[] arguments = { "-h", "127.0.0.1", "-p", "9999", CmdType.GETGLOBALMAXSTORAGEQUOTA.getCommand()};
         CommandLine commandLine = ServerCmd.parseCommandLine(arguments);
 
-        when(quotaProbe.getGlobalMaxStorage()).thenReturn(new SerializableQuotaValue<>(QuotaSize.size(1024L * 1024L * 1024L)));
+        when(quotaProbe.getGlobalMaxStorage()).thenReturn(new SerializableQuotaLimitValue<>(QuotaSizeLimit.size(1024L * 1024L * 1024L)));
 
         testee.executeCommandLine(commandLine);
     }
@@ -346,7 +348,7 @@ public class ServerCmdTest {
 
         testee.executeCommandLine(commandLine);
 
-        verify(quotaProbe).setGlobalMaxMessageCount(new SerializableQuotaValue<>(QuotaCount.count(1054)));
+        verify(quotaProbe).setGlobalMaxMessageCount(new SerializableQuotaLimitValue<>(QuotaCountLimit.count(1054)));
     }
 
     @Test
@@ -356,7 +358,7 @@ public class ServerCmdTest {
 
         testee.executeCommandLine(commandLine);
 
-        verify(quotaProbe).setGlobalMaxMessageCount(new SerializableQuotaValue<>(QuotaCount.unlimited()));
+        verify(quotaProbe).setGlobalMaxMessageCount(new SerializableQuotaLimitValue<>(QuotaCountLimit.unlimited()));
     }
 
     @Test
@@ -375,7 +377,7 @@ public class ServerCmdTest {
 
         testee.executeCommandLine(commandLine);
 
-        verify(quotaProbe).setGlobalMaxStorage(new SerializableQuotaValue<>(QuotaSize.size(1024 * 1024 * 1024)));
+        verify(quotaProbe).setGlobalMaxStorage(new SerializableQuotaLimitValue<>(QuotaSizeLimit.size(1024 * 1024 * 1024)));
     }
 
     @Test
@@ -385,7 +387,7 @@ public class ServerCmdTest {
 
         testee.executeCommandLine(commandLine);
 
-        verify(quotaProbe).setGlobalMaxStorage(new SerializableQuotaValue<>(QuotaSize.unlimited()));
+        verify(quotaProbe).setGlobalMaxStorage(new SerializableQuotaLimitValue<>(QuotaSizeLimit.unlimited()));
     }
 
     @Test
@@ -405,7 +407,7 @@ public class ServerCmdTest {
 
         testee.executeCommandLine(commandLine);
 
-        verify(quotaProbe).setMaxMessageCount(quotaroot, new SerializableQuotaValue<>(QuotaCount.count(1000)));
+        verify(quotaProbe).setMaxMessageCount(quotaroot, new SerializableQuotaLimitValue<>(QuotaCountLimit.count(1000)));
     }
 
     @Test
@@ -416,7 +418,7 @@ public class ServerCmdTest {
 
         testee.executeCommandLine(commandLine);
 
-        verify(quotaProbe).setMaxMessageCount(quotaroot, new SerializableQuotaValue<>(QuotaCount.unlimited()));
+        verify(quotaProbe).setMaxMessageCount(quotaroot, new SerializableQuotaLimitValue<>(QuotaCountLimit.unlimited()));
     }
 
     @Test
@@ -437,7 +439,7 @@ public class ServerCmdTest {
 
         testee.executeCommandLine(commandLine);
 
-        verify(quotaProbe).setMaxStorage(quotaroot, new SerializableQuotaValue<>(QuotaSize.size(5 * 1024 * 1024)));
+        verify(quotaProbe).setMaxStorage(quotaroot, new SerializableQuotaLimitValue<>(QuotaSizeLimit.size(5 * 1024 * 1024)));
     }
 
     @Test
@@ -448,7 +450,7 @@ public class ServerCmdTest {
 
         testee.executeCommandLine(commandLine);
 
-        verify(quotaProbe).setMaxStorage(quotaroot, new SerializableQuotaValue<>(QuotaSize.unlimited()));
+        verify(quotaProbe).setMaxStorage(quotaroot, new SerializableQuotaLimitValue<>(QuotaSizeLimit.unlimited()));
     }
 
     @Test
@@ -467,7 +469,7 @@ public class ServerCmdTest {
         String[] arguments = { "-h", "127.0.0.1", "-p", "9999", CmdType.GETMAXMESSAGECOUNTQUOTA.getCommand(), quotaroot};
         CommandLine commandLine = ServerCmd.parseCommandLine(arguments);
 
-        when(quotaProbe.getMaxMessageCount(quotaroot)).thenReturn(new SerializableQuotaValue<>(QuotaCount.unlimited()));
+        when(quotaProbe.getMaxMessageCount(quotaroot)).thenReturn(new SerializableQuotaLimitValue<>(QuotaCountLimit.unlimited()));
 
         testee.executeCommandLine(commandLine);
     }
@@ -478,7 +480,7 @@ public class ServerCmdTest {
         String[] arguments = { "-h", "127.0.0.1", "-p", "9999", CmdType.GETMAXSTORAGEQUOTA.getCommand(), quotaroot};
         CommandLine commandLine = ServerCmd.parseCommandLine(arguments);
 
-        when(quotaProbe.getMaxStorage(quotaroot)).thenReturn(new SerializableQuotaValue<>(QuotaSize.unlimited()));
+        when(quotaProbe.getMaxStorage(quotaroot)).thenReturn(new SerializableQuotaLimitValue<>(QuotaSizeLimit.unlimited()));
 
         testee.executeCommandLine(commandLine);
     }
@@ -489,7 +491,7 @@ public class ServerCmdTest {
         String[] arguments = { "-h", "127.0.0.1", "-p", "9999", CmdType.GETSTORAGEQUOTA.getCommand(), quotaroot};
         CommandLine commandLine = ServerCmd.parseCommandLine(arguments);
 
-        when(quotaProbe.getStorageQuota(quotaroot)).thenReturn(SerializableQuota.newInstance(QuotaSize.unlimited(), QuotaSize.size(12)));
+        when(quotaProbe.getStorageQuota(quotaroot)).thenReturn(SerializableQuota.newInstance(QuotaSizeUsage.size(12), QuotaSizeLimit.unlimited()));
 
         testee.executeCommandLine(commandLine);
     }
@@ -500,7 +502,7 @@ public class ServerCmdTest {
         String[] arguments = { "-h", "127.0.0.1", "-p", "9999", CmdType.GETMESSAGECOUNTQUOTA.getCommand(), quotaroot};
         CommandLine commandLine = ServerCmd.parseCommandLine(arguments);
 
-        when(quotaProbe.getMessageCountQuota(quotaroot)).thenReturn(SerializableQuota.newInstance(QuotaCount.unlimited(), QuotaCount.count(12)));
+        when(quotaProbe.getMessageCountQuota(quotaroot)).thenReturn(SerializableQuota.newInstance(QuotaCountUsage.count(12), QuotaCountLimit.unlimited()));
 
         testee.executeCommandLine(commandLine);
     }

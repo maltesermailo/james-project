@@ -23,34 +23,34 @@ import static org.apache.james.filesystem.api.FileSystemFixture.CLASSPATH_FILE_S
 import static org.apache.james.filesystem.api.FileSystemFixture.RECURSIVE_CLASSPATH_FILE_SYSTEM;
 import static org.apache.james.filesystem.api.FileSystemFixture.THROWING_FILE_SYSTEM;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import javax.mail.MessagingException;
 
 import org.apache.james.transport.mailets.AddFooter;
 import org.apache.james.transport.mailets.sub.TestMailet;
 import org.apache.mailet.Mailet;
+import org.apache.mailet.base.test.FakeMail;
 import org.apache.mailet.base.test.FakeMailContext;
 import org.apache.mailet.base.test.FakeMailetConfig;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Guice;
-import com.google.inject.Injector;
 
 public class GuiceMailetLoaderTest {
 
     public static final ImmutableSet<MailetConfigurationOverride> NO_MAILET_CONFIG_OVERRIDES = ImmutableSet.of();
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
-    private Injector injector = Guice.createInjector();
 
     @Test
     public void getMailetShouldLoadClass() throws Exception {
-        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(injector,
-            new ExtendedClassLoader(THROWING_FILE_SYSTEM),
-            NO_MAILET_CONFIG_OVERRIDES);
+        GuiceGenericLoader genericLoader = GuiceGenericLoader.forTesting(new ExtendedClassLoader(THROWING_FILE_SYSTEM));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
 
         Mailet mailet = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
             .mailetName("AddFooter")
@@ -62,9 +62,8 @@ public class GuiceMailetLoaderTest {
 
     @Test
     public void getMailetShouldLoadClassWhenInSubPackageFromDefaultPackage() throws Exception {
-        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(injector,
-            new ExtendedClassLoader(THROWING_FILE_SYSTEM),
-            NO_MAILET_CONFIG_OVERRIDES);
+        GuiceGenericLoader genericLoader = GuiceGenericLoader.forTesting(new ExtendedClassLoader(THROWING_FILE_SYSTEM));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
 
         Mailet mailet = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
             .mailetName("sub.TestMailet")
@@ -76,9 +75,8 @@ public class GuiceMailetLoaderTest {
 
     @Test
     public void getMailetShouldThrowOnBadType() throws Exception {
-        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(injector,
-            new ExtendedClassLoader(THROWING_FILE_SYSTEM),
-            NO_MAILET_CONFIG_OVERRIDES);
+        GuiceGenericLoader genericLoader = GuiceGenericLoader.forTesting(new ExtendedClassLoader(THROWING_FILE_SYSTEM));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
 
         expectedException.expect(MessagingException.class);
 
@@ -90,9 +88,8 @@ public class GuiceMailetLoaderTest {
 
     @Test
     public void getMailetShouldLoadClassWhenInExtensionsJars() throws Exception {
-        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(injector,
-            new ExtendedClassLoader(CLASSPATH_FILE_SYSTEM),
-            NO_MAILET_CONFIG_OVERRIDES);
+        GuiceGenericLoader genericLoader = GuiceGenericLoader.forTesting(new ExtendedClassLoader(CLASSPATH_FILE_SYSTEM));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
 
         Mailet mailet = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
             .mailetName("CustomMailet")
@@ -105,9 +102,8 @@ public class GuiceMailetLoaderTest {
 
     @Test
     public void getMailetShouldBrowseRecursivelyExtensionsJars() throws Exception {
-        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(injector,
-            new ExtendedClassLoader(RECURSIVE_CLASSPATH_FILE_SYSTEM),
-            NO_MAILET_CONFIG_OVERRIDES);
+        GuiceGenericLoader genericLoader = GuiceGenericLoader.forTesting(new ExtendedClassLoader(RECURSIVE_CLASSPATH_FILE_SYSTEM));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
 
         Mailet mailet = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
             .mailetName("CustomMailet")
@@ -120,9 +116,8 @@ public class GuiceMailetLoaderTest {
 
     @Test
     public void getMailedShouldAllowCustomPackages() throws Exception {
-        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(injector,
-            new ExtendedClassLoader(CLASSPATH_FILE_SYSTEM),
-            NO_MAILET_CONFIG_OVERRIDES);
+        GuiceGenericLoader genericLoader = GuiceGenericLoader.forTesting(new ExtendedClassLoader(CLASSPATH_FILE_SYSTEM));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
 
         Mailet mailet = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
             .mailetName("com.custom.mailets.AnotherMailet")
@@ -135,9 +130,8 @@ public class GuiceMailetLoaderTest {
 
     @Test
     public void getMailetShouldThrowOnUnknownMailet() throws Exception {
-        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(injector,
-            new ExtendedClassLoader(CLASSPATH_FILE_SYSTEM),
-            NO_MAILET_CONFIG_OVERRIDES);
+        GuiceGenericLoader genericLoader = GuiceGenericLoader.forTesting(new ExtendedClassLoader(CLASSPATH_FILE_SYSTEM));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
 
         expectedException.expect(MessagingException.class);
 
@@ -147,4 +141,66 @@ public class GuiceMailetLoaderTest {
             .build());
     }
 
+    @Test
+    public void getMailetShouldLoadMailetsWithCustomDependencyInConstructor() throws Exception {
+        GuiceGenericLoader genericLoader = GuiceGenericLoader.forTesting(new ExtendedClassLoader(RECURSIVE_CLASSPATH_FILE_SYSTEM));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
+
+        Mailet mailet = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
+            .mailetName("CustomMailetWithCustomDependencyInConstructor")
+            .mailetContext(FakeMailContext.defaultContext())
+            .build());
+
+        assertThat(mailet.getClass().getCanonicalName())
+            .isEqualTo("org.apache.james.transport.mailets.CustomMailetWithCustomDependencyInConstructor");
+    }
+
+    @Test
+    public void getMailetShouldLoadMailetsWithCustomDependencyInService() throws Exception {
+        GuiceGenericLoader genericLoader = GuiceGenericLoader.forTesting(new ExtendedClassLoader(RECURSIVE_CLASSPATH_FILE_SYSTEM));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
+
+        Mailet mailet = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
+            .mailetName("CustomMailetWithCustomDependencyInService")
+            .mailetContext(FakeMailContext.defaultContext())
+            .build());
+
+        assertThatCode(() -> mailet.service(FakeMail.defaultFakeMail())).doesNotThrowAnyException();
+    }
+
+    @Test
+    public void getMailetShouldAllowCustomInjections() throws Exception {
+        GuiceGenericLoader genericLoader = new GuiceGenericLoader(
+            Guice.createInjector(),
+            new ExtendedClassLoader(RECURSIVE_CLASSPATH_FILE_SYSTEM),
+            new ExtensionConfiguration(ImmutableList.of(new ClassName("org.apache.james.transport.mailets.MyExtensionModule"))));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
+
+        Mailet mailet = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
+            .mailetName("MyGenericMailet")
+            .mailetContext(FakeMailContext.defaultContext())
+            .build());
+
+        assertThatCode(() -> mailet.service(FakeMail.defaultFakeMail())).doesNotThrowAnyException();
+    }
+
+    @Test
+    public void allMailetsShouldShareTheSameSingleton() throws Exception {
+        GuiceGenericLoader genericLoader = new GuiceGenericLoader(
+            Guice.createInjector(),
+            new ExtendedClassLoader(RECURSIVE_CLASSPATH_FILE_SYSTEM),
+            new ExtensionConfiguration(ImmutableList.of(new ClassName("org.apache.james.transport.mailets.MyExtensionModule"))));
+        GuiceMailetLoader guiceMailetLoader = new GuiceMailetLoader(genericLoader, NO_MAILET_CONFIG_OVERRIDES);
+
+        Mailet mailet1 = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
+            .mailetName("MyGenericMailet")
+            .mailetContext(FakeMailContext.defaultContext())
+            .build());
+        Mailet mailet2 = guiceMailetLoader.getMailet(FakeMailetConfig.builder()
+            .mailetName("MyGenericMailet")
+            .mailetContext(FakeMailContext.defaultContext())
+            .build());
+
+        assertThat(mailet1).isEqualTo(mailet2);
+    }
 }

@@ -37,11 +37,6 @@ public abstract class DelegatingMailboxMessage implements MailboxMessage {
     }
 
     @Override
-    public int compareTo(MailboxMessage other) {
-        return this.getUid().compareTo(other.getUid());
-    }
-
-    @Override
     public final Flags createFlags() {
         return FlagsFactory.createFlags(this, createUserFlags());
     }
@@ -123,5 +118,10 @@ public abstract class DelegatingMailboxMessage implements MailboxMessage {
     @Override
     public List<MessageAttachment> getAttachments() {
         return message.getAttachments();
+    }
+
+    @Override
+    public boolean hasAttachment() {
+        return message.hasAttachment();
     }
 }

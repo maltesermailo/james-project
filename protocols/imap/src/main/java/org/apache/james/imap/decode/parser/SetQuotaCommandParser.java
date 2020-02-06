@@ -19,28 +19,28 @@
 
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.SetQuotaRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * SETQUOTA command parser
  */
 public class SetQuotaCommandParser extends AbstractImapCommandParser {
-
-    public SetQuotaCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.SETQUOTA_COMMAND_NAME));
+    public SetQuotaCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.SETQUOTA_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
         final String quotaRoot = request.atom();
-        SetQuotaRequest setQuotaRequest = new SetQuotaRequest(tag, command, quotaRoot);
+        SetQuotaRequest setQuotaRequest = new SetQuotaRequest(tag, quotaRoot);
         // We now parse resource limit declaration
         // It has the following shape : (RESOURCE1 1024000) (RESOURCE2 2048000)\n
         request.nextWordChar();

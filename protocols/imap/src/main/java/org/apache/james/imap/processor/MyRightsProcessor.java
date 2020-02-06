@@ -23,10 +23,9 @@ import java.io.Closeable;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
@@ -51,7 +50,7 @@ import org.slf4j.LoggerFactory;
 public class MyRightsProcessor extends AbstractMailboxProcessor<MyRightsRequest> implements CapabilityImplementingProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(MyRightsProcessor.class);
 
-    private static final List<String> CAPABILITIES = Collections.singletonList(ImapConstants.SUPPORTS_ACL);
+    private static final List<Capability> CAPABILITIES = Collections.singletonList(ImapConstants.SUPPORTS_ACL);
 
     public MyRightsProcessor(ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
             MetricFactory metricFactory) {
@@ -59,11 +58,11 @@ public class MyRightsProcessor extends AbstractMailboxProcessor<MyRightsRequest>
     }
 
     @Override
-    protected void doProcess(MyRightsRequest message, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void processRequest(MyRightsRequest request, ImapSession session, Responder responder) {
 
         final MailboxManager mailboxManager = getMailboxManager();
-        final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
-        final String mailboxName = message.getMailboxName();
+        final MailboxSession mailboxSession = session.getMailboxSession();
+        final String mailboxName = request.getMailboxName();
         try {
 
             MailboxPath mailboxPath = PathConverter.forSession(session).buildFullPath(mailboxName);
@@ -90,33 +89,33 @@ public class MyRightsProcessor extends AbstractMailboxProcessor<MyRightsRequest>
                     && !myRights.contains(MailboxACL.Right.CreateMailbox)
                     && !myRights.contains(MailboxACL.Right.DeleteMailbox)
                     && !myRights.contains(MailboxACL.Right.Administer)) {
-                no(command, tag, responder, HumanReadableText.MAILBOX_NOT_FOUND);
+                no(request, responder, HumanReadableText.MAILBOX_NOT_FOUND);
             } else {
                 MyRightsResponse myRightsResponse = new MyRightsResponse(mailboxName, myRights);
                 responder.respond(myRightsResponse);
-                okComplete(command, tag, responder);
+                okComplete(request, responder);
                 // FIXME should we send unsolicited responses here?
                 // unsolicitedResponses(session, responder, false);
             }
         } catch (MailboxNotFoundException e) {
-            no(command, tag, responder, HumanReadableText.MAILBOX_NOT_FOUND);
+            no(request, responder, HumanReadableText.MAILBOX_NOT_FOUND);
         } catch (MailboxException e) {
-            LOGGER.error("{} failed for mailbox {}", command.getName(), mailboxName, e);
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+            LOGGER.error("{} failed for mailbox {}", request.getCommand().getName(), mailboxName, e);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
         }
 
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         return CAPABILITIES;
     }
 
     @Override
-    protected Closeable addContextToMDC(MyRightsRequest message) {
+    protected Closeable addContextToMDC(MyRightsRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "MYRIGHTS")
-            .addContext("mailbox", message.getMailboxName())
+            .addContext("mailbox", request.getMailboxName())
             .build();
     }
 }

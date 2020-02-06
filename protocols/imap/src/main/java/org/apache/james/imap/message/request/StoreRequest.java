@@ -20,41 +20,26 @@ package org.apache.james.imap.message.request;
 
 import javax.mail.Flags;
 
-import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.imap.api.ImapConstants;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.message.IdRange;
+import org.apache.james.mailbox.MessageManager;
 
 public class StoreRequest extends AbstractImapRequest {
-
     private final IdRange[] idSet;
-
     private final Flags flags;
-
     private final boolean useUids;
-
     private final boolean silent;
-
-    private final boolean signedMinus;
-
-    private final boolean signedPlus;
-
+    private final MessageManager.FlagsUpdateMode flagsUpdateMode;
     private final long unchangedSince;
 
-    public StoreRequest(ImapCommand command, IdRange[] idSet, boolean silent, Flags flags, boolean useUids, String tag, Boolean sign, long unchangedSince) {
-        super(tag, command);
+    public StoreRequest(IdRange[] idSet, boolean silent, Flags flags, boolean useUids, Tag tag, MessageManager.FlagsUpdateMode flagsUpdateMode, long unchangedSince) {
+        super(tag, ImapConstants.STORE_COMMAND);
         this.idSet = idSet;
         this.silent = silent;
         this.flags = flags;
         this.useUids = useUids;
-        if (sign == null) {
-            signedMinus = false;
-            signedPlus = false;
-        } else if (sign.booleanValue()) {
-            signedMinus = false;
-            signedPlus = true;
-        } else {
-            signedMinus = true;
-            signedPlus = false;
-        }
+        this.flagsUpdateMode = flagsUpdateMode;
         this.unchangedSince = unchangedSince;
     }
 
@@ -67,24 +52,8 @@ public class StoreRequest extends AbstractImapRequest {
         return silent;
     }
 
-    /**
-     * Is the store signed MINUS? Note that {@link #isSignedPlus()} must be
-     * false when this property is true.
-     * 
-     * @return true if the store is subtractive
-     */
-    public final boolean isSignedMinus() {
-        return signedMinus;
-    }
-
-    /**
-     * Is the store signed PLUS? Note that {@link #isSignedMinus()} must be
-     * false when this property is true.
-     * 
-     * @return true if the store is additive
-     */
-    public final boolean isSignedPlus() {
-        return signedPlus;
+    public final MessageManager.FlagsUpdateMode getFlagsUpdateMode() {
+        return flagsUpdateMode;
     }
 
     public final Flags getFlags() {
@@ -104,39 +73,38 @@ public class StoreRequest extends AbstractImapRequest {
     }
 
     public String toString() {
-        final StringBuffer buffer = new StringBuffer(100);
-        buffer.append("STORE ");
+        final StringBuilder builder = new StringBuilder(100);
+        builder.append("STORE ");
         if (isUseUids()) {
-            buffer.append("UID ");
+            builder.append("UID ");
         }
         if (isSilent()) {
-            buffer.append("SILENT ");
-
+            builder.append("SILENT ");
         }
-        if (isSignedPlus()) {
-            buffer.append("+ ");
+        if (flagsUpdateMode == MessageManager.FlagsUpdateMode.ADD) {
+            builder.append("+ ");
         }
-        if (isSignedMinus()) {
-            buffer.append("- ");
+        if (flagsUpdateMode == MessageManager.FlagsUpdateMode.REMOVE) {
+            builder.append("- ");
         }
         if (flags.contains(Flags.Flag.ANSWERED)) {
-            buffer.append(" ANSWERED");
+            builder.append(" ANSWERED");
         }
         if (flags.contains(Flags.Flag.DELETED)) {
-            buffer.append(" DELETED");
+            builder.append(" DELETED");
         }
         if (flags.contains(Flags.Flag.FLAGGED)) {
-            buffer.append(" FLAGGED");
+            builder.append(" FLAGGED");
         }
         if (flags.contains(Flags.Flag.DRAFT)) {
-            buffer.append(" DRAFT");
+            builder.append(" DRAFT");
         }
         if (flags.contains(Flags.Flag.SEEN)) {
-            buffer.append(" SEEN");
+            builder.append(" SEEN");
         }
         if (flags.contains(Flags.Flag.RECENT)) {
-            buffer.append(" RECEN");
+            builder.append(" RECENT");
         }
-        return buffer.toString();
+        return builder.toString();
     }
 }

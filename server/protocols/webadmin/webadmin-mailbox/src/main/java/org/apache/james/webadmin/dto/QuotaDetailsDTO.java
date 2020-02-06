@@ -22,8 +22,10 @@ package org.apache.james.webadmin.dto;
 
 import java.util.Optional;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.mailbox.model.Quota;
 
 import com.google.common.base.Preconditions;
@@ -35,10 +37,10 @@ public class QuotaDetailsDTO {
     }
 
     public static class Builder {
-        private Optional<QuotaDTO> global;
-        private Optional<QuotaDTO> domain;
-        private Optional<QuotaDTO> user;
-        private Optional<QuotaDTO> computed;
+        private Optional<ValidatedQuotaDTO> global;
+        private Optional<ValidatedQuotaDTO> domain;
+        private Optional<ValidatedQuotaDTO> user;
+        private Optional<ValidatedQuotaDTO> computed;
         private OccupationDTO occupation;
 
         private Builder() {
@@ -47,32 +49,32 @@ public class QuotaDetailsDTO {
             computed = Optional.empty();
         }
 
-        public Builder global(QuotaDTO global) {
+        public Builder global(ValidatedQuotaDTO global) {
             this.global = Optional.of(global);
             return this;
         }
 
-        public Builder domain(QuotaDTO domain) {
+        public Builder domain(ValidatedQuotaDTO domain) {
             this.domain = Optional.of(domain);
             return this;
         }
 
-        public Builder user(QuotaDTO user) {
+        public Builder user(ValidatedQuotaDTO user) {
             this.user = Optional.of(user);
             return this;
         }
 
-        public Builder computed(QuotaDTO computed) {
+        public Builder computed(ValidatedQuotaDTO computed) {
             this.computed = Optional.of(computed);
             return this;
         }
 
-        public Builder occupation(Quota<QuotaSize> sizeQuota, Quota<QuotaCount> countQuota) {
+        public Builder occupation(Quota<QuotaSizeLimit, QuotaSizeUsage> sizeQuota, Quota<QuotaCountLimit, QuotaCountUsage> countQuota) {
             this.occupation = OccupationDTO.from(sizeQuota, countQuota);
             return this;
         }
 
-        public Builder valueForScope(Quota.Scope scope, QuotaDTO value) {
+        public Builder valueForScope(Quota.Scope scope, ValidatedQuotaDTO value) {
             switch (scope) {
                 case Global:
                     return global(value);
@@ -90,13 +92,13 @@ public class QuotaDetailsDTO {
         }
     }
 
-    private final Optional<QuotaDTO> global;
-    private final Optional<QuotaDTO> domain;
-    private final Optional<QuotaDTO> user;
-    private final Optional<QuotaDTO> computed;
+    private final Optional<ValidatedQuotaDTO> global;
+    private final Optional<ValidatedQuotaDTO> domain;
+    private final Optional<ValidatedQuotaDTO> user;
+    private final Optional<ValidatedQuotaDTO> computed;
     private final OccupationDTO occupation;
 
-    private QuotaDetailsDTO(Optional<QuotaDTO> global, Optional<QuotaDTO> domain, Optional<QuotaDTO> user, Optional<QuotaDTO> computed, OccupationDTO occupation) {
+    private QuotaDetailsDTO(Optional<ValidatedQuotaDTO> global, Optional<ValidatedQuotaDTO> domain, Optional<ValidatedQuotaDTO> user, Optional<ValidatedQuotaDTO> computed, OccupationDTO occupation) {
         this.global = global;
         this.domain = domain;
         this.user = user;
@@ -104,19 +106,19 @@ public class QuotaDetailsDTO {
         this.occupation = occupation;
     }
 
-    public Optional<QuotaDTO> getGlobal() {
+    public Optional<ValidatedQuotaDTO> getGlobal() {
         return global;
     }
 
-    public Optional<QuotaDTO> getDomain() {
+    public Optional<ValidatedQuotaDTO> getDomain() {
         return domain;
     }
 
-    public Optional<QuotaDTO> getUser() {
+    public Optional<ValidatedQuotaDTO> getUser() {
         return user;
     }
 
-    public Optional<QuotaDTO> getComputed() {
+    public Optional<ValidatedQuotaDTO> getComputed() {
         return computed;
     }
 

@@ -28,6 +28,7 @@ import com.google.common.base.Preconditions;
 public class Domain implements Serializable {
 
     public static final Domain LOCALHOST = Domain.of("localhost");
+    public static final int MAXIMUM_DOMAIN_LENGTH = 255;
 
     private static String removeBrackets(String domainName) {
         if (!(domainName.startsWith("[") && domainName.endsWith("]"))) {
@@ -38,8 +39,10 @@ public class Domain implements Serializable {
 
     public static Domain of(String domain) {
         Preconditions.checkNotNull(domain, "Domain can not be null");
-        Preconditions.checkArgument(!domain.isEmpty() && !domain.contains("@"),
-            "Domain can not be empty nor contain `@`");
+        Preconditions.checkArgument(!domain.isEmpty() && !domain.contains("@") && !domain.contains("/"),
+            "Domain can not be empty nor contain `@` nor `/`");
+        Preconditions.checkArgument(domain.length() <= MAXIMUM_DOMAIN_LENGTH,
+            "Domain name length should not exceed %s characters", MAXIMUM_DOMAIN_LENGTH);
         return new Domain(domain);
     }
 

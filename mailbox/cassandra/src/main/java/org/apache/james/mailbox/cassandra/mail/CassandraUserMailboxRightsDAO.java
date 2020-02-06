@@ -35,6 +35,7 @@ import javax.inject.Inject;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.james.backends.cassandra.utils.CassandraAsyncExecutor;
 import org.apache.james.backends.cassandra.utils.CassandraUtils;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.acl.ACLDiff;
 import org.apache.james.mailbox.acl.PositiveUserACLDiff;
 import org.apache.james.mailbox.cassandra.ids.CassandraId;
@@ -47,6 +48,7 @@ import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.github.fge.lambdas.Throwing;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -124,19 +126,19 @@ public class CassandraUserMailboxRightsDAO {
             .then();
     }
 
-    public Mono<Optional<Rfc4314Rights>> retrieve(String userName, CassandraId mailboxId) {
+    public Mono<Optional<Rfc4314Rights>> retrieve(Username userName, CassandraId mailboxId) {
         return cassandraAsyncExecutor.executeSingleRowOptional(
             select.bind()
-                .setString(USER_NAME, userName)
+                .setString(USER_NAME, userName.asString())
                 .setUUID(MAILBOX_ID, mailboxId.asUuid()))
             .map(rowOptional ->
                 rowOptional.map(Throwing.function(row -> Rfc4314Rights.fromSerializedRfc4314Rights(row.getString(RIGHTS)))));
     }
 
-    public Flux<Pair<CassandraId, Rfc4314Rights>> listRightsForUser(String userName) {
+    public Flux<Pair<CassandraId, Rfc4314Rights>> listRightsForUser(Username userName) {
         return cassandraAsyncExecutor.execute(
             selectUser.bind()
-                .setString(USER_NAME, userName))
+                .setString(USER_NAME, userName.asString()))
             .flatMapMany(cassandraUtils::convertToFlux)
             .map(Throwing.function(this::toPair));
     }

@@ -21,6 +21,7 @@
 package org.apache.mailet.base;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -37,6 +38,7 @@ import org.apache.mailet.MailetContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 
 /**
@@ -57,6 +59,7 @@ public abstract class GenericMailet implements Mailet, MailetConfig {
     private static final String NO = "no";
     private static final String TRUE = "true";
     private static final String FALSE = "false";
+    private static final String CONFIG_IS_NULL_ERROR_MESSAGE = "Mailet configuration must be set before getInitParameter is called.";
 
     private MailetConfig config = null;
 
@@ -82,9 +85,7 @@ public abstract class GenericMailet implements Mailet, MailetConfig {
      * @throws NullPointerException before {@link #init(MailetConfig)}
      */
     public boolean getInitParameter(String name, boolean defaultValue) {
-        if (config == null) {
-            throw new NullPointerException("Mailet configuration must be set before getInitParameter is called.");
-        }
+        Preconditions.checkState(config != null, CONFIG_IS_NULL_ERROR_MESSAGE);
         return MailetUtil.getInitParameter(config, name).orElse(defaultValue);
     }
 
@@ -126,6 +127,7 @@ public abstract class GenericMailet implements Mailet, MailetConfig {
      */
     @Override
     public String getInitParameter(String name) {
+        Preconditions.checkState(config != null, CONFIG_IS_NULL_ERROR_MESSAGE);
         return config.getInitParameter(name);
     }
 
@@ -142,6 +144,7 @@ public abstract class GenericMailet implements Mailet, MailetConfig {
      * @return a String containing the value of the initalization parameter
      */
     public String getInitParameter(String name, String defValue) {
+        Preconditions.checkState(config != null, CONFIG_IS_NULL_ERROR_MESSAGE);
         String res = config.getInitParameter(name);
         if (res == null) {
             return defValue;
@@ -163,6 +166,7 @@ public abstract class GenericMailet implements Mailet, MailetConfig {
      */
     @Override
     public Iterator<String> getInitParameterNames() {
+        Preconditions.checkState(config != null, CONFIG_IS_NULL_ERROR_MESSAGE);
         return config.getInitParameterNames();
     }
 
@@ -206,6 +210,7 @@ public abstract class GenericMailet implements Mailet, MailetConfig {
      */
     @Override
     public String getMailetName() {
+        Preconditions.checkState(config != null, CONFIG_IS_NULL_ERROR_MESSAGE);
         return config.getMailetName();
     }
 
@@ -309,8 +314,7 @@ public abstract class GenericMailet implements Mailet, MailetConfig {
         }
         
         if (bad.size() > 0) {
-            throw new MessagingException("Unexpected init parameters found: "
-                    + org.apache.mailet.base.StringUtils.arrayToString(bad.toArray()));
+            throw new MessagingException("Unexpected init parameters found: " + Arrays.toString(bad.toArray()));
         }
     }
 

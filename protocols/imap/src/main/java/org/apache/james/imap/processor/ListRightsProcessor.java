@@ -22,10 +22,9 @@ package org.apache.james.imap.processor;
 import java.io.Closeable;
 import java.util.List;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
@@ -53,7 +52,7 @@ import com.google.common.collect.ImmutableList;
 public class ListRightsProcessor extends AbstractMailboxProcessor<ListRightsRequest> implements CapabilityImplementingProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(ListRightsProcessor.class);
 
-    private static final List<String> CAPABILITIES = ImmutableList.of(ImapConstants.SUPPORTS_ACL);
+    private static final List<Capability> CAPABILITIES = ImmutableList.of(ImapConstants.SUPPORTS_ACL);
 
     public ListRightsProcessor(ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
             MetricFactory metricFactory) {
@@ -61,12 +60,12 @@ public class ListRightsProcessor extends AbstractMailboxProcessor<ListRightsRequ
     }
 
     @Override
-    protected void doProcess(ListRightsRequest message, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void processRequest(ListRightsRequest request, ImapSession session, Responder responder) {
 
         final MailboxManager mailboxManager = getMailboxManager();
-        final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
-        final String mailboxName = message.getMailboxName();
-        final String identifier = message.getIdentifier();
+        final MailboxSession mailboxSession = session.getMailboxSession();
+        final String mailboxName = request.getMailboxName();
+        final String identifier = request.getIdentifier();
         try {
 
             MailboxPath mailboxPath = PathConverter.forSession(session).buildFullPath(mailboxName);
@@ -84,16 +83,16 @@ public class ListRightsProcessor extends AbstractMailboxProcessor<ListRightsRequ
              * existence information, much less the mailbox’s ACL.
              */
             if (!mailboxManager.hasRight(mailboxPath, MailboxACL.Right.Lookup, mailboxSession)) {
-                no(command, tag, responder, HumanReadableText.MAILBOX_NOT_FOUND);
+                no(request, responder, HumanReadableText.MAILBOX_NOT_FOUND);
             } else if (!mailboxManager.hasRight(mailboxPath, MailboxACL.Right.Administer, mailboxSession)) {
                 /* RFC 4314 section 4. */
                 Object[] params = new Object[] {
                         MailboxACL.Right.Administer.toString(),
-                        command.getName(),
+                        request.getCommand().getName(),
                         mailboxName
                 };
                 HumanReadableText text = new HumanReadableText(HumanReadableText.UNSUFFICIENT_RIGHTS_KEY, HumanReadableText.UNSUFFICIENT_RIGHTS_DEFAULT_VALUE, params);
-                no(command, tag, responder, text);
+                no(request, responder, text);
             } else {
                 
                 EntryKey key = EntryKey.deserialize(identifier);
@@ -111,30 +110,30 @@ public class ListRightsProcessor extends AbstractMailboxProcessor<ListRightsRequ
                 Rfc4314Rights[] rights = mailboxManager.listRights(mailboxPath, key, mailboxSession);
                 ListRightsResponse aclResponse = new ListRightsResponse(mailboxName, identifier, rights);
                 responder.respond(aclResponse);
-                okComplete(command, tag, responder);
+                okComplete(request, responder);
                 // FIXME should we send unsolicited responses here?
                 // unsolicitedResponses(session, responder, false);
             }
         } catch (MailboxNotFoundException e) {
-            no(command, tag, responder, HumanReadableText.MAILBOX_NOT_FOUND);
+            no(request, responder, HumanReadableText.MAILBOX_NOT_FOUND);
         } catch (MailboxException e) {
-            LOGGER.error("{} failed for mailbox {}", command.getName(), mailboxName, e);
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+            LOGGER.error("{} failed for mailbox {}", request.getCommand().getName(), mailboxName, e);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
         }
 
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         return CAPABILITIES;
     }
 
     @Override
-    protected Closeable addContextToMDC(ListRightsRequest message) {
+    protected Closeable addContextToMDC(ListRightsRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "LIST_RIGHTS")
-            .addContext("mailbox", message.getMailboxName())
-            .addContext("identifier", message.getIdentifier())
+            .addContext("mailbox", request.getMailboxName())
+            .addContext("identifier", request.getIdentifier())
             .build();
     }
 }

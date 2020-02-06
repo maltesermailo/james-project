@@ -24,36 +24,37 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.display.Locales;
 import org.apache.james.imap.api.display.Localizer;
 import org.apache.james.imap.api.message.response.StatusResponse;
 import org.apache.james.imap.api.message.response.StatusResponse.ResponseCode;
 import org.apache.james.imap.api.message.response.StatusResponse.Type;
-import org.apache.james.imap.api.process.ImapSession;
-import org.apache.james.imap.encode.base.AbstractChainedImapEncoder;
+import org.apache.james.imap.message.response.ImmutableStatusResponse;
 
-public class StatusResponseEncoder extends AbstractChainedImapEncoder {
-
+public class StatusResponseEncoder implements ImapResponseEncoder<ImmutableStatusResponse> {
     private final Localizer localizer;
 
-    public StatusResponseEncoder(ImapEncoder next, Localizer localizer) {
-        super(next);
+    public StatusResponseEncoder(Localizer localizer) {
         this.localizer = localizer;
     }
 
     @Override
-    protected void doEncode(ImapMessage acceptableMessage, ImapResponseComposer composer, ImapSession session) throws IOException {
-        StatusResponse response = (StatusResponse) acceptableMessage;
+    public Class<ImmutableStatusResponse> acceptableMessages() {
+        return ImmutableStatusResponse.class;
+    }
+
+    @Override
+    public void encode(ImmutableStatusResponse response, ImapResponseComposer composer) throws IOException {
         final Type serverResponseType = response.getServerResponseType();
         final String type = asString(serverResponseType);
         final ResponseCode responseCode = response.getResponseCode();
         final String code = asString(responseCode);
-        final String tag = response.getTag();
+        final Tag tag = response.getTag();
         final ImapCommand command = response.getCommand();
         final HumanReadableText textKey = response.getTextKey();
-        final String text = asString(textKey, session);
+        final String text = asString(textKey);
         final Collection<String> parameters;
         final long number;
         final boolean useParens;
@@ -94,7 +95,7 @@ public class StatusResponseEncoder extends AbstractChainedImapEncoder {
             composer.closeSquareBracket();
         }
         if (command != null) {
-            composer.commandName(command.getName());
+            composer.commandName(command);
         }
         if (text != null && !"".equals(text)) {
             composer.message(text);
@@ -102,34 +103,24 @@ public class StatusResponseEncoder extends AbstractChainedImapEncoder {
         composer.end();
     }
 
-    private String asString(HumanReadableText text, ImapSession session) {
+    private String asString(HumanReadableText text) {
         // TODO: calculate locales
         return localizer.localize(text, new Locales(new ArrayList<>(), null));
     }
 
     private String asString(StatusResponse.ResponseCode code) {
-        final String result;
         if (code == null) {
-            result = null;
+            return null;
         } else {
-            result = code.getCode();
+            return code.getCode();
         }
-        return result;
     }
 
     private String asString(StatusResponse.Type type) {
-        final String result;
         if (type == null) {
-            result = null;
+            return null;
         } else {
-            result = type.getCode();
+            return type.getCode();
         }
-        return result;
     }
-
-    @Override
-    protected boolean isAcceptable(ImapMessage message) {
-        return (message instanceof StatusResponse);
-    }
-
 }

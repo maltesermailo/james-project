@@ -31,6 +31,7 @@ import javax.mail.util.SharedByteArrayInputStream;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.ComposedMessageId;
 import org.apache.james.mailbox.model.ComposedMessageIdWithMetaData;
@@ -38,8 +39,6 @@ import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MessageAttachment;
 import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.mailbox.store.mail.model.DelegatingMailboxMessage;
-import org.apache.james.mailbox.store.mail.model.FlagsFactory;
-import org.apache.james.mailbox.store.mail.model.FlagsFilter;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
 
 import com.google.common.base.MoreObjects;
@@ -64,8 +63,9 @@ public class SimpleMailboxMessage extends DelegatingMailboxMessage {
         private PropertyBuilder propertyBuilder;
         private MailboxId mailboxId;
         private Optional<MessageUid> uid = Optional.empty();
-        private Optional<Long> modseq = Optional.empty();
+        private Optional<ModSeq> modseq = Optional.empty();
         private ImmutableList.Builder<MessageAttachment> attachments = ImmutableList.builder();
+        private Optional<Boolean> hasAttachment = Optional.empty();
 
         public Builder messageId(MessageId messageId) {
             this.messageId = messageId;
@@ -77,8 +77,7 @@ public class SimpleMailboxMessage extends DelegatingMailboxMessage {
             return this;
         }
 
-        public Builder modseq(long modseq) {
-            Preconditions.checkArgument(modseq >= 0, "modseq can not be negative");
+        public Builder modseq(ModSeq modseq) {
             this.modseq = Optional.of(modseq);
             return this;
         }
@@ -102,6 +101,16 @@ public class SimpleMailboxMessage extends DelegatingMailboxMessage {
 
         public Builder content(SharedInputStream content) {
             this.content = content;
+            return this;
+        }
+
+        public Builder hasAttachment() {
+            this.hasAttachment = Optional.of(true);
+            return this;
+        }
+
+        public Builder hasAttachment(boolean hasAttachment) {
+            this.hasAttachment = Optional.of(hasAttachment);
             return this;
         }
 
@@ -135,8 +144,10 @@ public class SimpleMailboxMessage extends DelegatingMailboxMessage {
             Preconditions.checkNotNull(propertyBuilder, "propertyBuilder is required");
             Preconditions.checkNotNull(mailboxId, "mailboxId is required");
 
+            ImmutableList<MessageAttachment> attachments = this.attachments.build();
+            boolean hasAttachment = this.hasAttachment.orElse(!attachments.isEmpty());
             SimpleMailboxMessage simpleMailboxMessage = new SimpleMailboxMessage(messageId, internalDate, size,
-                bodyStartOctet, content, flags, propertyBuilder, mailboxId, attachments.build());
+                bodyStartOctet, content, flags, propertyBuilder, mailboxId, attachments, hasAttachment);
 
             uid.ifPresent(simpleMailboxMessage::setUid);
             modseq.ifPresent(simpleMailboxMessage::setModSeq);
@@ -164,6 +175,7 @@ public class SimpleMailboxMessage extends DelegatingMailboxMessage {
             .internalDate(original.getInternalDate())
             .size(original.getFullContentOctets())
             .flags(original.createFlags())
+            .hasAttachment(original.hasAttachment())
             .propertyBuilder(propertyBuilder);
     }
 
@@ -189,11 +201,12 @@ public class SimpleMailboxMessage extends DelegatingMailboxMessage {
     private boolean recent;
     private boolean seen;
     private String[] userFlags;
-    private long modSeq;
+    private ModSeq modSeq;
 
     public SimpleMailboxMessage(MessageId messageId, Date internalDate, long size, int bodyStartOctet,
             SharedInputStream content, Flags flags,
-            PropertyBuilder propertyBuilder, MailboxId mailboxId, List<MessageAttachment> attachments) {
+            PropertyBuilder propertyBuilder, MailboxId mailboxId, List<MessageAttachment> attachments,
+            boolean hasAttachment) {
         super(new SimpleMessage(
                 messageId,
                 content, size, internalDate, propertyBuilder.getSubType(),
@@ -201,12 +214,20 @@ public class SimpleMailboxMessage extends DelegatingMailboxMessage {
                 bodyStartOctet,
                 propertyBuilder.getTextualLineCount(),
                 propertyBuilder.toProperties(),
-                attachments
-                ));
+                attachments,
+                hasAttachment));
 
             setFlags(flags);
             this.mailboxId = mailboxId;
             this.userFlags = flags.getUserFlags();
+    }
+
+    public SimpleMailboxMessage(MessageId messageId, Date internalDate, long size, int bodyStartOctet,
+            SharedInputStream content, Flags flags,
+            PropertyBuilder propertyBuilder, MailboxId mailboxId, List<MessageAttachment> attachments) {
+        this(messageId, internalDate, size, bodyStartOctet,
+            content, flags,
+            propertyBuilder, mailboxId, attachments, !attachments.isEmpty());
     }
 
     public SimpleMailboxMessage(MessageId messageId, Date internalDate, long size, int bodyStartOctet,
@@ -272,12 +293,12 @@ public class SimpleMailboxMessage extends DelegatingMailboxMessage {
     }
 
     @Override
-    public long getModSeq() {
+    public ModSeq getModSeq() {
         return modSeq;
     }
 
     @Override
-    public void setModSeq(long modSeq) {
+    public void setModSeq(ModSeq modSeq) {
         this.modSeq = modSeq;
     }
 
@@ -295,16 +316,6 @@ public class SimpleMailboxMessage extends DelegatingMailboxMessage {
         recent = flags.contains(Flags.Flag.RECENT);
         seen = flags.contains(Flags.Flag.SEEN);
         userFlags = flags.getUserFlags();
-    }
-
-    public SimpleMailboxMessage filterFlags(FlagsFilter filter) throws MailboxException {
-        Flags flags = FlagsFactory
-            .builder()
-            .flags(createFlags())
-            .addUserFlags(createUserFlags())
-            .filteringFlags(filter)
-            .build();
-        return from(this).flags(flags).build();
     }
 
     @Override

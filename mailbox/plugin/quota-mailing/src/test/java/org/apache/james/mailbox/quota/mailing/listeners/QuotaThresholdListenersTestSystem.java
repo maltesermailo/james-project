@@ -19,6 +19,7 @@
 
 package org.apache.james.mailbox.quota.mailing.listeners;
 
+import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.eventsourcing.eventstore.EventStore;
 import org.apache.james.filesystem.api.FileSystem;
 import org.apache.james.mailbox.events.Event;
@@ -28,7 +29,7 @@ import org.apache.james.mailbox.events.RegistrationKey;
 import org.apache.james.mailbox.events.delivery.InVmEventDelivery;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.quota.mailing.QuotaMailingListenerConfiguration;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.apache.james.server.core.JamesServerResourceLoader;
 import org.apache.james.server.core.filesystem.FileSystemImpl;
 import org.apache.james.user.memory.MemoryUsersRepository;
@@ -38,16 +39,17 @@ import com.google.common.collect.ImmutableSet;
 
 class QuotaThresholdListenersTestSystem {
     private static final ImmutableSet<RegistrationKey> NO_KEYS = ImmutableSet.of();
+    private static final DomainList NO_DOMAIN_LIST = null;
 
     private final EventBus eventBus;
 
     QuotaThresholdListenersTestSystem(MailetContext mailetContext, EventStore eventStore, QuotaMailingListenerConfiguration configuration) throws MailboxException {
-        eventBus = new InVMEventBus(new InVmEventDelivery(new NoopMetricFactory()));
+        eventBus = new InVMEventBus(new InVmEventDelivery(new RecordingMetricFactory()));
 
         FileSystem fileSystem = new FileSystemImpl(new JamesServerResourceLoader("."));
 
         QuotaThresholdCrossingListener thresholdCrossingListener =
-            new QuotaThresholdCrossingListener(mailetContext, MemoryUsersRepository.withVirtualHosting(), fileSystem, eventStore, configuration);
+            new QuotaThresholdCrossingListener(mailetContext, MemoryUsersRepository.withVirtualHosting(NO_DOMAIN_LIST), fileSystem, eventStore, configuration);
 
         eventBus.register(thresholdCrossingListener);
     }

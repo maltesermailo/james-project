@@ -44,8 +44,8 @@ import org.apache.james.backends.cassandra.migration.MigrationTask;
 import org.apache.james.backends.cassandra.versions.CassandraSchemaVersionDAO;
 import org.apache.james.backends.cassandra.versions.SchemaTransition;
 import org.apache.james.backends.cassandra.versions.SchemaVersion;
+import org.apache.james.task.Hostname;
 import org.apache.james.task.MemoryTaskManager;
-import org.apache.james.task.eventsourcing.Hostname;
 import org.apache.james.webadmin.WebAdminServer;
 import org.apache.james.webadmin.WebAdminUtils;
 import org.apache.james.webadmin.utils.JsonTransformer;
@@ -56,6 +56,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableMap;
+
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import reactor.core.publisher.Mono;
@@ -70,7 +71,7 @@ public class CassandraMigrationRoutesTest {
     private CassandraSchemaVersionDAO schemaVersionDAO;
     private MemoryTaskManager taskManager;
 
-    private void createServer() throws InterruptedException {
+    private void createServer() {
         Migration successfulMigration = () -> { };
 
         CassandraSchemaTransitions transitions = new CassandraSchemaTransitions(ImmutableMap.of(
@@ -95,7 +96,7 @@ public class CassandraMigrationRoutesTest {
     }
 
     @Before
-    public void setUp() throws InterruptedException {
+    public void setUp() {
         createServer();
     }
 
@@ -165,8 +166,8 @@ public class CassandraMigrationRoutesTest {
         assertThat(errors)
             .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
             .containsEntry("type", "InvalidArgument")
-            .containsEntry("message", "Invalid request for version upgrade")
-            .containsEntry("details", "For input string: \"NonInt\"");
+            .containsEntry("message", "Invalid arguments supplied in the user request")
+            .containsEntry("details", "Expecting version to be specified as an integer");
 
         verifyNoMoreInteractions(schemaVersionDAO);
     }
@@ -232,6 +233,18 @@ public class CassandraMigrationRoutesTest {
     }
 
     @Test
+    public void postShouldPositionLocationHeader() {
+        when(schemaVersionDAO.getCurrentSchemaVersion()).thenReturn(Mono.just(Optional.of(CURRENT_VERSION)));
+
+        given()
+            .body(String.valueOf(OLDER_VERSION.getValue()))
+        .when()
+            .post("/upgrade")
+        .then()
+            .header("Location", notNullValue());
+    }
+
+    @Test
     public void postShouldDoMigrationToLatestVersion() {
         when(schemaVersionDAO.getCurrentSchemaVersion()).thenReturn(Mono.just(Optional.of(OLDER_VERSION)));
 
@@ -277,7 +290,7 @@ public class CassandraMigrationRoutesTest {
         .then()
             .body("status", is("completed"))
             .body("taskId", is(notNullValue()))
-            .body("type", is(MigrationTask.CASSANDRA_MIGRATION))
+            .body("type", is(MigrationTask.CASSANDRA_MIGRATION.asString()))
             .body("additionalInformation.toVersion", is(LATEST_VERSION.getValue()))
             .body("startedDate", is(notNullValue()))
             .body("submitDate", is(notNullValue()))

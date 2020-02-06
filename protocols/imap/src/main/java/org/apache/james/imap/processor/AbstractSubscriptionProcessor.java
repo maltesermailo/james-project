@@ -18,8 +18,6 @@
  ****************************************************************/
 package org.apache.james.imap.processor;
 
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.message.request.ImapRequest;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
@@ -33,12 +31,12 @@ import org.apache.james.metrics.api.MetricFactory;
  * Abstract base class which should be used by implementations which need to
  * access the {@link SubscriptionManager}
  */
-public abstract class AbstractSubscriptionProcessor<M extends ImapRequest> extends AbstractMailboxProcessor<M> {
+public abstract class AbstractSubscriptionProcessor<R extends ImapRequest> extends AbstractMailboxProcessor<R> {
 
     private final SubscriptionManager subscriptionManager;
 
-    public AbstractSubscriptionProcessor(Class<M> acceptableClass, ImapProcessor next, MailboxManager mailboxManager, SubscriptionManager subscriptionManager, StatusResponseFactory factory,
-            MetricFactory metricFactory) {
+    public AbstractSubscriptionProcessor(Class<R> acceptableClass, ImapProcessor next, MailboxManager mailboxManager, SubscriptionManager subscriptionManager, StatusResponseFactory factory,
+                                         MetricFactory metricFactory) {
         super(acceptableClass, next, mailboxManager, factory, metricFactory);
         this.subscriptionManager = subscriptionManager;
     }
@@ -53,24 +51,22 @@ public abstract class AbstractSubscriptionProcessor<M extends ImapRequest> exten
     }
 
     @Override
-    protected final void doProcess(M message, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected final void processRequest(R request, ImapSession session, Responder responder) {
 
         // take care of calling the start/end processing
-        MailboxSession mSession = ImapSessionUtils.getMailboxSession(session);
+        MailboxSession mSession = session.getMailboxSession();
         getSubscriptionManager().startProcessingRequest(mSession);
-        doProcessRequest(message, session, tag, command, responder);
+        doProcessRequest(request, session, responder);
         getSubscriptionManager().endProcessingRequest(mSession);
     }
 
     /**
      * Process the request
      * 
-     * @param message
+     * @param request
      * @param session
-     * @param tag
-     * @param command
      * @param responder
      */
-    protected abstract void doProcessRequest(M message, ImapSession session, String tag, ImapCommand command, Responder responder);
+    protected abstract void doProcessRequest(R request, ImapSession session, Responder responder);
 
 }

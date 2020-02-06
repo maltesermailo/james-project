@@ -20,16 +20,18 @@ package org.apache.james.imap.decode.parser;
 
 import javax.mail.Flags;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.IdRange;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.ImapRequestLineReader.CharacterValidator;
 import org.apache.james.imap.message.request.StoreRequest;
-import org.apache.james.protocols.imap.DecodingException;
+import org.apache.james.mailbox.MessageManager;
 
 /**
  * Parse STORE commands
@@ -38,14 +40,13 @@ public class StoreCommandParser extends AbstractUidCommandParser {
 
     private static final byte[] UNCHANGEDSINCE = "UNCHANGEDSINCE".getBytes();
     
-    public StoreCommandParser() {
-        super(ImapCommand.selectedStateCommand(ImapConstants.STORE_COMMAND_NAME));
+    public StoreCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.STORE_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, boolean useUids, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, boolean useUids, ImapSession session) throws DecodingException {
         final IdRange[] idSet = request.parseIdRange(session);
-        final Boolean sign;
         boolean silent = false;
         long unchangedSince = -1;
         char next = request.nextWordChar();
@@ -69,15 +70,16 @@ public class StoreCommandParser extends AbstractUidCommandParser {
             request.consumeChar(')');
             next = request.nextWordChar();
         }
-        
+
+        final MessageManager.FlagsUpdateMode flagsUpdateMode;
         if (next == '+') {
-            sign = Boolean.TRUE;
+            flagsUpdateMode = MessageManager.FlagsUpdateMode.ADD;
             request.consume();
         } else if (next == '-') {
-            sign = Boolean.FALSE;
+            flagsUpdateMode = MessageManager.FlagsUpdateMode.REMOVE;
             request.consume();
         } else {
-            sign = null;
+            flagsUpdateMode = MessageManager.FlagsUpdateMode.REPLACE;
         }
 
         String directive = request.consumeWord(new ImapRequestLineReader.NoopCharValidator());
@@ -108,6 +110,6 @@ public class StoreCommandParser extends AbstractUidCommandParser {
         }
 
         request.eol();
-        return new StoreRequest(command, idSet, silent, flags, useUids, tag, sign, unchangedSince);
+        return new StoreRequest(idSet, silent, flags, useUids, tag, flagsUpdateMode, unchangedSince);
     }
 }

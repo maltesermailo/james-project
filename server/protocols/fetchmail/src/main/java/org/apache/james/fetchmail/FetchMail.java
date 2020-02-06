@@ -21,7 +21,6 @@ package org.apache.james.fetchmail;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -35,6 +34,7 @@ import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.commons.configuration2.tree.ImmutableNode;
+import org.apache.james.core.Username;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.lifecycle.api.Configurable;
@@ -400,7 +400,7 @@ public class FetchMail implements Runnable, Configurable {
      * <code>ParsedDynamicAccountParameters</code> for each dynamic account.
      */
     @Override
-    public void configure(HierarchicalConfiguration configuration) throws ConfigurationException {
+    public void configure(HierarchicalConfiguration<ImmutableNode> configuration) throws ConfigurationException {
         // Set any Session parameters passed in the Configuration
         setSessionParameters(configuration);
 
@@ -430,7 +430,7 @@ public class FetchMail implements Runnable, Configurable {
             String accountsChildName = accountsChild.getNodeName();
 
             List<HierarchicalConfiguration<ImmutableNode>> accountsChildConfig = accounts.configurationsAt(accountsChildName);
-            HierarchicalConfiguration conf = accountsChildConfig.get(i);
+            HierarchicalConfiguration<ImmutableNode> conf = accountsChildConfig.get(i);
 
             if ("alllocal".equals(accountsChildName)) {
                 // <allLocal> is dynamic, save the parameters for accounts to
@@ -505,9 +505,8 @@ public class FetchMail implements Runnable, Configurable {
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Session properties:");
             Properties properties = getSession().getProperties();
-            Enumeration<Object> e = properties.keys();
-            while (e.hasMoreElements()) {
-                String key = (String) e.nextElement();
+            for (Object o : properties.keySet()) {
+                String key = (String) o;
                 String val = (String) properties.get(key);
                 if (val.length() > 40) {
                     val = val.substring(0, 37) + "...";
@@ -722,7 +721,7 @@ public class FetchMail implements Runnable, Configurable {
     protected Map<DynamicAccountKey, DynamicAccount> computeDynamicAccounts(Map<DynamicAccountKey, DynamicAccount> oldAccounts, ParsedDynamicAccountParameters parameters) throws ConfigurationException {
 
         Map<DynamicAccountKey, DynamicAccount> accounts;
-        Iterator<String> usersIterator;
+        Iterator<Username> usersIterator;
         try {
             accounts = new HashMap<>(getLocalUsers().countUsers());
             usersIterator = getLocalUsers().list();
@@ -731,7 +730,7 @@ public class FetchMail implements Runnable, Configurable {
             throw new ConfigurationException("Unable to access UsersRepository", e);
         }
         while (usersIterator.hasNext()) {
-            String userName = usersIterator.next();
+            String userName = usersIterator.next().asString();
             DynamicAccountKey key = new DynamicAccountKey(userName, parameters.getSequenceNumber());
             DynamicAccount account = oldAccounts.get(key);
             if (null == account) {
@@ -839,12 +838,12 @@ public class FetchMail implements Runnable, Configurable {
      * @param configuration The configuration containing the parameters
      * @throws ConfigurationException
      */
-    protected void setSessionParameters(HierarchicalConfiguration configuration) {
+    protected void setSessionParameters(HierarchicalConfiguration<ImmutableNode> configuration) {
 
         if (configuration.getKeys("javaMailProperties.property").hasNext()) {
             Properties properties = getSession().getProperties();
-            List<HierarchicalConfiguration> allProperties = configuration.configurationsAt("javaMailProperties.property");
-            for (HierarchicalConfiguration propConf : allProperties) {
+            List<HierarchicalConfiguration<ImmutableNode>> allProperties = configuration.configurationsAt("javaMailProperties.property");
+            for (HierarchicalConfiguration<ImmutableNode> propConf : allProperties) {
                 String nameProp = propConf.getString("[@name]");
                 String valueProp = propConf.getString("[@value]");
                 properties.setProperty(nameProp, valueProp);

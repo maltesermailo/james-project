@@ -23,9 +23,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import javax.mail.internet.AddressException;
 
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.mailbox.model.Quota;
 import org.junit.Test;
 
@@ -40,25 +42,25 @@ public class UsersQuotaDetailsDTOTest {
     @Test
     public void builderShouldThrowWhenDetailIsNull() {
         assertThatThrownBy(() -> UsersQuotaDetailsDTO.builder()
-                .user(User.fromUsername("user@domain.org"))
+                .user(Username.of("user@domain.org"))
                 .build())
             .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     public void builderShouldWork() throws AddressException {
-        User user = User.fromUsername("user@domain.org");
+        Username username = Username.of("user@domain.org");
         QuotaDetailsDTO quotaDetailsDTO = QuotaDetailsDTO.builder()
                 .occupation(
-                        Quota.<QuotaSize>builder().used(QuotaSize.size(1)).computedLimit(QuotaSize.size(12)).build(),
-                        Quota.<QuotaCount>builder().used(QuotaCount.count(36)).computedLimit(QuotaCount.count(360)).build())
+                        Quota.<QuotaSizeLimit, QuotaSizeUsage>builder().used(QuotaSizeUsage.size(1)).computedLimit(QuotaSizeLimit.size(12)).build(),
+                        Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(36)).computedLimit(QuotaCountLimit.count(360)).build())
                 .build();
         UsersQuotaDetailsDTO usersQuotaDetailsDTO = UsersQuotaDetailsDTO.builder()
-                .user(user)
+                .user(username)
                 .detail(quotaDetailsDTO)
                 .build();
 
-        assertThat(usersQuotaDetailsDTO.getUser()).isEqualTo(user.asString());
+        assertThat(usersQuotaDetailsDTO.getUsername()).isEqualTo(username.asString());
         assertThat(usersQuotaDetailsDTO.getDetail()).isEqualTo(quotaDetailsDTO);
     }
 }

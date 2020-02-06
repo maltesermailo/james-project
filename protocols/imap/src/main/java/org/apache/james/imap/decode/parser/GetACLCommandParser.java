@@ -19,30 +19,30 @@
 
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.GetACLRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * GETACL Parser
- * 
  */
 public class GetACLCommandParser extends AbstractImapCommandParser {
 
-    public GetACLCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.GETACL_COMMAND_NAME));
+    public GetACLCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.GETACL_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
         final String mailboxName = request.mailbox();
         request.eol();
-        return new GetACLRequest(tag, command, mailboxName);
+        return new GetACLRequest(tag, mailboxName);
     }
 
 }

@@ -19,38 +19,35 @@
 
 package org.apache.james.user.cassandra;
 
-import org.apache.james.backends.cassandra.CassandraCluster;
-import org.apache.james.backends.cassandra.DockerCassandraRule;
+import org.apache.commons.configuration2.BaseHierarchicalConfiguration;
+import org.apache.james.backends.cassandra.CassandraClusterExtension;
 import org.apache.james.user.lib.AbstractUsersRepository;
 import org.apache.james.user.lib.AbstractUsersRepositoryTest;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class CassandraUsersRepositoryTest extends AbstractUsersRepositoryTest {
+class CassandraUsersRepositoryTest extends AbstractUsersRepositoryTest {
 
-    @Rule
-    public DockerCassandraRule cassandraServer = new DockerCassandraRule();
-    
-    private CassandraCluster cassandra;
+    @RegisterExtension
+    static CassandraClusterExtension cassandraCluster = new CassandraClusterExtension(CassandraUsersRepositoryModule.MODULE);
 
-    @Override
-    @Before
-    public void setUp() throws Exception {
-        cassandra = CassandraCluster.create(CassandraUsersRepositoryModule.MODULE, cassandraServer.getHost());
+    @BeforeEach
+    void setup() throws Exception {
         super.setUp();
     }
-    
-    @Override
-    @After
-    public void tearDown() throws Exception {
+
+    @AfterEach
+    void teardown() throws Exception {
         super.tearDown();
-        cassandra.clearTables();
-        cassandra.closeCluster();
     }
 
     @Override
-    protected AbstractUsersRepository getUsersRepository() {
-        return new CassandraUsersRepository(cassandra.getConf());
+    protected AbstractUsersRepository getUsersRepository() throws Exception {
+        CassandraUsersRepository cassandraUsersRepository = new CassandraUsersRepository(domainList, cassandraCluster.getCassandraCluster().getConf());
+        BaseHierarchicalConfiguration configuration = new BaseHierarchicalConfiguration();
+        configuration.addProperty("enableVirtualHosting", "true");
+        cassandraUsersRepository.configure(configuration);
+        return cassandraUsersRepository;
     }
 }

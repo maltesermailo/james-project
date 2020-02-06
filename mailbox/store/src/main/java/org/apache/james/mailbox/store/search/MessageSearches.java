@@ -40,12 +40,13 @@ import java.util.stream.Stream;
 import javax.mail.Flags;
 
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.UnsupportedSearchException;
 import org.apache.james.mailbox.extractor.TextExtractor;
 import org.apache.james.mailbox.model.Attachment;
+import org.apache.james.mailbox.model.Header;
 import org.apache.james.mailbox.model.MessageAttachment;
-import org.apache.james.mailbox.model.MessageResult.Header;
 import org.apache.james.mailbox.model.SearchQuery;
 import org.apache.james.mailbox.model.SearchQuery.AddressType;
 import org.apache.james.mailbox.model.SearchQuery.DateResolution;
@@ -128,7 +129,6 @@ public class MessageSearches implements Iterable<SimpleMessageSearchIndex.Search
      *            <code>MailboxMessage</code>, not null
      * @return <code>true</code> if the row matches the given criteria,
      *         <code>false</code> otherwise
-     * @throws MailboxException
      */
     private boolean isMatch(MailboxMessage message) throws MailboxException {
         final List<SearchQuery.Criterion> criteria = query.getCriterias();
@@ -154,7 +154,6 @@ public class MessageSearches implements Iterable<SimpleMessageSearchIndex.Search
      *            collection of recent message uids
      * @return <code>true</code> if the row matches the given criterion,
      *         <code>false</code> otherwise
-     * @throws MailboxException
      */
     public boolean isMatch(SearchQuery.Criterion criterion, MailboxMessage message,
             final Collection<MessageUid> recentMessageUids) throws MailboxException {
@@ -411,13 +410,7 @@ public class MessageSearches implements Iterable<SimpleMessageSearchIndex.Search
 
     /**
      * Match against a {@link AddressType} header
-     * 
-     * @param operator
-     * @param headerName
-     * @param message
      * @return containsAddress
-     * @throws MailboxException
-     * @throws IOException
      */
     private boolean matchesAddress(SearchQuery.AddressOperator operator, String headerName,
                                    MailboxMessage message) throws MailboxException, IOException {
@@ -574,15 +567,15 @@ public class MessageSearches implements Iterable<SimpleMessageSearchIndex.Search
     private boolean matches(SearchQuery.ModSeqCriterion criterion, MailboxMessage message)
             throws UnsupportedSearchException {
         SearchQuery.NumericOperator operator = criterion.getOperator();
-        long modSeq = message.getModSeq();
+        ModSeq modSeq = message.getModSeq();
         long value = operator.getValue();
         switch (operator.getType()) {
         case LESS_THAN:
-            return modSeq < value;
+            return modSeq.asLong() < value;
         case GREATER_THAN:
-            return modSeq > value;
+            return modSeq.asLong() > value;
         case EQUALS:
-            return modSeq == value;
+            return modSeq.asLong() == value;
         default:
             throw new UnsupportedSearchException();
         }

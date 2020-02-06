@@ -26,13 +26,13 @@ import org.apache.james.filesystem.api.FileSystem;
 import org.apache.james.filesystem.api.JamesDirectoriesProvider;
 import org.apache.james.modules.server.DNSServiceModule;
 import org.apache.james.modules.server.DropWizardMetricsModule;
-import org.apache.james.modules.server.TaskManagerModule;
 import org.apache.james.onami.lifecycle.PreDestroyModule;
 import org.apache.james.server.core.configuration.Configuration;
 import org.apache.james.server.core.configuration.ConfigurationProvider;
 import org.apache.james.server.core.configuration.FileConfigurationProvider;
 import org.apache.james.server.core.filesystem.FileSystemImpl;
 import org.apache.james.utils.DataProbeImpl;
+import org.apache.james.utils.ExtensionModule;
 import org.apache.james.utils.GuiceProbe;
 
 import com.google.inject.AbstractModule;
@@ -53,12 +53,12 @@ public class CommonServicesModule extends AbstractModule {
     
     @Override
     protected void configure() {
+        install(new ExtensionModule());
         install(new StartUpChecksModule());
         install(new StartablesModule());
         install(new PreDestroyModule());
         install(new DNSServiceModule());
         install(new DropWizardMetricsModule());
-        install(new TaskManagerModule());
         install(new CleanupTaskModule());
         install(new MimeMessageModule());
         install(new ClockModule());

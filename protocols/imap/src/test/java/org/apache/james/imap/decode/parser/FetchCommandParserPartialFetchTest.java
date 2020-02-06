@@ -19,70 +19,75 @@
 
 package org.apache.james.imap.decode.parser;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 
-import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.message.BodyFetchElement;
 import org.apache.james.imap.api.message.FetchData;
 import org.apache.james.imap.api.message.IdRange;
+import org.apache.james.imap.api.message.SectionType;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.ImapRequestStreamLineReader;
-import org.apache.james.protocols.imap.DecodingException;
+import org.apache.james.imap.encode.FakeImapSession;
 import org.junit.Before;
 import org.junit.Test;
 
 public class FetchCommandParserPartialFetchTest  {
 
     FetchCommandParser parser;
-    ImapCommand command;
     ImapSession session;
 
     @Before
     public void setUp() throws Exception {
-        parser = new FetchCommandParser();
-        command = ImapCommand.anyStateCommand("Command");
-        session = mock(ImapSession.class);
+        parser = new FetchCommandParser(mock(StatusResponseFactory.class));
+        session = new FakeImapSession();
     }
 
     @Test
     public void testShouldParseZeroAndLength() throws Exception {
         IdRange[] ranges = { new IdRange(1) };
-        FetchData data = new FetchData();
-        data.add(new BodyFetchElement("BODY[]", BodyFetchElement.CONTENT, null,
-                null, new Long(0), new Long(100)), false);
-        check("1 (BODY[]<0.100>)\r\n", ranges, false, data, "A01");
+        FetchData data = FetchData.builder()
+            .add(new BodyFetchElement("BODY[]", SectionType.CONTENT, null,
+                null, 0L, 100L), false)
+            .build();
+        check("1 (BODY[]<0.100>)\r\n", ranges, false, data, TAG);
     }
 
     @Test
     public void testShouldParseNonZeroAndLength() throws Exception {
         IdRange[] ranges = { new IdRange(1) };
-        FetchData data = new FetchData();
-        data.add(new BodyFetchElement("BODY[]", BodyFetchElement.CONTENT, null,
-                null, new Long(20), new Long(12342348)), false);
-        check("1 (BODY[]<20.12342348>)\r\n", ranges, false, data, "A01");
+        FetchData data = FetchData.builder()
+            .add(new BodyFetchElement("BODY[]", SectionType.CONTENT, null,
+                null, 20L, 12342348L), false)
+            .build();
+        check("1 (BODY[]<20.12342348>)\r\n", ranges, false, data, TAG);
     }
 
     @Test
-    public void testShouldNotParseZeroLength() throws Exception {
+    public void testShouldNotParseZeroLength() {
         ImapRequestLineReader reader = new ImapRequestStreamLineReader(
                 new ByteArrayInputStream("1 (BODY[]<20.0>)\r\n"
-                        .getBytes("US-ASCII")), new ByteArrayOutputStream());
+                        .getBytes(StandardCharsets.US_ASCII)), new ByteArrayOutputStream());
 
-        assertThatThrownBy(() -> parser.decode(command, reader, "A01", false, session))
+        assertThatThrownBy(() -> parser.decode(reader, TAG, false, session))
             .isInstanceOf(DecodingException.class);
     }
 
     private void check(String input, IdRange[] idSet,
-            boolean useUids, FetchData data, String tag) throws Exception {
+            boolean useUids, FetchData data, Tag tag) throws Exception {
         ImapRequestLineReader reader = new ImapRequestStreamLineReader(
-                new ByteArrayInputStream(input.getBytes("US-ASCII")),
+                new ByteArrayInputStream(input.getBytes(StandardCharsets.US_ASCII)),
                 new ByteArrayOutputStream());
 
-        parser.decode(command, reader, tag, useUids, session);
+        parser.decode(reader, tag, useUids, session);
     }
 }

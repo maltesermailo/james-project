@@ -19,6 +19,8 @@
 
 package org.apache.james.imap.api;
 
+import org.apache.james.imap.api.message.Capability;
+
 public interface ImapConstants {
     // Basic response types
     String OK = "OK";
@@ -39,19 +41,9 @@ public interface ImapConstants {
 
     String UID = "UID";
 
-    String MIME_HEADER_CONTENT_LOCATION = "Content-Location";
-
-    String MIME_HEADER_CONTENT_MD5 = "Content-MD5";
-
-    String MIME_HEADER_CONTENT_LANGUAGE = "Content-Language";
-
-    String[] EMPTY_STRING_ARRAY = {};
-
     byte BYTE_OPENING_PARENTHESIS = 0x28;
 
     byte BYTE_CLOSING_PARENTHESIS = 0x29;
-
-    byte BYTE_SP = 0x20;
 
     byte BYTE_DQUOTE = 0x22;
 
@@ -67,47 +59,43 @@ public interface ImapConstants {
 
     byte BYTE_CLOSE_BRACE = 0x7D;
 
-    char OPENING_PARENTHESIS = '(';
-
-    char CLOSING_PARENTHESIS = ')';
-
-    char OPENING_SQUARE_BRACKET = '[';
-
-    char CLOSING_SQUARE_BRACKET = ']';
-
-    char SP_CHAR = ' ';
-
     char DQUOTE = '\"';
 
     String VERSION = "IMAP4rev1";
 
-    String SUPPORTS_LITERAL_PLUS = "LITERAL+";
+    Capability BASIC_CAPABILITIES = Capability.of(VERSION);
 
-    String SUPPORTS_RFC3348 = "CHILDREN";
+    Capability SUPPORTS_LITERAL_PLUS = Capability.of("LITERAL+");
 
-    String UTF8 = "UTF-8";
-    
-    String SUPPORTS_I18NLEVEL_1 = "I18NLEVEL=1";
+    Capability SUPPORTS_RFC3348 = Capability.of("CHILDREN");
 
-    String SUPPORTS_NAMESPACES = "NAMESPACE";
+    Capability SUPPORTS_I18NLEVEL_1 = Capability.of("I18NLEVEL=1");
 
-    String SUPPORTS_STARTTLS = "STARTTLS";
+    Capability SUPPORTS_NAMESPACES = Capability.of("NAMESPACE");
 
-    String SUPPORTS_IDLE = "IDLE";
+    Capability SUPPORTS_STARTTLS = Capability.of("STARTTLS");
 
-    String SUPPORTS_XLIST = "XLIST";
+    Capability SUPPORTS_IDLE = Capability.of("IDLE");
 
-    String SUPPORTS_ENABLE = "ENABLE";
-    
-    String SUPPORTS_CONDSTORE = "CONDSTORE";
-    
-    String SUPPORTS_QRESYNC = "QRESYNC";
+    Capability SUPPORTS_XLIST = Capability.of("XLIST");
 
-    String SUPPORTS_ACL = "ACL";
+    Capability SUPPORTS_ENABLE = Capability.of("ENABLE");
 
-    String SUPPORTS_QUOTA = "QUOTA";
+    Capability SUPPORTS_CONDSTORE = Capability.of("CONDSTORE");
 
-    String SUPPORTS_ANNOTATION = "ANNOTATION";
+    Capability SUPPORTS_UNSELECT = Capability.of("UNSELECT");
+
+    Capability SUPPORTS_QRESYNC = Capability.of("QRESYNC");
+
+    Capability SUPPORTS_ACL = Capability.of("ACL");
+
+    Capability SUPPORTS_QUOTA = Capability.of("QUOTA");
+
+    Capability SUPPORTS_MOVE = Capability.of("MOVE");
+
+    Capability SUPPORTS_UIDPLUS = Capability.of("UIDPLUS");
+
+    Capability SUPPORTS_ANNOTATION = Capability.of("ANNOTATION");
     
     String INBOX_NAME = "INBOX";
 
@@ -147,7 +135,6 @@ public interface ImapConstants {
 
     String NAME_ATTRIBUTE_HAS_NO_CHILDREN = "\\HasNoChildren";
 
-    String NAMESPACE_COMMAND_NAME = "NAMESPACE";
 
     char BACK_SLASH = '\\';
 
@@ -160,104 +147,63 @@ public interface ImapConstants {
     String STATUS_RECENT = "RECENT";
 
     String STATUS_MESSAGES = "MESSAGES";
-    
+
     String STATUS_HIGHESTMODSEQ = "HIGHESTMODSEQ";
 
-    String UNSUBSCRIBE_COMMAND_NAME = "UNSUBSCRIBE";
+    ImapCommand CAPABILITY_COMMAND = ImapCommand.anyStateCommand("CAPABILITY");
+    ImapCommand COMPRESS_COMMAND = ImapCommand.anyStateCommand("COMPRESS");
+    ImapCommand LOGOUT_COMMAND = ImapCommand.anyStateCommand("LOGOUT");
+    ImapCommand NOOP_COMMAND = ImapCommand.anyStateCommand("NOOP");
 
-    String UID_COMMAND_NAME = "UID";
+    ImapCommand AUTHENTICATE_COMMAND = ImapCommand.nonAuthenticatedStateCommand("AUTHENTICATE");
+    ImapCommand LOGIN_COMMAND = ImapCommand.nonAuthenticatedStateCommand("LOGIN");
+    ImapCommand STARTTLS_COMMAND = ImapCommand.nonAuthenticatedStateCommand("STARTTLS");
 
-    String SUBSCRIBE_COMMAND_NAME = "SUBSCRIBE";
+    ImapCommand APPEND_COMMAND = ImapCommand.authenticatedStateCommand("APPEND");
+    ImapCommand CREATE_COMMAND = ImapCommand.authenticatedStateCommand("CREATE");
+    ImapCommand DELETE_COMMAND = ImapCommand.authenticatedStateCommand("DELETE");
+    ImapCommand ENABLE_COMMAND = ImapCommand.authenticatedStateCommand("ENABLE");
+    ImapCommand EXAMINE_COMMAND = ImapCommand.authenticatedStateCommand("EXAMINE");
+    ImapCommand IDLE_COMMAND = ImapCommand.authenticatedStateCommand("IDLE");
+    ImapCommand LIST_COMMAND = ImapCommand.authenticatedStateCommand("LIST");
+    ImapCommand LSUB_COMMAND = ImapCommand.authenticatedStateCommand("LSUB");
+    ImapCommand NAMESPACE_COMMAND = ImapCommand.authenticatedStateCommand("NAMESPACE");
+    ImapCommand RENAME_COMMAND = ImapCommand.authenticatedStateCommand("RENAME");
+    ImapCommand SELECT_COMMAND = ImapCommand.authenticatedStateCommand("SELECT");
+    ImapCommand STATUS_COMMAND = ImapCommand.authenticatedStateCommand("STATUS");
+    ImapCommand SUBSCRIBE_COMMAND = ImapCommand.authenticatedStateCommand("SUBSCRIBE");
+    ImapCommand UNSELECT_COMMAND = ImapCommand.authenticatedStateCommand("UNSELECT");
+    ImapCommand UNSUBSCRIBE_COMMAND = ImapCommand.authenticatedStateCommand("UNSUBSCRIBE");
+    ImapCommand XLIST_COMMAND = ImapCommand.authenticatedStateCommand("XLIST");
+    // RFC-4314 IMAP ACL
+    ImapCommand DELETEACL_COMMAND = ImapCommand.authenticatedStateCommand("DELETEACL");
+    ImapCommand LISTRIGHTS_COMMAND = ImapCommand.authenticatedStateCommand("LISTRIGHTS");
+    ImapCommand MYRIGHTS_COMMAND = ImapCommand.authenticatedStateCommand("MYRIGHTS");
+    ImapCommand GETACL_COMMAND = ImapCommand.authenticatedStateCommand("GETACL");
+    ImapCommand SETACL_COMMAND = ImapCommand.authenticatedStateCommand("SETACL");
+    // RFC-2087 IMAP Quota
+    ImapCommand GETQUOTA_COMMAND = ImapCommand.authenticatedStateCommand("GETQUOTA");
+    ImapCommand GETQUOTAROOT_COMMAND = ImapCommand.authenticatedStateCommand("GETQUOTAROOT");
+    ImapCommand SETQUOTA_COMMAND = ImapCommand.authenticatedStateCommand("SETQUOTA");
+    // RFC-5464 IMAP Metadata (mailbox annotations)
+    ImapCommand GETANNOTATION_COMMAND = ImapCommand.authenticatedStateCommand("GETMETADATA");
+    ImapCommand SETANNOTATION_COMMAND = ImapCommand.authenticatedStateCommand("SETMETADATA");
 
-    String STORE_COMMAND_NAME = "STORE";
-
-    String STATUS_COMMAND_NAME = "STATUS";
-
-    String SELECT_COMMAND_NAME = "SELECT";
-
-    String UNSELECT_COMMAND_NAME = "UNSELECT";
-
-    String SEARCH_COMMAND_NAME = "SEARCH";
-
-    String RENAME_COMMAND_NAME = "RENAME";
-
-    String NOOP_COMMAND_NAME = "NOOP";
-
-    String IDLE_COMMAND_NAME = "IDLE";
-
-    String LSUB_COMMAND_NAME = "LSUB";
-
-    String LOGOUT_COMMAND_NAME = "LOGOUT";
-
-    String LOGIN_COMMAND_NAME = "LOGIN";
-
-    String LIST_COMMAND_NAME = "LIST";
-
-    String XLIST_COMMAND_NAME = "XLIST";
-
-    String FETCH_COMMAND_NAME = "FETCH";
-
-    String EXPUNGE_COMMAND_NAME = "EXPUNGE";
-
-    String EXAMINE_COMMAND_NAME = "EXAMINE";
-
-    String DELETE_COMMAND_NAME = "DELETE";
-
-    String CREATE_COMMAND_NAME = "CREATE";
-
-    String COPY_COMMAND_NAME = "COPY";
-
-    String MOVE_COMMAND_NAME = "MOVE";
-
-    String CLOSE_COMMAND_NAME = "CLOSE";
-
-    String CHECK_COMMAND_NAME = "CHECK";
-
-    String CAPABILITY_COMMAND_NAME = "CAPABILITY";
-
-    String AUTHENTICATE_COMMAND_NAME = "AUTHENTICATE";
-
-    String APPEND_COMMAND_NAME = "APPEND";
-    
-    String ENABLE_COMMAND_NAME = "ENABLE";
-    
-    String GETACL_COMMAND_NAME = "GETACL";
-
-    String SETACL_COMMAND_NAME = "SETACL";
-    
-    String DELETEACL_COMMAND_NAME = "DELETEACL";
-    
-    String LISTRIGHTS_COMMAND_NAME = "LISTRIGHTS";
-    
-    String MYRIGHTS_COMMAND_NAME = "MYRIGHTS";
-
-    String GETQUOTAROOT_COMMAND_NAME = "GETQUOTAROOT";
-
-    String GETQUOTA_COMMAND_NAME = "GETQUOTA";
-
-    String SETQUOTA_COMMAND_NAME = "SETQUOTA";
-
-    String SETANNOTATION_COMMAND_NAME = "SETMETADATA";
-
-    String GETANNOTATION_COMMAND_NAME = "GETMETADATA";
-
-    String LIST_RESPONSE_NAME = "LIST";
-
-    String XLIST_RESPONSE_NAME = "XLIST";
-
-    String LSUB_RESPONSE_NAME = "LSUB";
-
-    String SEARCH_RESPONSE_NAME = "SEARCH";
+    ImapCommand CHECK_COMMAND = ImapCommand.selectedStateCommand("CHECK");
+    ImapCommand CLOSE_COMMAND = ImapCommand.selectedStateCommand("CLOSE");
+    ImapCommand COPY_COMMAND = ImapCommand.selectedStateCommand("COPY");
+    ImapCommand EXPUNGE_COMMAND = ImapCommand.selectedStateCommand("EXPUNGE");
+    ImapCommand FETCH_COMMAND = ImapCommand.selectedStateCommand("FETCH");
+    ImapCommand MOVE_COMMAND = ImapCommand.selectedStateCommand("MOVE");
+    ImapCommand SEARCH_COMMAND = ImapCommand.selectedStateCommand("SEARCH");
+    ImapCommand STORE_COMMAND = ImapCommand.selectedStateCommand("STORE");
+    ImapCommand UID_COMMAND = ImapCommand.selectedStateCommand("UID");
 
     String ACL_RESPONSE_NAME = "ACL";
 
     String QUOTA_RESPONSE_NAME = "QUOTA";
 
     String QUOTAROOT_RESPONSE_NAME = "QUOTAROOT";
-
-    String LISTRIGHTS_RESPONSE_NAME = "LISTRIGHTS";
-    
-    String MYRIGHTS_RESPONSE_NAME = "MYRIGHTS";
 
     String ANNOTATION_RESPONSE_NAME = "METADATA";
 
@@ -268,12 +214,6 @@ public interface ImapConstants {
     String NAME_ATTRIBUTE_MARKED = "\\Marked";
 
     String NAME_ATTRIBUTE_UNMARKED = "\\Unmarked";
-
-    String PS_TEXT = "TEXT";
-
-    String PS_HEADER = "HEADER";
-
-    String PS_MIME = "MIME";
 
     String FETCH_RFC822 = "RFC822";
 
@@ -287,16 +227,9 @@ public interface ImapConstants {
     
     String FETCH_MODSEQ = "MODSEQ";
 
-    
-    String STARTTLS = "STARTTLS";
-
     String LINE_END = "\r\n";
     long MAX_NZ_NUMBER = 4294967295L;
     long MIN_NZ_NUMBER = 1L;
-
-    String COMPRESS_COMMAND_NAME = "COMPRESS";
-
-    int DEFAULT_BATCH_SIZE = 100;
 
     // Quota resources definition
 

@@ -26,6 +26,7 @@ import javax.inject.Inject;
 import org.apache.camel.CamelContext;
 import org.apache.camel.CamelContextAware;
 import org.apache.commons.configuration2.HierarchicalConfiguration;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.mailetcontainer.api.MailProcessor;
 import org.apache.james.mailetcontainer.api.MailetLoader;
 import org.apache.james.mailetcontainer.api.MatcherLoader;
@@ -44,29 +45,17 @@ import org.apache.mailet.MailetContext;
 public class CamelCompositeProcessor extends AbstractStateCompositeProcessor implements CamelContextAware {
 
     private final MetricFactory metricFactory;
+    private final MailetContext mailetContext;
+    private final MatcherLoader matcherLoader;
+    private final MailetLoader mailetLoader;
     private CamelContext camelContext;
-    private MailetContext mailetContext;
-    private MatcherLoader matcherLoader;
-    private MailetLoader mailetLoader;
 
     @Inject
-    public CamelCompositeProcessor(MetricFactory metricFactory) {
+    CamelCompositeProcessor(MetricFactory metricFactory, MailetContext mailetContext, MatcherLoader matcherLoader, MailetLoader mailetLoader) {
         this.metricFactory = metricFactory;
-    }
-
-    @Inject
-    public void setMatcherLoader(MatcherLoader matcherLoader) {
-        this.matcherLoader = matcherLoader;
-    }
-
-    @Inject
-    public void setMailetLoader(MailetLoader mailetLoader) {
-        this.mailetLoader = mailetLoader;
-    }
-
-    @Inject
-    public void setMailetContext(MailetContext mailetContext) {
         this.mailetContext = mailetContext;
+        this.matcherLoader = matcherLoader;
+        this.mailetLoader = mailetLoader;
     }
 
     @Override
@@ -98,7 +87,7 @@ public class CamelCompositeProcessor extends AbstractStateCompositeProcessor imp
     }
 
     @Override
-    protected MailProcessor createMailProcessor(String name, HierarchicalConfiguration config) throws Exception {
+    protected MailProcessor createMailProcessor(String name, HierarchicalConfiguration<ImmutableNode> config) throws Exception {
         CamelMailetProcessor processor = new CamelMailetProcessor(metricFactory);
         try {
             processor.setCamelContext(camelContext);

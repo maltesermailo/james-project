@@ -26,8 +26,8 @@ import static org.mockito.Mockito.mock;
 import org.apache.commons.configuration2.PropertiesConfiguration;
 import org.apache.james.FakePropertiesProvider;
 import org.apache.james.blob.cassandra.CassandraBlobStore;
-import org.apache.james.blob.objectstorage.ObjectStorageBlobsDAO;
-import org.apache.james.blob.union.UnionBlobStore;
+import org.apache.james.blob.objectstorage.ObjectStorageBlobStore;
+import org.apache.james.blob.union.HybridBlobStore;
 import org.apache.james.modules.blobstore.BlobStoreChoosingConfiguration.BlobStoreImplName;
 import org.apache.james.modules.mailbox.ConfigurationComponent;
 import org.junit.jupiter.api.Test;
@@ -38,8 +38,8 @@ class BlobStoreChoosingModuleTest {
 
     private static CassandraBlobStore CASSANDRA_BLOBSTORE = mock(CassandraBlobStore.class);
     private static Provider<CassandraBlobStore> CASSANDRA_BLOBSTORE_PROVIDER = () -> CASSANDRA_BLOBSTORE;
-    private static ObjectStorageBlobsDAO OBJECT_STORAGE_BLOBSTORE = mock(ObjectStorageBlobsDAO.class);
-    private static Provider<ObjectStorageBlobsDAO> OBJECT_STORAGE_BLOBSTORE_PROVIDER = () -> OBJECT_STORAGE_BLOBSTORE;
+    private static ObjectStorageBlobStore OBJECT_STORAGE_BLOBSTORE = mock(ObjectStorageBlobStore.class);
+    private static Provider<ObjectStorageBlobStore> OBJECT_STORAGE_BLOBSTORE_PROVIDER = () -> OBJECT_STORAGE_BLOBSTORE;
 
     @Test
     void provideChoosingConfigurationShouldThrowWhenMissingPropertyField() {
@@ -105,16 +105,16 @@ class BlobStoreChoosingModuleTest {
     }
 
     @Test
-    void provideChoosingConfigurationShouldReturnUnionConfigurationWhenConfigurationImplIsUnion() throws Exception {
+    void provideChoosingConfigurationShouldReturnHybridConfigurationWhenConfigurationImplIsHybrid() throws Exception {
         BlobStoreChoosingModule module = new BlobStoreChoosingModule();
         PropertiesConfiguration configuration = new PropertiesConfiguration();
-        configuration.addProperty("implementation", BlobStoreImplName.UNION.getName());
+        configuration.addProperty("implementation", BlobStoreImplName.HYBRID.getName());
         FakePropertiesProvider propertyProvider = FakePropertiesProvider.builder()
             .register(ConfigurationComponent.NAME, configuration)
             .build();
 
         assertThat(module.provideChoosingConfiguration(propertyProvider))
-            .isEqualTo(BlobStoreChoosingConfiguration.union());
+            .isEqualTo(BlobStoreChoosingConfiguration.hybrid());
     }
 
     @Test
@@ -131,11 +131,63 @@ class BlobStoreChoosingModuleTest {
     }
 
     @Test
+    void providesHybridBlobStoreConfigurationShouldThrowWhenNegative() {
+        BlobStoreChoosingModule module = new BlobStoreChoosingModule();
+        PropertiesConfiguration configuration = new PropertiesConfiguration();
+        configuration.addProperty("hybrid.size.threshold", -1);
+        FakePropertiesProvider propertyProvider = FakePropertiesProvider.builder()
+            .register(ConfigurationComponent.NAME, configuration)
+            .build();
+
+        assertThatThrownBy(() -> module.providesHybridBlobStoreConfiguration(propertyProvider))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void providesHybridBlobStoreConfigurationShouldNotThrowWhenZero() {
+        BlobStoreChoosingModule module = new BlobStoreChoosingModule();
+        PropertiesConfiguration configuration = new PropertiesConfiguration();
+        configuration.addProperty("hybrid.size.threshold", 0);
+        FakePropertiesProvider propertyProvider = FakePropertiesProvider.builder()
+            .register(ConfigurationComponent.NAME, configuration)
+            .build();
+
+        assertThat(module.providesHybridBlobStoreConfiguration(propertyProvider))
+            .isEqualTo(new HybridBlobStore.Configuration(0));
+    }
+
+    @Test
+    void providesHybridBlobStoreConfigurationShouldReturnConfiguration() {
+        BlobStoreChoosingModule module = new BlobStoreChoosingModule();
+        PropertiesConfiguration configuration = new PropertiesConfiguration();
+        configuration.addProperty("hybrid.size.threshold", 36);
+        FakePropertiesProvider propertyProvider = FakePropertiesProvider.builder()
+            .register(ConfigurationComponent.NAME, configuration)
+            .build();
+
+        assertThat(module.providesHybridBlobStoreConfiguration(propertyProvider))
+            .isEqualTo(new HybridBlobStore.Configuration(36));
+    }
+
+    @Test
+    void providesHybridBlobStoreConfigurationShouldReturnConfigurationWhenLegacyFile() {
+        BlobStoreChoosingModule module = new BlobStoreChoosingModule();
+        PropertiesConfiguration configuration = new PropertiesConfiguration();
+        configuration.addProperty("hybrid.size.threshold", 36);
+        FakePropertiesProvider propertyProvider = FakePropertiesProvider.builder()
+            .register(ConfigurationComponent.LEGACY, configuration)
+            .build();
+
+        assertThat(module.providesHybridBlobStoreConfiguration(propertyProvider))
+            .isEqualTo(new HybridBlobStore.Configuration(36));
+    }
+
+    @Test
     void provideBlobStoreShouldReturnCassandraBlobStoreWhenCassandraConfigured() {
         BlobStoreChoosingModule module = new BlobStoreChoosingModule();
 
         assertThat(module.provideBlobStore(BlobStoreChoosingConfiguration.cassandra(),
-            CASSANDRA_BLOBSTORE_PROVIDER, OBJECT_STORAGE_BLOBSTORE_PROVIDER))
+            CASSANDRA_BLOBSTORE_PROVIDER, OBJECT_STORAGE_BLOBSTORE_PROVIDER, HybridBlobStore.Configuration.DEFAULT))
             .isEqualTo(CASSANDRA_BLOBSTORE);
     }
 
@@ -144,16 +196,16 @@ class BlobStoreChoosingModuleTest {
         BlobStoreChoosingModule module = new BlobStoreChoosingModule();
 
         assertThat(module.provideBlobStore(BlobStoreChoosingConfiguration.cassandra(),
-            CASSANDRA_BLOBSTORE_PROVIDER, OBJECT_STORAGE_BLOBSTORE_PROVIDER))
+            CASSANDRA_BLOBSTORE_PROVIDER, OBJECT_STORAGE_BLOBSTORE_PROVIDER, HybridBlobStore.Configuration.DEFAULT))
             .isEqualTo(CASSANDRA_BLOBSTORE);
     }
 
     @Test
-    void provideBlobStoreShouldReturnUnionBlobStoreWhenUnionConfigured() {
+    void provideBlobStoreShouldReturnHybridBlobStoreWhenHybridConfigured() {
         BlobStoreChoosingModule module = new BlobStoreChoosingModule();
 
-        assertThat(module.provideBlobStore(BlobStoreChoosingConfiguration.union(),
-            CASSANDRA_BLOBSTORE_PROVIDER, OBJECT_STORAGE_BLOBSTORE_PROVIDER))
-            .isInstanceOf(UnionBlobStore.class);
+        assertThat(module.provideBlobStore(BlobStoreChoosingConfiguration.hybrid(),
+            CASSANDRA_BLOBSTORE_PROVIDER, OBJECT_STORAGE_BLOBSTORE_PROVIDER, HybridBlobStore.Configuration.DEFAULT))
+            .isInstanceOf(HybridBlobStore.class);
     }
 }

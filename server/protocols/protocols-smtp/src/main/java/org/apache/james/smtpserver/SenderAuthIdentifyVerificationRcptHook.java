@@ -20,11 +20,10 @@ package org.apache.james.smtpserver;
 
 import javax.inject.Inject;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.james.core.Domain;
 import org.apache.james.core.MailAddress;
 import org.apache.james.core.MaybeSender;
+import org.apache.james.core.Username;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.domainlist.api.DomainListException;
 import org.apache.james.protocols.smtp.SMTPSession;
@@ -37,28 +36,13 @@ import org.apache.james.user.api.UsersRepositoryException;
  * Handler which check if the authenticated user is incorrect
  */
 public class SenderAuthIdentifyVerificationRcptHook extends AbstractSenderAuthIdentifyVerificationRcptHook {
-
-    private DomainList domains;
-    private UsersRepository users;
-
-    @Inject
-    public final void setUsersRepository(UsersRepository users) {
-        this.users = users;
-    }
+    private final DomainList domains;
+    private final UsersRepository users;
 
     @Inject
-    public void setDomainList(DomainList domains) {
+    public SenderAuthIdentifyVerificationRcptHook(DomainList domains, UsersRepository users) {
         this.domains = domains;
-    }
-
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
+        this.users = users;
     }
 
     @Override
@@ -81,7 +65,7 @@ public class SenderAuthIdentifyVerificationRcptHook extends AbstractSenderAuthId
     }
 
     @Override
-    protected String getUser(MailAddress mailAddress) {
+    protected Username getUser(MailAddress mailAddress) {
         try {
             return users.getUser(mailAddress);
         } catch (UsersRepositoryException e) {
@@ -89,4 +73,8 @@ public class SenderAuthIdentifyVerificationRcptHook extends AbstractSenderAuthId
         }
     }
 
+    @Override
+    protected boolean isSenderAllowed(Username user, Username sender) {
+        return user.equals(sender);
+    }
 }

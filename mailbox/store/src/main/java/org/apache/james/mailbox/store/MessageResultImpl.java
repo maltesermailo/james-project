@@ -30,8 +30,10 @@ import java.util.Map;
 import javax.mail.Flags;
 
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.Content;
+import org.apache.james.mailbox.model.Header;
 import org.apache.james.mailbox.model.Headers;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MessageAttachment;
@@ -39,8 +41,8 @@ import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.mailbox.model.MessageMetaData;
 import org.apache.james.mailbox.model.MessageResult;
 import org.apache.james.mailbox.model.MimeDescriptor;
+import org.apache.james.mailbox.model.MimePath;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
-import org.apache.james.mailbox.store.mail.model.Message;
 import org.apache.james.mailbox.store.streaming.InputStreamContent;
 import org.apache.james.mailbox.store.streaming.InputStreamContent.Type;
 import org.apache.james.mime4j.MimeException;
@@ -51,19 +53,17 @@ import com.google.common.base.Objects;
  * Bean based implementation.
  */
 public class MessageResultImpl implements MessageResult {
+    private static final String TAB = " ";
 
     private final Map<MimePath, PartContent> partsByPath = new HashMap<>();
+    private final MailboxMessage message;
+    private final HeadersImpl headers;
 
     private MimeDescriptor mimeDescriptor;
-
-    private final MailboxMessage message;
-
-    private HeadersImpl headers;
     private Content fullContent;
     private Content bodyContent;
 
-    
-    public MessageResultImpl(MailboxMessage message) throws IOException {
+    public MessageResultImpl(MailboxMessage message) {
         this.message = message;
         this.headers = new HeadersImpl(message);
     }
@@ -99,7 +99,7 @@ public class MessageResultImpl implements MessageResult {
     }
 
     @Override
-    public long getModSeq() {
+    public ModSeq getModSeq() {
         return messageMetaData().getModSeq();
     }
 
@@ -153,103 +153,67 @@ public class MessageResultImpl implements MessageResult {
      * @return a <code>String</code> representation of this object.
      */
     public String toString() {
-        final String TAB = " ";
-
-        return "MessageResultImpl ( " + "uid = " + getUid() + TAB + "flags = " + getFlags() + TAB + "size = " + getSize() + TAB + "internalDate = " + getInternalDate() + ")";
+        return "MessageResultImpl ( " + "uid = " + getUid() + TAB + "flags = " + getFlags() + TAB + "size = " + getSize()
+            + TAB + "internalDate = " + getInternalDate() + ")";
     }
 
     @Override
-    public Content getBody(MimePath path) throws MailboxException {
-        final Content result;
-        final PartContent partContent = getPartContent(path);
-        if (partContent == null) {
-            result = null;
-        } else {
-            result = partContent.getBody();
-        }
-        return result;
+    public Content getBody(MimePath path) {
+        PartContent partContent = getPartContent(path);
+        return partContent.getBody();
     }
 
     @Override
-    public Content getMimeBody(MimePath path) throws MailboxException {
-        final Content result;
-        final PartContent partContent = getPartContent(path);
-        if (partContent == null) {
-            result = null;
-        } else {
-            result = partContent.getMimeBody();
-        }
-        return result;
+    public Content getMimeBody(MimePath path) {
+        PartContent partContent = getPartContent(path);
+        return partContent.getMimeBody();
     }
 
     @Override
-    public Content getFullContent(MimePath path) throws MailboxException {
-        final Content result;
-        final PartContent partContent = getPartContent(path);
-        if (partContent == null) {
-            result = null;
-        } else {
-            result = partContent.getFull();
-        }
-        return result;
+    public Content getFullContent(MimePath path) {
+        PartContent partContent = getPartContent(path);
+        return partContent.getFull();
     }
 
     @Override
-    public Iterator<Header> iterateHeaders(MimePath path) throws MailboxException {
-        final Iterator<Header> result;
-        final PartContent partContent = getPartContent(path);
-        if (partContent == null) {
-            result = null;
-        } else {
-            result = partContent.getHeaders();
-        }
-        return result;
+    public Iterator<Header> iterateHeaders(MimePath path) {
+        PartContent partContent = getPartContent(path);
+        return partContent.getHeaders();
     }
 
     @Override
-    public Iterator<Header> iterateMimeHeaders(MimePath path) throws MailboxException {
-        final Iterator<Header> result;
-        final PartContent partContent = getPartContent(path);
-        if (partContent == null) {
-            result = null;
-        } else {
-            result = partContent.getMimeHeaders();
-        }
-        return result;
+    public Iterator<Header> iterateMimeHeaders(MimePath path) {
+        PartContent partContent = getPartContent(path);
+        return partContent.getMimeHeaders();
     }
 
-    public void setBodyContent(MimePath path, Content content) {
-        final PartContent partContent = getPartContent(path);
+    void setBodyContent(MimePath path, Content content) {
+        PartContent partContent = getPartContent(path);
         partContent.setBody(content);
     }
 
-    public void setMimeBodyContent(MimePath path, Content content) {
-        final PartContent partContent = getPartContent(path);
+    void setMimeBodyContent(MimePath path, Content content) {
+        PartContent partContent = getPartContent(path);
         partContent.setMimeBody(content);
     }
 
-    public void setFullContent(MimePath path, Content content) {
-        final PartContent partContent = getPartContent(path);
+    void setFullContent(MimePath path, Content content) {
+        PartContent partContent = getPartContent(path);
         partContent.setFull(content);
     }
 
-    public void setHeaders(MimePath path, Iterator<Header> headers) {
-        final PartContent partContent = getPartContent(path);
+    void setHeaders(MimePath path, Iterator<Header> headers) {
+        PartContent partContent = getPartContent(path);
         partContent.setHeaders(headers);
     }
 
-    public void setMimeHeaders(MimePath path, Iterator<Header> headers) {
-        final PartContent partContent = getPartContent(path);
+    void setMimeHeaders(MimePath path, Iterator<Header> headers) {
+        PartContent partContent = getPartContent(path);
         partContent.setMimeHeaders(headers);
     }
 
     private PartContent getPartContent(MimePath path) {
-        PartContent result = (PartContent) partsByPath.get(path);
-        if (result == null) {
-            result = new PartContent();
-            partsByPath.put(path, result);
-        }
-        return result;
+        return partsByPath.computeIfAbsent(path, any -> new PartContent());
     }
 
     private static final class PartContent {
@@ -263,23 +227,20 @@ public class MessageResultImpl implements MessageResult {
 
         private Iterator<Header> mimeHeaders;
 
-        private int content;
 
         public Content getBody() {
             return body;
         }
 
         public void setBody(Content body) {
-            content = content | FetchGroup.BODY_CONTENT;
             this.body = body;
         }
 
-        public Content getMimeBody() {
+        Content getMimeBody() {
             return mimeBody;
         }
 
-        public void setMimeBody(Content mimeBody) {
-            content = content | FetchGroup.MIME_CONTENT;
+        void setMimeBody(Content mimeBody) {
             this.mimeBody = mimeBody;
         }
 
@@ -288,7 +249,6 @@ public class MessageResultImpl implements MessageResult {
         }
 
         public void setFull(Content full) {
-            content = content | FetchGroup.FULL_CONTENT;
             this.full = full;
         }
 
@@ -297,16 +257,14 @@ public class MessageResultImpl implements MessageResult {
         }
 
         public void setHeaders(Iterator<Header> headers) {
-            content = content | FetchGroup.HEADERS;
             this.headers = headers;
         }
 
-        public Iterator<Header> getMimeHeaders() {
+        Iterator<Header> getMimeHeaders() {
             return mimeHeaders;
         }
 
-        public void setMimeHeaders(Iterator<Header> mimeHeaders) {
-            content = content | FetchGroup.MIME_HEADERS;
+        void setMimeHeaders(Iterator<Header> mimeHeaders) {
             this.mimeHeaders = mimeHeaders;
         }
     }
@@ -318,7 +276,7 @@ public class MessageResultImpl implements MessageResult {
         // it can be relative expensive on big messages and slow mailbox implementations
         if (mimeDescriptor == null) {
             try {
-                if (MimeDescriptorImpl.isComposite(message.getMediaType())) {
+                if (isComposite(message.getMediaType())) {
                     mimeDescriptor = MimeDescriptorImpl.build(getFullContent().getInputStream());
                 } else {
                     mimeDescriptor = new LazyMimeDescriptor(this, message);
@@ -329,32 +287,46 @@ public class MessageResultImpl implements MessageResult {
         }
         return mimeDescriptor;
     }
+
+    /**
+     * Is this a composite media type (as per RFC2045)?
+     *
+     * TODO: Move to Mime4j
+     * @param mediaType possibly null
+     * @return true when the type is composite,
+     * false otherwise
+     */
+    private boolean isComposite(String mediaType) {
+        return "message".equalsIgnoreCase(mediaType) || "multipart".equalsIgnoreCase(mediaType);
+    }
     
     @Override
-    public Headers getHeaders() throws MailboxException {
-        if (headers == null) {
-            headers = new HeadersImpl(message);
-        }
+    public Headers getHeaders() {
         return headers;
     }
     
     @Override
-    public List<MessageAttachment> getAttachments() throws MailboxException {
+    public List<MessageAttachment> getLoadedAttachments() {
         return message.getAttachments();
     }
-    
-    private final class HeadersImpl implements Headers {
 
-        private final Message msg;
+    @Override
+    public boolean hasAttachments() {
+        return message.hasAttachment();
+    }
+
+    private static final class HeadersImpl implements Headers {
+
+        private final MailboxMessage msg;
         private List<Header> headers;
         
-        public HeadersImpl(Message msg) {
+        private HeadersImpl(MailboxMessage msg) {
             this.msg = msg;
         }
 
         @Override
         public int hashCode() {
-            return 39 * 19 + message.hashCode();
+            return 39 * 19 + msg.hashCode();
         }
 
         @Override
@@ -382,13 +354,12 @@ public class MessageResultImpl implements MessageResult {
         public Iterator<Header> headers() throws MailboxException {
             if (headers == null) {
                 try {
-                    headers = ResultUtils.createHeaders(message);
+                    headers = ResultUtils.createHeaders(msg);
                 } catch (IOException e) {
                     throw new MailboxException("Unable to parse headers", e);
                 }
             }
             return headers.iterator();
         }
-        
     }
 }

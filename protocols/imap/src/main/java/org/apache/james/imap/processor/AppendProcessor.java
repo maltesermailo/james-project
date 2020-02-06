@@ -29,8 +29,6 @@ import java.util.Date;
 import javax.mail.Flags;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.UidRange;
 import org.apache.james.imap.api.message.response.StatusResponse;
@@ -44,7 +42,6 @@ import org.apache.james.imap.message.request.AppendRequest;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
-import org.apache.james.mailbox.MessageManager.MetaData.FetchGroup;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.MailboxNotFoundException;
 import org.apache.james.mailbox.model.ComposedMessageId;
@@ -63,7 +60,7 @@ public class AppendProcessor extends AbstractMailboxProcessor<AppendRequest> {
     }
 
     @Override
-    protected void doProcess(AppendRequest request, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void processRequest(AppendRequest request, ImapSession session, Responder responder) {
         final String mailboxName = request.getMailboxName();
         final InputStream messageIn = request.getMessage();
         final Date datetime = request.getDatetime();
@@ -73,8 +70,8 @@ public class AppendProcessor extends AbstractMailboxProcessor<AppendRequest> {
         try {
 
             final MailboxManager mailboxManager = getMailboxManager();
-            final MessageManager mailbox = mailboxManager.getMailbox(mailboxPath, ImapSessionUtils.getMailboxSession(session));
-            appendToMailbox(messageIn, datetime, flags, session, tag, command, mailbox, responder, mailboxPath);
+            final MessageManager mailbox = mailboxManager.getMailbox(mailboxPath, session.getMailboxSession());
+            appendToMailbox(messageIn, datetime, flags, session, request, mailbox, responder, mailboxPath);
         } catch (MailboxNotFoundException e) {
             // consume message on exception
             consume(messageIn);
@@ -83,7 +80,7 @@ public class AppendProcessor extends AbstractMailboxProcessor<AppendRequest> {
             
             // Indicates that the mailbox does not exist
             // So TRY CREATE
-            tryCreate(session, tag, command, responder, e);
+            tryCreate(request, responder, e);
 
         } catch (MailboxException e) {
             // consume message on exception
@@ -92,7 +89,7 @@ public class AppendProcessor extends AbstractMailboxProcessor<AppendRequest> {
             LOGGER.error("Append failed for mailbox {}", mailboxPath, e);
             
             // Some other issue
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
 
         }
 
@@ -111,26 +108,22 @@ public class AppendProcessor extends AbstractMailboxProcessor<AppendRequest> {
     /**
      * Issues a TRY CREATE response.
      * 
-     * @param session
-     *            not null
-     * @param tag
-     *            not null
-     * @param command
+     * @param request
      *            not null
      * @param responder
      *            not null
      * @param e
      *            not null
      */
-    private void tryCreate(ImapSession session, String tag, ImapCommand command, Responder responder, MailboxNotFoundException e) {
+    private void tryCreate(AppendRequest request, Responder responder, MailboxNotFoundException e) {
         LOGGER.debug("Cannot open mailbox: ", e);
 
-        no(command, tag, responder, HumanReadableText.FAILURE_NO_SUCH_MAILBOX, StatusResponse.ResponseCode.tryCreate());
+        no(request, responder, HumanReadableText.FAILURE_NO_SUCH_MAILBOX, StatusResponse.ResponseCode.tryCreate());
     }
 
-    private void appendToMailbox(InputStream message, Date datetime, Flags flagsToBeSet, ImapSession session, String tag, ImapCommand command, MessageManager mailbox, Responder responder, MailboxPath mailboxPath) {
+    private void appendToMailbox(InputStream message, Date datetime, Flags flagsToBeSet, ImapSession session, AppendRequest request, MessageManager mailbox, Responder responder, MailboxPath mailboxPath) {
         try {
-            final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
+            final MailboxSession mailboxSession = session.getMailboxSession();
             final SelectedMailbox selectedMailbox = session.getSelected();
             final MailboxManager mailboxManager = getMailboxManager();
             final boolean isSelectedMailbox = selectedMailbox != null && selectedMailbox.getPath().equals(mailboxPath);
@@ -140,28 +133,30 @@ public class AppendProcessor extends AbstractMailboxProcessor<AppendRequest> {
             }
 
             // get folder UIDVALIDITY
-            Long uidValidity = mailboxManager.getMailbox(mailboxPath, mailboxSession).getMetaData(false, mailboxSession, FetchGroup.NO_COUNT).getUidValidity();
+            Long uidValidity = mailboxManager.getMailbox(mailboxPath, mailboxSession)
+                .getMailboxEntity()
+                .getUidValidity();
 
             unsolicitedResponses(session, responder, false);
 
             // in case of MULTIAPPEND support we will push more then one UID here
-            okComplete(command, tag, ResponseCode.appendUid(uidValidity, new UidRange[] { new UidRange(messageId.getUid()) }), responder);
+            okComplete(request, ResponseCode.appendUid(uidValidity, new UidRange[] { new UidRange(messageId.getUid()) }), responder);
         } catch (MailboxNotFoundException e) {
             // Indicates that the mailbox does not exist
             // So TRY CREATE
-            tryCreate(session, tag, command, responder, e);
+            tryCreate(request, responder, e);
         } catch (MailboxException e) {
             LOGGER.error("Unable to append message to mailbox {}", mailboxPath, e);
             // Some other issue
-            no(command, tag, responder, HumanReadableText.SAVE_FAILED);
+            no(request, responder, HumanReadableText.SAVE_FAILED);
         }
     }
 
     @Override
-    protected Closeable addContextToMDC(AppendRequest message) {
+    protected Closeable addContextToMDC(AppendRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "APPEND")
-            .addContext("mailbox", message.getMailboxName())
+            .addContext("mailbox", request.getMailboxName())
             .build();
     }
 }

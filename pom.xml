@@ -32,7 +32,7 @@
 
     <groupId>org.apache.james</groupId>
     <artifactId>james-project</artifactId>
-    <version>3.4.0</version>
+    <version>3.5.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Apache James Project</name>
@@ -478,11 +478,11 @@
         </contributor>
         <contributor>
             <name>Luc Duzan</name>
-            <email>lduzan@linagora.com</email>
+            <email>lduzan@apache.org</email>
         </contributor>
         <contributor>
             <name>Quynh Nguyen</name>
-            <email>qnguyen@linagora.com</email>
+            <email>qnguyen@apache.org</email>
         </contributor>
     </contributors>
 
@@ -538,13 +538,14 @@
         <module>mpt</module>
         <module>protocols</module>
         <module>server</module>
+        <module>testing/base</module>
         <module>third-party</module>
     </modules>
 
     <scm>
         <connection>scm:git:http://git-wip-us.apache.org/repos/asf/james-project.git</connection>
         <developerConnection>scm:git:https://git-wip-us.apache.org/repos/asf/james-project.git</developerConnection>
-        <tag>james-project-3.4.0</tag>
+        <tag>HEAD</tag>
         <url>http://git-wip-us.apache.org/repos/asf/james-project.git</url>
     </scm>
 
@@ -603,7 +604,6 @@
         <slf4j.version>1.7.27</slf4j.version>
 
         <dnsjava.version>2.1.9</dnsjava.version>
-        <junit.version>4.12</junit.version>
         <junit.jupiter.version>5.5.1</junit.jupiter.version>
         <junit.platform.version>1.5.1</junit.platform.version>
         <junit.vintage.version>5.5.1</junit.vintage.version>
@@ -623,7 +623,7 @@
         <testcontainers.version>1.12.0</testcontainers.version>
         <assertj.version>3.3.0</assertj.version>
         <es.version>2.2.1</es.version>
-        <es-reporter.version>6.0.0-RC2</es-reporter.version>
+        <es-reporter.version>6.0.0-RC3</es-reporter.version>
         <guava.version>25.1-jre</guava.version>
 
         <jutf7.version>1.0.0</jutf7.version>
@@ -648,8 +648,8 @@
 
         <bouncycastle.version>1.62</bouncycastle.version>
 
-        <scala.base>2.12</scala.base>
-        <scala.version>${scala.base}.8</scala.version>
+        <scala.base>2.13</scala.base>
+        <scala.version>${scala.base}.1</scala.version>
 
         <doclint>none</doclint>
     </properties>
@@ -659,7 +659,7 @@
             <dependency>
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-bom</artifactId>
-                <version>Californium-SR10</version>
+                <version>Dysprosium-RELEASE</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -777,6 +777,11 @@
                 <artifactId>apache-james-mailbox-elasticsearch</artifactId>
                 <version>${project.version}</version>
                 <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>apache-james-mailbox-event-cassandra</artifactId>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
@@ -1234,6 +1239,12 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
+                <artifactId>james-json</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
                 <artifactId>james-server-blob</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -1356,6 +1367,12 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-data-memory</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
                 <artifactId>james-server-deleted-messages-vault</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -1435,12 +1452,12 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
-                <artifactId>james-server-guice-jmap</artifactId>
+                <artifactId>james-server-guice-jmap-draft</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
-                <artifactId>james-server-guice-jmap</artifactId>
+                <artifactId>james-server-guice-jmap-draft</artifactId>
                 <version>${project.version}</version>
                 <type>test-jar</type>
             </dependency>
@@ -1453,6 +1470,28 @@
                 <groupId>${james.groupId}</groupId>
                 <artifactId>james-server-guice-netty</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-guice-sieve-file</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-guice-sieve-file</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-guice-sieve-jpa</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-guice-sieve-jpa</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
@@ -1471,17 +1510,17 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
-                <artifactId>james-server-jmap</artifactId>
+                <artifactId>james-server-jmap-draft</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
-                <artifactId>james-server-jmap-integration-testing</artifactId>
+                <artifactId>james-server-jmap-draft-integration-testing</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
-                <artifactId>james-server-jmap-integration-testing</artifactId>
+                <artifactId>james-server-jmap-draft-integration-testing</artifactId>
                 <version>${project.version}</version>
                 <type>test-jar</type>
             </dependency>
@@ -1693,12 +1732,23 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
-                <artifactId>james-server-task</artifactId>
+                <artifactId>james-server-task-memory</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
-                <artifactId>james-server-task</artifactId>
+                <artifactId>james-server-task-memory</artifactId>
+                <type>test-jar</type>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-task-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-task-api</artifactId>
                 <type>test-jar</type>
                 <version>${project.version}</version>
             </dependency>
@@ -1768,6 +1818,16 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-webadmin-integration-test-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>james-server-webadmin-jmap</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
                 <artifactId>james-server-webadmin-mailbox</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -1809,6 +1869,12 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
+                <artifactId>metrics-api</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
                 <artifactId>metrics-dropwizard</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -1824,18 +1890,22 @@
             </dependency>
             <dependency>
                 <groupId>${james.groupId}</groupId>
+                <artifactId>mock-smtp-server</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
                 <artifactId>quota-mailing-cassandra</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${james.groupId}</groupId>
+                <artifactId>testing-base</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>ch.qos.logback</groupId>
                 <artifactId>logback-classic</artifactId>
-                <version>${logback.version}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-core</artifactId>
                 <version>${logback.version}</version>
             </dependency>
             <dependency>
@@ -1919,11 +1989,6 @@
                 <version>${guice.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.google.inject.extensions</groupId>
-                <artifactId>guice-multibindings</artifactId>
-                <version>${guice.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>com.ibm.icu</groupId>
                 <artifactId>icu4j</artifactId>
                 <version>64.2</version>
@@ -1965,6 +2030,16 @@
                 <version>1.2.0</version>
             </dependency>
             <dependency>
+                <groupId>com.sun.xml.bind</groupId>
+                <artifactId>jaxb-core</artifactId>
+                <version>2.3.0.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sun.xml.bind</groupId>
+                <artifactId>jaxb-impl</artifactId>
+                <version>${jaxb.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>javax.activation</groupId>
                 <artifactId>javax.activation-api</artifactId>
                 <version>1.2.0</version>
@@ -1979,16 +2054,6 @@
                         <artifactId>activation</artifactId>
                     </exclusion>
                 </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>com.sun.xml.bind</groupId>
-                <artifactId>jaxb-core</artifactId>
-                <version>2.3.0.1</version>
-            </dependency>
-            <dependency>
-                <groupId>com.sun.xml.bind</groupId>
-                <artifactId>jaxb-impl</artifactId>
-                <version>${jaxb.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.thoughtworks.qdox</groupId>
@@ -2107,11 +2172,6 @@
                 <version>${netty.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.projectreactor.rabbitmq</groupId>
-                <artifactId>reactor-rabbitmq</artifactId>
-                <version>1.2.0.RELEASE</version>
-            </dependency>
-            <dependency>
                 <groupId>javax.activation</groupId>
                 <artifactId>activation</artifactId>
                 <version>${javax-activation.version}</version>
@@ -2135,11 +2195,6 @@
                 <groupId>javax.xml.bind</groupId>
                 <artifactId>jaxb-api</artifactId>
                 <version>${jaxb.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>junit</groupId>
-                <artifactId>junit</artifactId>
-                <version>${junit.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.javacrumbs.json-unit</groupId>
@@ -2406,11 +2461,6 @@
                 <version>3.12.2</version>
             </dependency>
             <dependency>
-                <groupId>org.assertj</groupId>
-                <artifactId>assertj-guava</artifactId>
-                <version>3.2.1</version>
-            </dependency>
-            <dependency>
                 <groupId>org.awaitility</groupId>
                 <artifactId>awaitility</artifactId>
                 <version>3.1.6</version>
@@ -2642,6 +2692,11 @@
     <build>
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>${james.groupId}</groupId>
+                    <artifactId>mailetdocs-maven-plugin</artifactId>
+                    <version>${project.version}</version>
+                </plugin>
                 <!-- Order by groupId / artifactId / scope -->
                 <plugin>
                     <groupId>com.coderplus.maven.plugins</groupId>
@@ -2698,7 +2753,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-assembly-plugin</artifactId>
-                    <version>3.1.0</version>
+                    <version>3.1.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -3098,7 +3153,7 @@
                         <configuration>
                             <rules>
                                 <requireMavenVersion>
-                                    <version>3.3.9</version>
+                                    <version>3.6.0</version>
                                 </requireMavenVersion>
                             </rules>
                         </configuration>
@@ -3182,7 +3237,7 @@
                     <dependency>
                         <groupId>com.puppycrawl.tools</groupId>
                         <artifactId>checkstyle</artifactId>
-                        <version>8.23</version>
+                        <version>8.29</version>
                     </dependency>
                 </dependencies>
                 <executions>

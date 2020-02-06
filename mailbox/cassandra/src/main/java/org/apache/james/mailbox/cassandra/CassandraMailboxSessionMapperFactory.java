@@ -142,7 +142,6 @@ public class CassandraMailboxSessionMapperFactory extends MailboxSessionMapperFa
         return new CassandraMessageMapper(
                                           uidProvider,
                                           modSeqProvider,
-                                          null,
                                           createAttachmentMapper(mailboxSession),
                                           messageDAO,
                                           messageIdDAO,
@@ -160,7 +159,7 @@ public class CassandraMailboxSessionMapperFactory extends MailboxSessionMapperFa
     public MessageIdMapper createMessageIdMapper(MailboxSession mailboxSession) throws MailboxException {
         return new CassandraMessageIdMapper(getMailboxMapper(mailboxSession), mailboxDAO,
                 createAttachmentMapper(mailboxSession),
-                imapUidDAO, messageIdDAO, messageDAO, indexTableHandler, modSeqProvider, mailboxSession,
+                imapUidDAO, messageIdDAO, messageDAO, indexTableHandler, modSeqProvider,
                 cassandraConfiguration);
     }
 
@@ -187,10 +186,6 @@ public class CassandraMailboxSessionMapperFactory extends MailboxSessionMapperFa
     @Override
     public UidProvider getUidProvider() {
         return uidProvider;
-    }
-
-    Session getSession() {
-        return session;
     }
 
     @Override

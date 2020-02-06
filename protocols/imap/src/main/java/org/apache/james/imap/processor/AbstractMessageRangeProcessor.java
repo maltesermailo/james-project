@@ -19,11 +19,11 @@
 
 package org.apache.james.imap.processor;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Stream;
 
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.response.StatusResponse;
@@ -44,75 +44,68 @@ import org.apache.james.metrics.api.MetricFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class AbstractMessageRangeProcessor<M extends AbstractMessageRangeRequest> extends AbstractMailboxProcessor<M> {
+import com.github.fge.lambdas.Throwing;
+import com.github.steveash.guavate.Guavate;
+
+public abstract class AbstractMessageRangeProcessor<R extends AbstractMessageRangeRequest> extends AbstractMailboxProcessor<R> {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractMessageRangeProcessor.class);
 
-    public AbstractMessageRangeProcessor(Class<M> acceptableClass, ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
-            MetricFactory metricFactory) {
+    public AbstractMessageRangeProcessor(Class<R> acceptableClass, ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
+                                         MetricFactory metricFactory) {
         super(acceptableClass, next, mailboxManager, factory, metricFactory);
     }
 
-    protected abstract List<MessageRange> process(final MailboxPath targetMailbox,
-                                                  final SelectedMailbox currentMailbox,
-                                                  final MailboxSession mailboxSession,
-                                                  final MailboxManager mailboxManager,
+    protected abstract List<MessageRange> process(MailboxPath targetMailbox,
+                                                  SelectedMailbox currentMailbox,
+                                                  MailboxSession mailboxSession,
                                                   MessageRange messageSet) throws MailboxException;
 
     protected abstract String getOperationName();
 
     @Override
-    protected void doProcess(M request, ImapSession session, String tag, ImapCommand command, Responder responder) {
-        final MailboxPath targetMailbox = PathConverter.forSession(session).buildFullPath(request.getMailboxName());
-        final IdRange[] idSet = request.getIdSet();
-        final boolean useUids = request.isUseUids();
-        final SelectedMailbox currentMailbox = session.getSelected();
+    protected void processRequest(R request, ImapSession session, Responder responder) {
+        MailboxPath targetMailbox = PathConverter.forSession(session).buildFullPath(request.getMailboxName());
+
         try {
-            final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
-            final MailboxManager mailboxManager = getMailboxManager();
-            final boolean mailboxExists = mailboxManager.mailboxExists(targetMailbox, mailboxSession);
+            MailboxSession mailboxSession = session.getMailboxSession();
 
-            if (!mailboxExists) {
-                no(command, tag, responder, HumanReadableText.FAILURE_NO_SUCH_MAILBOX, StatusResponse.ResponseCode.tryCreate());
+            if (!getMailboxManager().mailboxExists(targetMailbox, mailboxSession)) {
+                no(request, responder, HumanReadableText.FAILURE_NO_SUCH_MAILBOX, StatusResponse.ResponseCode.tryCreate());
             } else {
-
-                final MessageManager mailbox = mailboxManager.getMailbox(targetMailbox, mailboxSession);
-
-                List<IdRange> resultRanges = new ArrayList<>();
-                for (IdRange range : idSet) {
-                    MessageRange messageSet = messageRange(currentMailbox, range, useUids);
-                    if (messageSet != null) {
-                        List<MessageRange> processedUids = process(
-                            targetMailbox, currentMailbox, mailboxSession,
-                            mailboxManager, messageSet);
-                        for (MessageRange mr : processedUids) {
-                            // Set recent flag on copied message as this SHOULD be
-                            // done.
-                            // See RFC 3501 6.4.7. COPY Command
-                            // See IMAP-287
-                            //
-                            // Disable this as this is now done directly in the scope of the copy operation.
-                            // See MAILBOX-85
-                            //mailbox.setFlags(new Flags(Flags.Flag.RECENT), true, false, mr, mailboxSession);
-                            resultRanges.add(new IdRange(mr.getUidFrom().asLong(), mr.getUidTo().asLong()));
-                        }
-                    }
-                }
-                IdRange[] resultUids = IdRange.mergeRanges(resultRanges).toArray(new IdRange[0]);
-
-                // get folder UIDVALIDITY
-                Long uidValidity = mailbox.getMetaData(false, mailboxSession, MessageManager.MetaData.FetchGroup.NO_UNSEEN).getUidValidity();
-
-                unsolicitedResponses(session, responder, useUids);
-                okComplete(command, tag, StatusResponse.ResponseCode.copyUid(uidValidity, idSet, resultUids), responder);
+                StatusResponse.ResponseCode code = handleRanges(request, session, targetMailbox, mailboxSession);
+                unsolicitedResponses(session, responder, request.isUseUids());
+                okComplete(request, code, responder);
             }
         } catch (MessageRangeException e) {
             LOGGER.debug("{} failed from mailbox {} to {} for invalid sequence-set {}",
-                    getOperationName(), currentMailbox.getMailboxId(), targetMailbox, idSet, e);
-            taggedBad(command, tag, responder, HumanReadableText.INVALID_MESSAGESET);
+                    getOperationName(), session.getSelected().getMailboxId(), targetMailbox, request.getIdSet(), e);
+            taggedBad(request, responder, HumanReadableText.INVALID_MESSAGESET);
         } catch (MailboxException e) {
             LOGGER.error("{} failed from mailbox {} to {} for sequence-set {}",
-                    getOperationName(), currentMailbox.getMailboxId(), targetMailbox, idSet, e);
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+                    getOperationName(), session.getSelected().getMailboxId(), targetMailbox, request.getIdSet(), e);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
         }
+    }
+
+    private StatusResponse.ResponseCode handleRanges(R request, ImapSession session, MailboxPath targetMailbox, MailboxSession mailboxSession) throws MailboxException {
+        MessageManager mailbox = getMailboxManager().getMailbox(targetMailbox, mailboxSession);
+
+        IdRange[] resultUids = IdRange.mergeRanges(Arrays.stream(request.getIdSet())
+            .map(Throwing.<IdRange, MessageRange>function(
+                range -> messageRange(session.getSelected(), range, request.isUseUids()))
+                .sneakyThrow())
+            .filter(Objects::nonNull)
+            .flatMap(Throwing.<MessageRange, Stream<MessageRange>>function(
+                range -> process(targetMailbox, session.getSelected(), mailboxSession, range)
+                    .stream())
+                .sneakyThrow())
+            .map(IdRange::from)
+            .collect(Guavate.toImmutableList()))
+            .toArray(new IdRange[0]);
+
+        // get folder UIDVALIDITY
+        Long uidValidity = mailbox.getMailboxEntity().getUidValidity();
+
+        return StatusResponse.ResponseCode.copyUid(uidValidity, request.getIdSet(), resultUids);
     }
 }

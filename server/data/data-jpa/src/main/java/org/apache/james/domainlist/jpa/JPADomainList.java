@@ -18,7 +18,6 @@
  ****************************************************************/
 package org.apache.james.domainlist.jpa;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.PostConstruct;
@@ -30,6 +29,7 @@ import javax.persistence.NoResultException;
 import javax.persistence.PersistenceException;
 import javax.persistence.PersistenceUnit;
 
+import org.apache.james.backends.jpa.EntityManagerUtils;
 import org.apache.james.core.Domain;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.domainlist.api.DomainListException;
@@ -39,7 +39,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.steveash.guavate.Guavate;
-import com.google.common.collect.ImmutableList;
 
 /**
  * JPA implementation of the DomainList.<br>
@@ -62,8 +61,6 @@ public class JPADomainList extends AbstractDomainList {
 
     /**
      * Set the entity manager to use.
-     *
-     * @param entityManagerFactory
      */
     @Inject
     @PersistenceUnit(unitName = "James")
@@ -73,50 +70,39 @@ public class JPADomainList extends AbstractDomainList {
 
     @PostConstruct
     public void init() {
-        createEntityManager().close();
+        EntityManagerUtils.safelyClose(createEntityManager());
     }
 
     @SuppressWarnings("unchecked")
     @Override
     protected List<Domain> getDomainListInternal() throws DomainListException {
-        List<Domain> domains = new ArrayList<>();
         EntityManager entityManager = entityManagerFactory.createEntityManager();
-        final EntityTransaction transaction = entityManager.getTransaction();
         try {
-            transaction.begin();
             List<String> resultList = entityManager
                     .createNamedQuery("listDomainNames")
                     .getResultList();
-            domains = resultList
+            return resultList
                     .stream()
-                    .map(domainAsString -> Domain.of(domainAsString))
+                    .map(Domain::of)
                     .collect(Guavate.toImmutableList());
-            transaction.commit();
         } catch (PersistenceException e) {
             LOGGER.error("Failed to list domains", e);
-            rollback(transaction);
             throw new DomainListException("Unable to retrieve domains", e);
         } finally {
-            entityManager.close();
+            EntityManagerUtils.safelyClose(entityManager);
         }
-        return ImmutableList.copyOf(domains);
     }
 
     @Override
     protected boolean containsDomainInternal(Domain domain) throws DomainListException {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
-        final EntityTransaction transaction = entityManager.getTransaction();
         try {
-            transaction.begin();
-            boolean result = containsDomainInternal(domain, entityManager);
-            transaction.commit();
-            return result;
+            return containsDomainInternal(domain, entityManager);
         } catch (PersistenceException e) {
             LOGGER.error("Failed to find domain", e);
-            rollback(transaction);
             throw new DomainListException("Unable to retrieve domains", e);
         } finally {
-            entityManager.close();
+            EntityManagerUtils.safelyClose(entityManager);
         }
     }
 
@@ -138,12 +124,12 @@ public class JPADomainList extends AbstractDomainList {
             rollback(transaction);
             throw new DomainListException("Unable to add domain " + domain.name(), e);
         } finally {
-            entityManager.close();
+            EntityManagerUtils.safelyClose(entityManager);
         }
     }
 
     @Override
-    public void removeDomain(Domain domain) throws DomainListException {
+    public void doRemoveDomain(Domain domain) throws DomainListException {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         final EntityTransaction transaction = entityManager.getTransaction();
         try {
@@ -159,7 +145,7 @@ public class JPADomainList extends AbstractDomainList {
             rollback(transaction);
             throw new DomainListException("Unable to remove domain " + domain.name(), e);
         } finally {
-            entityManager.close();
+            EntityManagerUtils.safelyClose(entityManager);
         }
     }
 

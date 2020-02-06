@@ -53,8 +53,10 @@ import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 public class MemoryMailQueueFactory implements MailQueueFactory<ManageableMailQueue> {
 
@@ -96,7 +98,9 @@ public class MemoryMailQueueFactory implements MailQueueFactory<ManageableMailQu
             this.name = name;
             this.flux = Mono.fromCallable(mailItems::take)
                 .repeat()
-                .flatMap(item -> Mono.just(inProcessingMailItems.add(item)).thenReturn(item))
+                .subscribeOn(Schedulers.elastic())
+                .flatMap(item ->
+                    Mono.fromRunnable(() -> inProcessingMailItems.add(item)).thenReturn(item))
                 .map(mailQueueItemDecoratorFactory::decorate);
         }
 

@@ -20,12 +20,11 @@
 package org.apache.james.imap.processor;
 
 import java.io.Closeable;
-import java.util.Collections;
 import java.util.List;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
@@ -34,16 +33,13 @@ import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.metrics.api.MetricFactory;
 import org.apache.james.util.MDCBuilder;
 
+import com.google.common.collect.ImmutableList;
+
 /**
  * SETQUOTA processor
  */
 public class SetQuotaProcessor extends AbstractMailboxProcessor<SetQuotaRequest> implements CapabilityImplementingProcessor {
-    private static final List<String> CAPABILITIES = Collections.singletonList(ImapConstants.SUPPORTS_QUOTA);
-
-    @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
-        return CAPABILITIES;
-    }
+    private static final List<Capability> CAPABILITIES = ImmutableList.of(ImapConstants.SUPPORTS_QUOTA);
 
     public SetQuotaProcessor(ImapProcessor next, MailboxManager mailboxManager, StatusResponseFactory factory,
             MetricFactory metricFactory) {
@@ -51,22 +47,27 @@ public class SetQuotaProcessor extends AbstractMailboxProcessor<SetQuotaRequest>
     }
 
     @Override
-    protected void doProcess(SetQuotaRequest message, ImapSession session, String tag, ImapCommand command, Responder responder) {
-        Object[] params = new Object[]{
-            "Full admin rights",
-            command.getName(),
-            "Can not perform SETQUOTA commands"
-        };
-        HumanReadableText humanReadableText = new HumanReadableText(HumanReadableText.UNSUFFICIENT_RIGHTS_KEY, HumanReadableText.UNSUFFICIENT_RIGHTS_DEFAULT_VALUE, params);
-        no(command, tag, responder, humanReadableText);
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
+        return CAPABILITIES;
     }
 
     @Override
-    protected Closeable addContextToMDC(SetQuotaRequest message) {
+    protected void processRequest(SetQuotaRequest request, ImapSession session, Responder responder) {
+        Object[] params = new Object[]{
+            "Full admin rights",
+            request.getCommand().getName(),
+            "Can not perform SETQUOTA commands"
+        };
+        HumanReadableText humanReadableText = new HumanReadableText(HumanReadableText.UNSUFFICIENT_RIGHTS_KEY, HumanReadableText.UNSUFFICIENT_RIGHTS_DEFAULT_VALUE, params);
+        no(request, responder, humanReadableText);
+    }
+
+    @Override
+    protected Closeable addContextToMDC(SetQuotaRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "SET_QUOTA")
-            .addContext("quotaRoot", message.getQuotaRoot())
-            .addContext("limits", message.getResourceLimits())
+            .addContext("quotaRoot", request.getQuotaRoot())
+            .addContext("limits", request.getResourceLimits())
             .build();
     }
 }

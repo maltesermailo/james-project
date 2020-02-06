@@ -105,6 +105,9 @@ public class UserMailboxesRoutes implements Routes {
         defineDeleteUserMailbox();
 
         defineDeleteUserMailboxes();
+      
+        reIndexMailboxesRoute()
+            .ifPresent(route -> service.post(USER_MAILBOXES_BASE, route, jsonTransformer));
     }
 
     @GET
@@ -395,5 +398,30 @@ public class UserMailboxesRoutes implements Routes {
                         .type(ErrorType.SERVER_ERROR).message("Error occured while reading email").cause(e).haltError();
             }
         }, jsonTransformer);
+    }
+  
+    @POST
+    @ApiImplicitParams({
+        @ApiImplicitParam(required = true, dataType = "string", name = "username", paramType = "path"),
+        @ApiImplicitParam(
+            required = true,
+            name = "task",
+            paramType = "query parameter",
+            dataType = "String",
+            defaultValue = "none",
+            example = "?task=reIndex",
+            value = "Compulsory. Only supported value is `reIndex`")
+    })
+    @ApiOperation(value = "Perform an action on a user mailbox")
+    @ApiResponses(value = {
+        @ApiResponse(code = HttpStatus.CREATED_201, message = "Task is created", response = TaskIdDto.class),
+        @ApiResponse(code = HttpStatus.INTERNAL_SERVER_ERROR_500, message = "Internal server error - Something went bad on the server side."),
+        @ApiResponse(code = HttpStatus.BAD_REQUEST_400, message = "Bad request - details in the returned error message")
+    })
+    public Optional<Route> reIndexMailboxesRoute() {
+        return TaskFromRequestRegistry.builder()
+            .parameterName(TASK_PARAMETER)
+            .registrations(usersMailboxesTaskRegistration)
+            .buildAsRouteOptional(taskManager);
     }
 }

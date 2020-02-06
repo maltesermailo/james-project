@@ -23,8 +23,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.james.protocols.api.Request;
 import org.apache.james.protocols.api.Response;
 import org.apache.james.protocols.api.handler.CommandHandler;
@@ -58,16 +56,6 @@ public class StartTlsCmdHandler implements CommandHandler<SMTPSession>, EhloExte
         return COMMANDS;
     }
 
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
-    }
-
     /**
      * Handler method called upon receipt of a STARTTLS command. Resets
      * message-specific, but not authenticated user, state.
@@ -93,13 +81,12 @@ public class StartTlsCmdHandler implements CommandHandler<SMTPSession>, EhloExte
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public List<String> getImplementedEsmtpFeatures(SMTPSession session) {
         // SMTP STARTTLS
         if (!session.isTLSStarted() && session.isStartTLSSupported()) {
             return FEATURES;
         } else {
-            return Collections.EMPTY_LIST;
+            return Collections.emptyList();
         }
 
     }

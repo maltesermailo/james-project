@@ -24,41 +24,47 @@ import static io.restassured.config.EncoderConfig.encoderConfig;
 import static io.restassured.config.RestAssuredConfig.newConfig;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Set;
+import java.time.Duration;
+import java.util.List;
 
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.api.MetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.apache.james.util.Port;
+import org.apache.james.webadmin.authentication.AuthenticationFilter;
 import org.apache.james.webadmin.authentication.NoAuthenticationFilter;
 
-import com.github.steveash.guavate.Guavate;
+import com.google.common.collect.ImmutableList;
 
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.config.RestAssuredConfig;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
+import reactor.core.publisher.Mono;
 
 public class WebAdminUtils {
+    private static class ConcurrentSafeWebAdminServer extends WebAdminServer {
+        ConcurrentSafeWebAdminServer(WebAdminConfiguration configuration, List<Routes> routesList, AuthenticationFilter authenticationFilter, MetricFactory metricFactory) {
+            super(configuration, routesList, authenticationFilter, metricFactory);
+        }
+
+        /**
+         * JVM-wide synchronized start method to avoid the all too common random port allocation conflict
+         * that occurs when parallelly testing webadmin maven modules.
+         */
+        @Override
+        public WebAdminServer start() {
+            Mono.fromRunnable(super::start)
+                .retryBackoff(5, Duration.ofMillis(10))
+                .block();
+            return this;
+        }
+    }
 
     public static WebAdminServer createWebAdminServer(Routes... routes) {
-        return new WebAdminServer(WebAdminConfiguration.TEST_CONFIGURATION,
-            privateRoutes(routes),
-            publicRoutes(routes),
+        return new ConcurrentSafeWebAdminServer(WebAdminConfiguration.TEST_CONFIGURATION,
+            ImmutableList.copyOf(routes),
             new NoAuthenticationFilter(),
-            new NoopMetricFactory());
-    }
-
-    private static Set<Routes> privateRoutes(Routes[] routes) {
-        return Arrays.stream(routes)
-                .filter(route -> !(route instanceof PublicRoutes))
-                .collect(Guavate.toImmutableSet());
-    }
-
-    private static Set<PublicRoutes> publicRoutes(Routes[] routes) {
-        return Arrays.stream(routes)
-                .filter(PublicRoutes.class::isInstance)
-                .map(PublicRoutes.class::cast)
-                .collect(Guavate.toImmutableSet());
+            new RecordingMetricFactory());
     }
 
     public static RequestSpecBuilder buildRequestSpecification(WebAdminServer webAdminServer) {

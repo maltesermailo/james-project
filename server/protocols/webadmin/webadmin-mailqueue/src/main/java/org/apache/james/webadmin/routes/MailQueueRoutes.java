@@ -36,7 +36,6 @@ import org.apache.james.queue.api.MailQueue.MailQueueException;
 import org.apache.james.queue.api.MailQueueFactory;
 import org.apache.james.queue.api.ManageableMailQueue;
 import org.apache.james.task.Task;
-import org.apache.james.task.TaskId;
 import org.apache.james.task.TaskManager;
 import org.apache.james.util.streams.Iterators;
 import org.apache.james.util.streams.Limit;
@@ -44,9 +43,9 @@ import org.apache.james.webadmin.Routes;
 import org.apache.james.webadmin.dto.ForceDelivery;
 import org.apache.james.webadmin.dto.MailQueueDTO;
 import org.apache.james.webadmin.dto.MailQueueItemDTO;
-import org.apache.james.webadmin.dto.TaskIdDto;
 import org.apache.james.webadmin.service.ClearMailQueueTask;
 import org.apache.james.webadmin.service.DeleteMailsFromMailQueueTask;
+import org.apache.james.webadmin.tasks.TaskFromRequest;
 import org.apache.james.webadmin.utils.ErrorResponder;
 import org.apache.james.webadmin.utils.ErrorResponder.ErrorType;
 import org.apache.james.webadmin.utils.JsonExtractException;
@@ -90,16 +89,16 @@ public class MailQueueRoutes implements Routes {
     private static final String NAME_QUERY_PARAM = "name";
     private static final String RECIPIENT_QUERY_PARAM = "recipient";
     
-    private final MailQueueFactory<ManageableMailQueue> mailQueueFactory;
+    private final MailQueueFactory<? extends ManageableMailQueue> mailQueueFactory;
     private final JsonTransformer jsonTransformer;
     private final JsonExtractor<ForceDelivery> jsonExtractor;
     private final TaskManager taskManager;
 
     @Inject
     @SuppressWarnings("unchecked")
-    @VisibleForTesting MailQueueRoutes(MailQueueFactory<?> mailQueueFactory, JsonTransformer jsonTransformer,
+    @VisibleForTesting MailQueueRoutes(MailQueueFactory<? extends ManageableMailQueue> mailQueueFactory, JsonTransformer jsonTransformer,
                                        TaskManager taskManager) {
-        this.mailQueueFactory = (MailQueueFactory<ManageableMailQueue>) mailQueueFactory;
+        this.mailQueueFactory = mailQueueFactory;
         this.jsonTransformer = jsonTransformer;
         this.jsonExtractor = new JsonExtractor<>(ForceDelivery.class);
         this.taskManager = taskManager;
@@ -167,7 +166,7 @@ public class MailQueueRoutes implements Routes {
         return mailQueueFactory.getQueue(mailQueueName).map(this::toDTO)
             .orElseThrow(
                 () -> ErrorResponder.builder()
-                    .message(String.format("%s can not be found", mailQueueName))
+                    .message("%s can not be found", mailQueueName)
                     .statusCode(HttpStatus.NOT_FOUND_404)
                     .type(ErrorResponder.ErrorType.NOT_FOUND)
                     .haltError());
@@ -180,7 +179,7 @@ public class MailQueueRoutes implements Routes {
             throw ErrorResponder.builder()
                 .statusCode(HttpStatus.BAD_REQUEST_400)
                 .type(ErrorType.INVALID_ARGUMENT)
-                .message("Invalid request for getting the mail queue " + queue)
+                .message("Invalid request for getting the mail queue %s", queue)
                 .cause(e)
                 .haltError();
         }
@@ -227,7 +226,7 @@ public class MailQueueRoutes implements Routes {
                 .map(name -> listMails(name, isDelayed(request.queryParams(DELAYED_QUERY_PARAM)), ParametersExtractor.extractLimit(request)))
                 .orElseThrow(
                     () -> ErrorResponder.builder()
-                        .message(String.format("%s can not be found", mailQueueName))
+                        .message("%s can not be found", mailQueueName)
                         .statusCode(HttpStatus.NOT_FOUND_404)
                         .type(ErrorResponder.ErrorType.NOT_FOUND)
                         .haltError());
@@ -248,7 +247,7 @@ public class MailQueueRoutes implements Routes {
             throw ErrorResponder.builder()
                 .statusCode(HttpStatus.BAD_REQUEST_400)
                 .type(ErrorType.INVALID_ARGUMENT)
-                .message("Invalid request for listing the mails from the mail queue " + queue)
+                .message("Invalid request for listing the mails from the mail queue %s", queue)
                 .cause(e)
                 .haltError();
         }
@@ -267,7 +266,7 @@ public class MailQueueRoutes implements Routes {
         @ApiImplicitParam(required = true, dataType = "string", name = "mailQueueName", paramType = "path"),
         @ApiImplicitParam(
                 required = false, 
-                dataType = "MailAddress", 
+                dataTypeClass = MailAddress.class,
                 name = SENDER_QUERY_PARAM, 
                 paramType = "query",
                 example = "?sender=sender@james.org",
@@ -297,27 +296,25 @@ public class MailQueueRoutes implements Routes {
         @ApiResponse(code = HttpStatus.INTERNAL_SERVER_ERROR_500, message = "Internal server error - Something went bad on the server side.")
     })
     public void deleteMails(Service service) {
+        TaskFromRequest taskFromRequest = this::deleteMails;
         service.delete(BASE_URL + SEPARATOR + MAIL_QUEUE_NAME + MAILS,
-                this::deleteMails,
+                taskFromRequest.asRoute(taskManager),
                 jsonTransformer);
     }
 
-    private Object deleteMails(Request request, Response response) {
+    private Task deleteMails(Request request) {
         String mailQueueName = request.params(MAIL_QUEUE_NAME);
-        Task task = mailQueueFactory.getQueue(mailQueueName)
+        return mailQueueFactory.getQueue(mailQueueName)
             .map(name -> deleteMailsTask(name,
                     sender(request.queryParams(SENDER_QUERY_PARAM)),
                     name(request.queryParams(NAME_QUERY_PARAM)),
                     recipient(request.queryParams(RECIPIENT_QUERY_PARAM))))
             .orElseThrow(
                 () -> ErrorResponder.builder()
-                    .message(String.format("%s can not be found", mailQueueName))
+                    .message("%s can not be found", mailQueueName)
                     .statusCode(HttpStatus.NOT_FOUND_404)
                     .type(ErrorResponder.ErrorType.NOT_FOUND)
                     .haltError());
-
-        TaskId taskId = taskManager.submit(task);
-        return TaskIdDto.respond(response, taskId);
     }
 
     private Optional<MailAddress> sender(String senderAsString) throws HaltException {
@@ -397,7 +394,7 @@ public class MailQueueRoutes implements Routes {
         String mailQueueName = request.params(MAIL_QUEUE_NAME);
         return mailQueueFactory.getQueue(mailQueueName)
             .orElseThrow(() -> ErrorResponder.builder()
-                .message(String.format("%s can not be found", mailQueueName))
+                .message("%s can not be found", mailQueueName)
                 .statusCode(HttpStatus.NOT_FOUND_404)
                 .type(ErrorType.NOT_FOUND)
                 .haltError());

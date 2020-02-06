@@ -29,10 +29,10 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.inject.Inject;
 import javax.mail.MessagingException;
-import javax.management.NotCompliantMBeanException;
 
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.core.MailAddress;
 import org.apache.james.lifecycle.api.Configurable;
 import org.apache.james.mailetcontainer.api.MailProcessor;
@@ -66,10 +66,10 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
     private MailetContext mailetContext;
     private MatcherLoader matcherLoader;
     private MailProcessor rootMailProcessor;
-    private final List<MailetProcessorListener> listeners = Collections.synchronizedList(new ArrayList<MailetProcessorListener>());
+    private final List<MailetProcessorListener> listeners = Collections.synchronizedList(new ArrayList<>());
     private JMXStateMailetProcessorListener jmxListener;
     private boolean enableJmx = true;
-    private HierarchicalConfiguration config;
+    private HierarchicalConfiguration<ImmutableNode> config;
     private MailetLoader mailetLoader;
     private final List<MatcherMailetPair> pairs = new ArrayList<>();
     private String state;
@@ -94,7 +94,7 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
 
 
     @Override
-    public void configure(HierarchicalConfiguration config) throws ConfigurationException {
+    public void configure(HierarchicalConfiguration<ImmutableNode> config) throws ConfigurationException {
         this.state = config.getString("[@state]", null);
         if (state == null) {
             throw new ConfigurationException("Processor state attribute must be configured");
@@ -110,8 +110,6 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
 
     /**
      * Init the container
-     * 
-     * @throws Exception
      */
     @PostConstruct
     public void init() throws Exception {
@@ -148,9 +146,6 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
 
     /**
      * Hand the mail over to another processor
-     * 
-     * @param mail
-     * @throws MessagingException
      */
     protected void toProcessor(Mail mail) throws MessagingException {
         rootMailProcessor.service(mail);
@@ -162,8 +157,6 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
 
     /**
      * Return a unmodifiable {@link List} of the configured {@link Mailet}'s
-     * 
-     * @return mailets
      */
     public List<Mailet> getMailets() {
         return pairs.stream()
@@ -173,8 +166,6 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
 
     /**
      * Return a unmodifiable {@link List} of the configured {@link Matcher}'s
-     * 
-     * @return matchers
      */
     public List<Matcher> getMatchers() {
         return pairs.stream()
@@ -186,22 +177,14 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
         listeners.add(listener);
     }
 
-    public void removeListener(MailetProcessorListener listener) {
-        listeners.remove(listener);
-    }
-
     public List<MailetProcessorListener> getListeners() {
         return listeners;
     }
 
     /**
      * Create a {@link MailetConfig} for the given mailetname and configuration
-     * 
-     * @param mailetName
-     * @param configuration
-     * @return mailetConfig
      */
-    private MailetConfig createMailetConfig(String mailetName, HierarchicalConfiguration configuration) {
+    private MailetConfig createMailetConfig(String mailetName, HierarchicalConfiguration<ImmutableNode> configuration) {
 
         final MailetConfigImpl configImpl = new MailetConfigImpl();
         configImpl.setMailetName(mailetName);
@@ -212,9 +195,6 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
 
     /**
      * Create a {@link MatcherConfig} for the given "match=" attribute.
-     * 
-     * @param matchName
-     * @return matcherConfig
      */
     private MatcherConfig createMatcherConfig(String matchName) {
         String condition = null;
@@ -236,18 +216,13 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
      * {@link Matcher}'s
      * 
      * CompositeMatcher were added by JAMES-948
-     * 
-     * @param compMap
-     * @param compMatcherConfs
+     *
      * @return compositeMatchers
-     * @throws ConfigurationException
-     * @throws MessagingException
-     * @throws NotCompliantMBeanException
      */
-    private List<Matcher> loadCompositeMatchers(String state, Map<String, Matcher> compMap, List<HierarchicalConfiguration> compMatcherConfs) throws ConfigurationException, MessagingException {
+    private List<Matcher> loadCompositeMatchers(String state, Map<String, Matcher> compMap, List<HierarchicalConfiguration<ImmutableNode>> compMatcherConfs) throws ConfigurationException, MessagingException {
         List<Matcher> matchers = new ArrayList<>();
 
-        for (HierarchicalConfiguration c : compMatcherConfs) {
+        for (HierarchicalConfiguration<ImmutableNode> c : compMatcherConfs) {
             String compName = c.getString("[@name]", null);
             String matcherName = c.getString("[@match]", null);
             String invertedMatcherName = c.getString("[@notmatch]", null);
@@ -300,12 +275,12 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
         Map<String, Matcher> compositeMatchers = new HashMap<>();
         loadCompositeMatchers(getState(), compositeMatchers, config.configurationsAt("matcher"));
 
-        final List<HierarchicalConfiguration> mailetConfs = config.configurationsAt("mailet");
+        final List<HierarchicalConfiguration<ImmutableNode>> mailetConfs = config.configurationsAt("mailet");
 
         // Loop through the mailet configuration, load
         // all of the matcher and mailets, and add
         // them to the processor.
-        for (HierarchicalConfiguration c : mailetConfs) {
+        for (HierarchicalConfiguration<ImmutableNode> c : mailetConfs) {
             // We need to set this because of correctly parsing comma
             String mailetClassName = c.getString("[@class]");
             String matcherName = c.getString("[@match]", null);
@@ -341,6 +316,7 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
                 } else {
                     // default matcher is All
                     matcher = matcherLoader.getMatcher(createMatcherConfig("All"));
+                    LOGGER.debug("Mailet {} has no 'match' attribute. Defaulting to match all mails.", mailetClassName);
                 }
 
                 // The matcher itself should log that it's been inited.
@@ -428,10 +404,7 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
 
         /**
          * Get called after each {@link Mailet} call was complete
-         * 
-         * @param m
-         * @param mailName
-         * @param state
+         *
          * @param processTime
          *            in ms
          * @param e
@@ -441,11 +414,7 @@ public abstract class AbstractStateMailetProcessor implements MailProcessor, Con
 
         /**
          * Get called after each {@link Matcher} call was complete
-         * 
-         * @param m
-         * @param mailName
-         * @param recipients
-         * @param matches
+         *
          * @param processTime
          *            in ms
          * @param e

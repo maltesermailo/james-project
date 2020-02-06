@@ -19,12 +19,13 @@
 
 package org.apache.james;
 
-import static org.apache.james.JmapJamesServerContract.DOMAIN_LIST_CONFIGURATION_MODULE;
+import static org.apache.james.jmap.draft.JmapJamesServerContract.DOMAIN_LIST_CONFIGURATION_MODULE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import org.apache.james.jmap.JMAPConfiguration;
-import org.apache.james.jmap.JMAPConfigurationStartUpCheck;
+import org.apache.james.jmap.draft.JMAPConfiguration;
+import org.apache.james.jmap.draft.JMAPConfigurationStartUpCheck;
+import org.apache.james.jmap.draft.JmapJamesServerContract;
 import org.apache.james.modules.TestJMAPServerModule;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -32,13 +33,11 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 class MemoryJmapJamesServerTest {
 
-    private static final int LIMIT_TO_10_MESSAGES = 10;
-
     private static JamesServerBuilder extensionBuilder() {
         return new JamesServerBuilder()
             .server(configuration -> GuiceJamesServer.forConfiguration(configuration)
                 .combineWith(MemoryJamesServerMain.IN_MEMORY_SERVER_AGGREGATE_MODULE)
-                .overrideWith(new TestJMAPServerModule(LIMIT_TO_10_MESSAGES))
+                .overrideWith(TestJMAPServerModule.limitToTenMessages())
                 .overrideWith(DOMAIN_LIST_CONFIGURATION_MODULE));
     }
 

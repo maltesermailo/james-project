@@ -20,19 +20,54 @@
 package org.apache.james.eventsourcing.eventstore.cassandra;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Set;
 
 import javax.inject.Inject;
+import javax.inject.Named;
 
 import org.apache.james.eventsourcing.Event;
 import org.apache.james.eventsourcing.eventstore.cassandra.dto.EventDTO;
 import org.apache.james.eventsourcing.eventstore.cassandra.dto.EventDTOModule;
+import org.apache.james.json.DTOModule;
 import org.apache.james.json.JsonGenericSerializer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.github.steveash.guavate.Guavate;
 import com.google.common.collect.ImmutableSet;
 
 public class JsonEventSerializer {
+
+    public static final String EVENT_NESTED_TYPES_INJECTION_NAME = "EventNestedTypes";
+
+    public static RequireNestedConfiguration forModules(Set<? extends EventDTOModule<?, ?>> modules) {
+        return nestedTypesModules -> {
+            ImmutableSet<EventDTOModule<?, ?>> dtoModules = ImmutableSet.copyOf(modules);
+            return new JsonEventSerializer(dtoModules, ImmutableSet.copyOf(nestedTypesModules));
+        };
+    }
+
+    @SafeVarargs
+    public static RequireNestedConfiguration forModules(EventDTOModule<?, ?>... modules) {
+        return forModules(ImmutableSet.copyOf(modules));
+    }
+
+    public interface RequireNestedConfiguration {
+        JsonEventSerializer withNestedTypeModules(Set<DTOModule<?, ?>> modules);
+
+        default JsonEventSerializer withNestedTypeModules(DTOModule<?, ?>... modules) {
+            return withNestedTypeModules(ImmutableSet.copyOf(modules));
+        }
+
+        default JsonEventSerializer withNestedTypeModules(Set<DTOModule<?, ?>>... modules) {
+            return withNestedTypeModules(Arrays.stream(modules).flatMap(Collection::stream).collect(Guavate.toImmutableSet()));
+        }
+
+        default JsonEventSerializer withoutNestedType() {
+            return withNestedTypeModules(ImmutableSet.of());
+        }
+    }
 
     public static class InvalidEventException extends RuntimeException {
         public InvalidEventException(JsonGenericSerializer.InvalidTypeException original) {
@@ -48,16 +83,11 @@ public class JsonEventSerializer {
 
     private JsonGenericSerializer<Event, EventDTO> jsonGenericSerializer;
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
     @Inject
-    public JsonEventSerializer(Set<EventDTOModule> modules) {
-        jsonGenericSerializer = new JsonGenericSerializer(modules);
+    private JsonEventSerializer(Set<EventDTOModule<?, ?>> modules, @Named(EVENT_NESTED_TYPES_INJECTION_NAME) Set<DTOModule<?, ?>> nestedTypesModules) {
+        jsonGenericSerializer = JsonGenericSerializer.forModules(modules).withNestedTypeModules(nestedTypesModules);
     }
     
-    public JsonEventSerializer(@SuppressWarnings("rawtypes") EventDTOModule... modules) {
-        this(ImmutableSet.copyOf(modules));
-    }
-
     public String serialize(Event event) throws JsonProcessingException {
         try {
             return jsonGenericSerializer.serialize(event);

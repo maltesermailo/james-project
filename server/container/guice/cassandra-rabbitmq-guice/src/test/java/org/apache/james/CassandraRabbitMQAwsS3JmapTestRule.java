@@ -21,7 +21,7 @@ package org.apache.james;
 
 import java.io.IOException;
 
-import org.apache.james.backend.rabbitmq.DockerRabbitMQSingleton;
+import org.apache.james.backends.rabbitmq.DockerRabbitMQSingleton;
 import org.apache.james.mailbox.extractor.TextExtractor;
 import org.apache.james.mailbox.store.search.PDFTextExtractor;
 import org.apache.james.modules.TestDockerESMetricReporterModule;
@@ -30,6 +30,7 @@ import org.apache.james.modules.TestRabbitMQModule;
 import org.apache.james.modules.blobstore.BlobStoreChoosingConfiguration;
 import org.apache.james.modules.objectstorage.aws.s3.DockerAwsS3TestRule;
 import org.apache.james.server.core.configuration.Configuration;
+import org.apache.james.webadmin.WebAdminConfiguration;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
@@ -39,7 +40,6 @@ import com.google.inject.Module;
 
 public class CassandraRabbitMQAwsS3JmapTestRule implements TestRule {
 
-    private static final int LIMIT_TO_10_MESSAGES = 10;
     public static final int TWO_SECONDS = 2000;
     private final TemporaryFolder temporaryFolder;
 
@@ -73,10 +73,11 @@ public class CassandraRabbitMQAwsS3JmapTestRule implements TestRule {
             .overrideWith(new TestRabbitMQModule(DockerRabbitMQSingleton.SINGLETON))
             .overrideWith(binder -> binder.bind(BlobStoreChoosingConfiguration.class)
                 .toInstance(BlobStoreChoosingConfiguration.objectStorage()))
-            .overrideWith(new TestJMAPServerModule(LIMIT_TO_10_MESSAGES))
+            .overrideWith(TestJMAPServerModule.limitToTenMessages())
             .overrideWith(new TestDockerESMetricReporterModule(dockerElasticSearchRule.getDockerEs().getHttpHost()))
             .overrideWith(guiceModuleTestRule.getModule())
             .overrideWith((binder -> binder.bind(CleanupTasksPerformer.class).asEagerSingleton()))
+            .overrideWith(binder -> binder.bind(WebAdminConfiguration.class).toInstance(WebAdminConfiguration.TEST_CONFIGURATION))
             .overrideWith(additionals);
     }
 

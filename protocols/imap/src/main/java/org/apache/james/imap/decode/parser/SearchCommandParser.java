@@ -25,10 +25,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
-import org.apache.james.imap.api.display.CharsetUtil;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
@@ -40,9 +39,9 @@ import org.apache.james.imap.api.message.response.StatusResponse;
 import org.apache.james.imap.api.message.response.StatusResponse.ResponseCode;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.message.request.SearchRequest;
-import org.apache.james.protocols.imap.DecodingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,8 +51,8 @@ import org.slf4j.LoggerFactory;
 public class SearchCommandParser extends AbstractUidCommandParser {
     private static final Logger LOGGER = LoggerFactory.getLogger(SearchCommandParser.class);
 
-    public SearchCommandParser() {
-        super(ImapCommand.selectedStateCommand(ImapConstants.SEARCH_COMMAND_NAME));
+    public SearchCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.SEARCH_COMMAND, statusResponseFactory);
     }
 
     /**
@@ -902,10 +901,9 @@ public class SearchCommandParser extends AbstractUidCommandParser {
         return result;
     }
 
-    private ImapMessage unsupportedCharset(String tag, ImapCommand command) {
-        final StatusResponseFactory factory = getStatusResponseFactory();
-        final ResponseCode badCharset = StatusResponse.ResponseCode.badCharset(CharsetUtil.getAvailableCharsetNames());
-        return factory.taggedNo(tag, command, HumanReadableText.BAD_CHARSET, badCharset);
+    private ImapMessage unsupportedCharset(Tag tag) {
+        final ResponseCode badCharset = StatusResponse.ResponseCode.badCharset();
+        return taggedNo(tag, ImapConstants.SEARCH_COMMAND, HumanReadableText.BAD_CHARSET, badCharset);
     }
 
     /**
@@ -969,7 +967,7 @@ public class SearchCommandParser extends AbstractUidCommandParser {
     }
     
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, boolean useUids, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, boolean useUids, ImapSession session) throws DecodingException {
         try {
             SearchKey recent = null;
             List<SearchResultOption> options = null;
@@ -1019,10 +1017,10 @@ public class SearchCommandParser extends AbstractUidCommandParser {
                 options = new ArrayList<>();
             }
 
-            return new SearchRequest(command, new SearchOperation(finalKey, options), useUids, tag);
+            return new SearchRequest(new SearchOperation(finalKey, options), useUids, tag);
         } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
             LOGGER.debug("Unable to decode request", e);
-            return unsupportedCharset(tag, command);
+            return unsupportedCharset(tag);
         }
     }
 

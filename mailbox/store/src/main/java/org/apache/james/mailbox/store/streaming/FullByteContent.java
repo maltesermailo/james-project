@@ -23,17 +23,16 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.SequenceInputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.Content;
-import org.apache.james.mailbox.model.MessageResult;
-import org.apache.james.mailbox.model.MessageResult.Header;
+import org.apache.james.mailbox.model.Header;
 
 /**
  * Abstract base class for {@link Content} implementations which hold the headers and 
  * the body a email
- *
  */
 public class FullByteContent implements Content {
 
@@ -42,7 +41,7 @@ public class FullByteContent implements Content {
     private final byte[] body;
     private final long size;
     
-    public FullByteContent(byte[] body, List<MessageResult.Header> headers) throws MailboxException {
+    public FullByteContent(byte[] body, List<Header> headers) throws MailboxException {
         this.headers = headers;
         this.body = body;
         this.size = caculateSize();
@@ -65,10 +64,10 @@ public class FullByteContent implements Content {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         for (Header header : headers) {
             if (header != null) {
-                out.write((header.getName() + ": " + header.getValue() + "\r\n").getBytes("US-ASCII"));
+                out.write((header.getName() + ": " + header.getValue() + "\r\n").getBytes(StandardCharsets.US_ASCII));
             }
         }
-        out.write("\r\n".getBytes("US-ASCII"));
+        out.write("\r\n".getBytes(StandardCharsets.US_ASCII));
         out.flush();
         return new SequenceInputStream(new ByteArrayInputStream(out.toByteArray()), new ByteArrayInputStream(body));
     }

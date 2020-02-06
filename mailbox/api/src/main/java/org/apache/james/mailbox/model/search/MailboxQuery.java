@@ -19,10 +19,12 @@
 
 package org.apache.james.mailbox.model.search;
 
+import java.util.Objects;
 import java.util.Optional;
 
-import org.apache.james.core.User;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxSession;
+import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxConstants;
 import org.apache.james.mailbox.model.MailboxPath;
 
@@ -34,7 +36,7 @@ import com.google.common.base.Preconditions;
 /**
  * Expresses select criteria for mailboxes.
  */
-public final class MailboxQuery {
+public class MailboxQuery {
 
     public static Builder builder() {
         return new Builder();
@@ -43,14 +45,14 @@ public final class MailboxQuery {
     public static Builder privateMailboxesBuilder(MailboxSession session) {
         return builder()
             .namespace(MailboxConstants.USER_NAMESPACE)
-            .username(session.getUser().asString())
+            .username(session.getUser())
             .matchesAllMailboxNames();
     }
 
     public static class Builder {
         private static final Wildcard DEFAULT_WILDCARD = Wildcard.INSTANCE;
 
-        Optional<String> username;
+        Optional<Username> username;
         Optional<String> namespace;
         Optional<MailboxNameExpression> mailboxNameExpression;
         
@@ -69,15 +71,15 @@ public final class MailboxQuery {
             return this;
         }
 
-        public Builder username(String username) {
+        public Builder username(Username username) {
             Preconditions.checkState(!this.username.isPresent());
 
             this.username = Optional.of(username);
             return this;
         }
 
-        public Builder user(User user) {
-            this.username(user.asString());
+        public Builder user(Username username) {
+            this.username(username);
             return this;
         }
 
@@ -110,21 +112,30 @@ public final class MailboxQuery {
         }
     }
 
-    private final Optional<String> namespace;
-    private final Optional<String> user;
+    public static class UserBound extends MailboxQuery {
+        private UserBound(String namespace, Username user, MailboxNameExpression mailboxNameExpression) {
+            super(Optional.of(namespace), Optional.of(user), mailboxNameExpression);
+            Preconditions.checkNotNull(namespace);
+            Preconditions.checkNotNull(user);
+        }
+
+        public String getFixedNamespace() {
+            return namespace.get();
+        }
+
+        public Username getFixedUser() {
+            return user.get();
+        }
+    }
+
+    protected final Optional<String> namespace;
+    protected final Optional<Username> user;
     private final MailboxNameExpression mailboxNameExpression;
 
     /**
      * Constructs an expression determining a set of mailbox names.
-     * 
-     * @param base
-     *            base reference name, not null
-     * @param expression
-     *            mailbox match expression, not null
-     * @param pathDelimiter
-     *            path delimiter to use
      */
-    @VisibleForTesting MailboxQuery(Optional<String> namespace, Optional<String> user, MailboxNameExpression mailboxNameExpression) {
+    private MailboxQuery(Optional<String> namespace, Optional<Username> user, MailboxNameExpression mailboxNameExpression) {
         this.namespace = namespace;
         this.user = user;
         this.mailboxNameExpression = mailboxNameExpression;
@@ -134,7 +145,7 @@ public final class MailboxQuery {
         return namespace;
     }
 
-    public Optional<String> getUser() {
+    public Optional<Username> getUser() {
         return user;
     }
 
@@ -143,9 +154,9 @@ public final class MailboxQuery {
     }
 
     public boolean isPrivateMailboxes(MailboxSession session) {
-        User sessionUser = session.getUser();
+        Username sessionUsername = session.getUser();
         return namespace.map(MailboxConstants.USER_NAMESPACE::equals).orElse(false)
-            && user.map(User::fromUsername).map(sessionUser::equals).orElse(false);
+            && user.map(sessionUsername::equals).orElse(false);
     }
 
     @VisibleForTesting
@@ -167,6 +178,33 @@ public final class MailboxQuery {
     public boolean isPathMatch(MailboxPath mailboxPath) {
         return belongsToRequestedNamespaceAndUser(mailboxPath)
             && isExpressionMatch(mailboxPath.getName());
+    }
+
+    public boolean matches(Mailbox mailbox) {
+        return isPathMatch(mailbox.generateAssociatedPath());
+    }
+
+    public UserBound asUserBound() {
+        Preconditions.checkState(namespace.isPresent(), "This MailboxQuery is not user bound as namespace is missing");
+        Preconditions.checkState(user.isPresent(), "This MailboxQuery is not user bound as user is missing");
+        return new UserBound(namespace.get(), user.get(), mailboxNameExpression);
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (o instanceof MailboxQuery) {
+            MailboxQuery that = (MailboxQuery) o;
+
+            return Objects.equals(this.namespace, that.namespace)
+                && Objects.equals(this.user, that.user)
+                && Objects.equals(this.mailboxNameExpression, that.mailboxNameExpression);
+        }
+        return false;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(namespace, user, mailboxNameExpression);
     }
 
     public String toString() {

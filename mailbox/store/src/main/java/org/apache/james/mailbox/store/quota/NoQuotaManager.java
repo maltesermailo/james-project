@@ -19,8 +19,10 @@
 
 package org.apache.james.mailbox.store.quota;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.mailbox.model.Quota;
 import org.apache.james.mailbox.model.QuotaRoot;
 import org.apache.james.mailbox.quota.QuotaManager;
@@ -31,18 +33,18 @@ import org.apache.james.mailbox.quota.QuotaManager;
 public class NoQuotaManager implements QuotaManager {
 
     @Override
-    public Quota<QuotaCount> getMessageQuota(QuotaRoot quotaRoot) {
-        return Quota.<QuotaCount>builder()
-            .used(QuotaCount.count(0))
-            .computedLimit(QuotaCount.unlimited())
+    public Quota<QuotaCountLimit, QuotaCountUsage> getMessageQuota(QuotaRoot quotaRoot) {
+        return Quota.<QuotaCountLimit, QuotaCountUsage>builder()
+            .used(QuotaCountUsage.count(0))
+            .computedLimit(QuotaCountLimit.unlimited())
             .build();
     }
 
     @Override
-    public Quota<QuotaSize> getStorageQuota(QuotaRoot quotaRoot) {
-        return Quota.<QuotaSize>builder()
-            .used(QuotaSize.size(0))
-            .computedLimit(QuotaSize.unlimited())
+    public Quota<QuotaSizeLimit, QuotaSizeUsage> getStorageQuota(QuotaRoot quotaRoot) {
+        return Quota.<QuotaSizeLimit, QuotaSizeUsage>builder()
+            .used(QuotaSizeUsage.size(0))
+            .computedLimit(QuotaSizeLimit.unlimited())
             .build();
     }
 }

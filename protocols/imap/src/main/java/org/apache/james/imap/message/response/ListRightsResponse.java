@@ -20,6 +20,7 @@
 package org.apache.james.imap.message.response;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.message.response.ImapResponseMessage;
@@ -29,7 +30,6 @@ import org.apache.james.mailbox.model.MailboxACL;
  * LISTRIGHTS Response.
  */
 public final class ListRightsResponse implements ImapResponseMessage {
-
     private final String identifier;
     private final String mailboxName;
     private final MailboxACL.Rfc4314Rights[] rights;
@@ -39,15 +39,6 @@ public final class ListRightsResponse implements ImapResponseMessage {
         this.mailboxName = mailboxName;
         this.identifier = identifier;
         this.rights = rights;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o instanceof ListRightsResponse) {
-            ListRightsResponse other = (ListRightsResponse) o;
-            return (this.mailboxName == other.mailboxName || (this.mailboxName != null && this.mailboxName.equals(other.mailboxName))) && (this.identifier == other.identifier || (this.identifier != null && this.identifier.equals(other.identifier))) && Arrays.equals(this.rights, other.rights);
-        }
-        return false;
     }
 
     public String getIdentifier() {
@@ -63,18 +54,25 @@ public final class ListRightsResponse implements ImapResponseMessage {
     }
 
     @Override
-    public int hashCode() {
-        final int PRIME = 31;
-        int hashCode = (mailboxName == null ? 0 : mailboxName.hashCode());
-        hashCode = PRIME * hashCode + (identifier == null ? 0 : identifier.hashCode());
-        hashCode = PRIME * hashCode + (rights == null ? 0 : Arrays.hashCode(rights));
+    public final boolean equals(Object o) {
+        if (o instanceof ListRightsResponse) {
+            ListRightsResponse other = (ListRightsResponse) o;
 
-        return hashCode;
+            return Objects.equals(this.mailboxName, other.mailboxName) &&
+                Objects.equals(this.identifier, other.identifier) &&
+                Arrays.equals(this.rights, other.rights);
+        }
+        return false;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(mailboxName, identifier, Arrays.hashCode(rights));
     }
 
     @Override
     public String toString() {
-        StringBuilder result = new StringBuilder().append(ImapConstants.LISTRIGHTS_RESPONSE_NAME).append(' ').append(mailboxName).append(' ').append(identifier);
+        StringBuilder result = new StringBuilder().append(ImapConstants.LISTRIGHTS_COMMAND.getName()).append(' ').append(mailboxName).append(' ').append(identifier);
 
         for (MailboxACL.Rfc4314Rights optionalRightsGroup : rights) {
             result.append(' ').append(optionalRightsGroup.toString());

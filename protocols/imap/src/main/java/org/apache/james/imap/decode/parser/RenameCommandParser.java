@@ -18,30 +18,29 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.RenameRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * Parses RENAME command
  */
 public class RenameCommandParser extends AbstractImapCommandParser {
-
-    public RenameCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.RENAME_COMMAND_NAME));
+    public RenameCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.RENAME_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
         final String existingName = request.mailbox();
         final String newName = request.mailbox();
         request.eol();
-        return new RenameRequest(command, existingName, newName, tag);
+        return new RenameRequest(existingName, newName, tag);
     }
-
 }

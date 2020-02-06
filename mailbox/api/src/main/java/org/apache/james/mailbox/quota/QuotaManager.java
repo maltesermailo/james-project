@@ -18,8 +18,10 @@
  ****************************************************************/
 package org.apache.james.mailbox.quota;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.Quota;
 import org.apache.james.mailbox.model.QuotaRoot;
@@ -36,10 +38,8 @@ public interface QuotaManager {
      * bound to a user)
      *
      * @param quotaRoot Quota root argument from RFC 2087 ( correspond to the user owning this mailbox )
-     * @return quota
-     * @throws MailboxException
      */
-    Quota<QuotaCount> getMessageQuota(QuotaRoot quotaRoot) throws MailboxException;
+    Quota<QuotaCountLimit, QuotaCountUsage> getMessageQuota(QuotaRoot quotaRoot) throws MailboxException;
 
 
     /**
@@ -47,8 +47,6 @@ public interface QuotaManager {
      * bound to a user)
      *
      * @param quotaRoot Quota root argument from RFC 2087 ( correspond to the user owning this mailbox )
-     * @return quota
-     * @throws MailboxException
      */
-    Quota<QuotaSize> getStorageQuota(QuotaRoot quotaRoot) throws MailboxException;
+    Quota<QuotaSizeLimit, QuotaSizeUsage> getStorageQuota(QuotaRoot quotaRoot) throws MailboxException;
 }

@@ -43,6 +43,23 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.github.steveash.guavate.Guavate;
 
 public class HTTPConfigurationServer {
+
+    public static class RunningStage {
+        private final HTTPConfigurationServer underlyingServer;
+
+        private RunningStage(HTTPConfigurationServer underlyingServer) {
+            this.underlyingServer = underlyingServer;
+        }
+
+        public Port getPort() {
+            return underlyingServer.getPort();
+        }
+
+        public void stop() throws Exception {
+            underlyingServer.stop();
+        }
+    }
+
     static class SMTPBehaviorsServlet extends HttpServlet {
         private final SMTPBehaviorRepository smtpBehaviorRepository;
 
@@ -93,10 +110,16 @@ public class HTTPConfigurationServer {
             resp.setContentType("application/json");
             OBJECT_MAPPER.writeValue(resp.getOutputStream(), mails);
         }
+
+        @Override
+        protected void doDelete(HttpServletRequest req, HttpServletResponse resp) {
+            receivedMailRepository.clear();
+            resp.setStatus(SC_NO_CONTENT);
+        }
     }
 
-    private static final String SMTP_BEHAVIORS = "/smtpBehaviors";
-    private static final String SMTP_MAILS = "/smtpMails";
+    static final String SMTP_BEHAVIORS = "/smtpBehaviors";
+    static final String SMTP_MAILS = "/smtpMails";
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
         .registerModule(new Jdk8Module())
@@ -125,15 +148,16 @@ public class HTTPConfigurationServer {
             .build());
     }
 
-    public void start() throws Exception {
+    public RunningStage start() throws Exception {
         jettyHttpServer.start();
+        return new RunningStage(this);
     }
 
-    public Port getPort() {
+    private Port getPort() {
         return new Port(jettyHttpServer.getPort());
     }
 
-    public void stop() throws Exception {
+    private void stop() throws Exception {
         jettyHttpServer.stop();
     }
 }

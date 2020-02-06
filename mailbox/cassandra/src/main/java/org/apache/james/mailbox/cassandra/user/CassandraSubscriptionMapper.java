@@ -31,12 +31,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.apache.james.backends.cassandra.utils.CassandraUtils;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.store.transaction.NonTransactionalMapper;
 import org.apache.james.mailbox.store.user.SubscriptionMapper;
 import org.apache.james.mailbox.store.user.model.Subscription;
-import org.apache.james.mailbox.store.user.model.impl.SimpleSubscription;
 
-import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
 
@@ -53,41 +52,32 @@ public class CassandraSubscriptionMapper extends NonTransactionalMapper implemen
     public synchronized void delete(Subscription subscription) {
         session.execute(QueryBuilder.delete()
             .from(TABLE_NAME)
-            .where(eq(USER, subscription.getUser()))
+            .where(eq(USER, subscription.getUser().asString()))
             .and(eq(MAILBOX, subscription.getMailbox())));
     }
 
     @Override
-    public Subscription findMailboxSubscriptionForUser(String user, String mailbox) {
-        ResultSet results = session.execute(select(MAILBOX)
-            .from(TABLE_NAME)
-            .where(eq(USER, user))
-            .and(eq(MAILBOX, mailbox)));
-        return !results.isExhausted() ? new SimpleSubscription(user, mailbox) : null;
-    }
-
-    @Override
-    public List<Subscription> findSubscriptionsForUser(String user) {
+    public List<Subscription> findSubscriptionsForUser(Username user) {
         return cassandraUtils.convertToStream(
             session.execute(select(MAILBOX)
                 .from(TABLE_NAME)
-                .where(eq(USER, user))))
-            .map((row) -> new SimpleSubscription(user, row.getString(MAILBOX)))
+                .where(eq(USER, user.asString()))))
+            .map((row) -> new Subscription(user, row.getString(MAILBOX)))
             .collect(Collectors.toList());
     }
 
     @Override
     public synchronized void save(Subscription subscription) {
         session.execute(insertInto(TABLE_NAME)
-            .value(USER, subscription.getUser())
+            .value(USER, subscription.getUser().asString())
             .value(MAILBOX, subscription.getMailbox()));
     }
 
-    public List<SimpleSubscription> list() {
+    public List<Subscription> list() {
         return cassandraUtils.convertToStream(
             session.execute(select(FIELDS)
                 .from(TABLE_NAME)))
-            .map((row) -> new SimpleSubscription(row.getString(USER), row.getString(MAILBOX)))
+            .map((row) -> new Subscription(Username.of(row.getString(USER)), row.getString(MAILBOX)))
             .collect(Collectors.toList());
     }
 

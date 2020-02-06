@@ -19,6 +19,7 @@
 
 package org.apache.james.mailbox.model.search;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.StringTokenizer;
 import java.util.regex.Pattern;
@@ -50,6 +51,11 @@ public class PrefixedRegex implements MailboxNameExpression {
         } else {
             return regex.equals(name);
         }
+    }
+
+    @Override
+    public MailboxNameExpression includeChildren() {
+        return new PrefixedRegex(prefix, regex + "*", pathDelimiter);
     }
 
     @Override
@@ -108,5 +114,22 @@ public class PrefixedRegex implements MailboxNameExpression {
         } else {
             return Pattern.quote(token);
         }
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (o instanceof PrefixedRegex) {
+            PrefixedRegex that = (PrefixedRegex) o;
+
+            return Objects.equals(this.pathDelimiter, that.pathDelimiter)
+                && Objects.equals(this.prefix, that.prefix)
+                && Objects.equals(this.regex, that.regex);
+        }
+        return false;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(prefix, regex, pathDelimiter);
     }
 }

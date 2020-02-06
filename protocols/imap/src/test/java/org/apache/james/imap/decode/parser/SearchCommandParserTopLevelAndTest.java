@@ -20,10 +20,11 @@
 package org.apache.james.imap.decode.parser;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -33,10 +34,11 @@ import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
 import org.apache.james.imap.api.message.request.DayMonthYear;
 import org.apache.james.imap.api.message.request.SearchKey;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.ImapRequestStreamLineReader;
 import org.apache.james.mailbox.MessageUid;
-import org.apache.james.protocols.imap.DecodingException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -137,7 +139,7 @@ public class SearchCommandParserTopLevelAndTest {
 
     @Before
     public void setUp() throws Exception {
-        parser = new SearchCommandParser();
+        parser = new SearchCommandParser(mock(StatusResponseFactory.class));
         command = ImapCommand.anyStateCommand("Command");
     }
 
@@ -183,13 +185,12 @@ public class SearchCommandParserTopLevelAndTest {
         }
     }
 
-    private void check(List<SearchKey> keys, StringBuffer buffer)
-            throws UnsupportedEncodingException, DecodingException {
+    private void check(List<SearchKey> keys, StringBuffer buffer) throws DecodingException {
         buffer.append("\r\n");
         String input = buffer.toString();
         SearchKey key = SearchKey.buildAnd(keys);
         ImapRequestLineReader reader = new ImapRequestStreamLineReader(
-                new ByteArrayInputStream(input.getBytes("US-ASCII")),
+                new ByteArrayInputStream(input.getBytes(StandardCharsets.US_ASCII)),
                 new ByteArrayOutputStream());
 
         assertThat(parser.decode(null, reader)).describedAs(input).isEqualTo(key);

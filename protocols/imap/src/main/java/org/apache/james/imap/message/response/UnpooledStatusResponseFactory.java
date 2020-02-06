@@ -20,16 +20,17 @@
 package org.apache.james.imap.message.response;
 
 import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.response.StatusResponse;
 import org.apache.james.imap.api.message.response.StatusResponse.ResponseCode;
 import org.apache.james.imap.api.message.response.StatusResponse.Type;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 
-public class UnpooledStatusResponseFactory extends AbstactStatusResponseFactory implements StatusResponseFactory {
+public class UnpooledStatusResponseFactory extends AbstractStatusResponseFactory implements StatusResponseFactory {
 
     @Override
-    protected StatusResponse createResponse(Type type, String tag, ImapCommand command, HumanReadableText displayTextKey, ResponseCode code) {
+    protected StatusResponse createResponse(Type type, Tag tag, ImapCommand command, HumanReadableText displayTextKey, ResponseCode code) {
         return new ImmutableStatusResponse(type, tag, command, displayTextKey, code);
     }
 

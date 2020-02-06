@@ -28,9 +28,11 @@ import java.util.Optional;
 import javax.mail.Flags;
 
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.mailbox.acl.ACLDiff;
 import org.apache.james.mailbox.events.Event;
 import org.apache.james.mailbox.events.MailboxListener;
@@ -50,20 +52,20 @@ import com.google.common.collect.ImmutableSortedMap;
 import nl.jqno.equalsverifier.EqualsVerifier;
 
 class MailboxListenerTest {
-    private static final MailboxPath PATH = MailboxPath.forUser("bob", "mailbox");
-    private static final MailboxPath OTHER_PATH = MailboxPath.forUser("bob", "mailbox.other");
-    private static final User BOB = User.fromUsername("bob");
+    private static final MailboxPath PATH = MailboxPath.forUser(Username.of("bob"), "mailbox");
+    private static final MailboxPath OTHER_PATH = MailboxPath.forUser(Username.of("bob"), "mailbox.other");
+    private static final Username BOB = Username.of("bob");
     private static final MailboxSession.SessionId SESSION_ID = MailboxSession.SessionId.of(42);
     private static final TestId MAILBOX_ID = TestId.of(18);
     private static final QuotaRoot QUOTA_ROOT = QuotaRoot.quotaRoot("bob", Optional.empty());
-    private static final QuotaCount QUOTA_COUNT = QuotaCount.count(34);
-    private static final QuotaSize QUOTA_SIZE = QuotaSize.size(48);
+    private static final QuotaCountUsage QUOTA_COUNT = QuotaCountUsage.count(34);
+    private static final QuotaSizeUsage QUOTA_SIZE = QuotaSizeUsage.size(48);
     private static final MailboxACL ACL_1 = new MailboxACL(
-        Pair.of(MailboxACL.EntryKey.createUserEntryKey("Bob"), new MailboxACL.Rfc4314Rights(MailboxACL.Right.Administer)));
+        Pair.of(MailboxACL.EntryKey.createUserEntryKey(Username.of("Bob")), new MailboxACL.Rfc4314Rights(MailboxACL.Right.Administer)));
     private static final MailboxACL ACL_2 = new MailboxACL(
-        Pair.of(MailboxACL.EntryKey.createUserEntryKey("Bob"), new MailboxACL.Rfc4314Rights(MailboxACL.Right.Read)));
+        Pair.of(MailboxACL.EntryKey.createUserEntryKey(Username.of("Bob")), new MailboxACL.Rfc4314Rights(MailboxACL.Right.Read)));
     private static final MessageUid UID = MessageUid.of(85);
-    private static final MessageMetaData META_DATA = new MessageMetaData(UID, 45, new Flags(), 45, new Date(), TestMessageId.of(75));
+    private static final MessageMetaData META_DATA = new MessageMetaData(UID, ModSeq.of(45), new Flags(), 45, new Date(), TestMessageId.of(75));
 
     @Test
     void mailboxAddedShouldMatchBeanContract() {
@@ -192,7 +194,7 @@ class MailboxListenerTest {
         MailboxListener.FlagsUpdated flagsUpdated = new MailboxListener.FlagsUpdated(SESSION_ID, BOB, PATH, MAILBOX_ID,
             ImmutableList.of(UpdatedFlags.builder()
                 .uid(UID)
-                .modSeq(45)
+                .modSeq(ModSeq.of(45))
                 .newFlags(new Flags())
                 .oldFlags(new Flags(Flags.Flag.ANSWERED))
                 .build()),
@@ -204,13 +206,13 @@ class MailboxListenerTest {
     @Test
     void quotaUsageUpdatedEventShouldNotBeNoop() {
         MailboxListener.QuotaUsageUpdatedEvent event = new MailboxListener.QuotaUsageUpdatedEvent(Event.EventId.random(), BOB, QUOTA_ROOT,
-            Quota.<QuotaCount>builder()
+            Quota.<QuotaCountLimit, QuotaCountUsage>builder()
                 .used(QUOTA_COUNT)
-                .computedLimit(QuotaCount.unlimited())
+                .computedLimit(QuotaCountLimit.unlimited())
                 .build(),
-            Quota.<QuotaSize>builder()
+            Quota.<QuotaSizeLimit, QuotaSizeUsage>builder()
                 .used(QUOTA_SIZE)
-                .computedLimit(QuotaSize.unlimited())
+                .computedLimit(QuotaSizeLimit.unlimited())
                 .build(), Instant.now());
 
         assertThat(event.isNoop()).isFalse();

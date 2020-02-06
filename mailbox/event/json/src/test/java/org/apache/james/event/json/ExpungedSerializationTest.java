@@ -32,10 +32,11 @@ import java.util.NoSuchElementException;
 
 import javax.mail.Flags;
 
-import org.apache.james.core.User;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.FlagsBuilder;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.events.MailboxListener;
 import org.apache.james.mailbox.model.MailboxConstants;
 import org.apache.james.mailbox.model.MailboxId;
@@ -50,15 +51,15 @@ import com.google.common.collect.ImmutableMap;
 
 class ExpungedSerializationTest {
 
-    private static final User USER = User.fromUsername("user");
+    private static final Username USERNAME = Username.of("user");
     private static final MailboxSession.SessionId SESSION_ID = MailboxSession.SessionId.of(42);
     private static final MailboxId MAILBOX_ID = TestId.of(18);
     private static final String MAILBOX_NAME = "mailboxName";
-    private static final MailboxPath MAILBOX_PATH = new MailboxPath(MailboxConstants.USER_NAMESPACE, "user", MAILBOX_NAME);
+    private static final MailboxPath MAILBOX_PATH = new MailboxPath(MailboxConstants.USER_NAMESPACE, Username.of("user"), MAILBOX_NAME);
     private static final MessageUid MESSAGE_UID = MessageUid.of(123456);
     private static final Instant INSTANT = Instant.parse("2018-12-14T09:41:51.541Z");
     private static final TestMessageId MESSAGE_ID = TestMessageId.of(42);
-    private static final int MOD_SEQ = 35;
+    private static final ModSeq MOD_SEQ = ModSeq.of(35);
     private static final int SIZE = 45;
     private static final Flags FLAGS = FlagsBuilder.builder()
         .add(Flags.Flag.ANSWERED, Flags.Flag.DRAFT)
@@ -67,7 +68,7 @@ class ExpungedSerializationTest {
     private static final Map<MessageUid, MessageMetaData> EXPUNGED = ImmutableMap.of(
         MESSAGE_UID, new MessageMetaData(MESSAGE_UID, MOD_SEQ, FLAGS, SIZE, Date.from(INSTANT), MESSAGE_ID));
 
-    private static final MailboxListener.Expunged DEFAULT_EXPUNGED_EVENT = new MailboxListener.Expunged(SESSION_ID, USER,
+    private static final MailboxListener.Expunged DEFAULT_EXPUNGED_EVENT = new MailboxListener.Expunged(SESSION_ID, USERNAME,
         MAILBOX_PATH, MAILBOX_ID, EXPUNGED, EVENT_ID);
     private static final String DEFAULT_EXPUNGED_EVENT_JSON =
         "{" +
@@ -111,7 +112,7 @@ class ExpungedSerializationTest {
     @Nested
     class WithEmptyExpungedMap {
 
-        private final MailboxListener.Expunged emptyExpungedEvent = new MailboxListener.Expunged(SESSION_ID, USER,
+        private final MailboxListener.Expunged emptyExpungedEvent = new MailboxListener.Expunged(SESSION_ID, USERNAME,
             MAILBOX_PATH, MAILBOX_ID, ImmutableMap.of(), EVENT_ID);
         private final String emptyExpungedEventJson =
             "{" +

@@ -28,9 +28,9 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.Optional;
 
+import org.apache.james.core.Username;
 import org.apache.james.mpt.Runner;
 import org.apache.james.mpt.api.ImapFeatures;
 import org.apache.james.mpt.api.ImapFeatures.Feature;
@@ -244,19 +244,18 @@ public class MailProtocolTestTask extends Task implements Monitor {
             scripts = new Union();
             scripts.add(new FileResource(script));
         }
-        
-        for (Iterator<?> it = scripts.iterator(); it.hasNext();) {
-            final Resource resource = (Resource) it.next();
+
+        for (final Resource resource : scripts) {
             try {
                 final Runner runner = new Runner();
-                
+
                 try {
-                    
+
                     final InputStream inputStream = resource.getInputStream();
                     final String name = resource.getName();
                     builder.addProtocolLines(name == null ? "[Unknown]" : name, inputStream, runner.getTestElements());
                     runner.runSessions(host);
-                    
+
                 } catch (UnsupportedOperationException e) {
                     log("Resource cannot be read: " + resource.getName(), Project.MSG_WARN);
                 }
@@ -266,7 +265,7 @@ public class MailProtocolTestTask extends Task implements Monitor {
                 log(e.getMessage(), Project.MSG_ERR);
                 throw new BuildException("[FAILURE] in script " + resource.getName() + "\n" + e.getMessage(), e);
             }
-            
+
         }
     
     }
@@ -390,7 +389,7 @@ public class MailProtocolTestTask extends Task implements Monitor {
                 final File scriptFile = getScript();
                 final ScriptedUserAdder adder = new ScriptedUserAdder(getHost(), port, MailProtocolTestTask.this);
                 try (Reader reader = newReader(scriptFile)) {
-                    adder.addUser(getUser(), getPasswd(), reader);
+                    adder.addUser(Username.of(getUser()), getPasswd(), reader);
                 }
             } catch (Exception e) {
                 log(e.getMessage(), Project.MSG_ERR);

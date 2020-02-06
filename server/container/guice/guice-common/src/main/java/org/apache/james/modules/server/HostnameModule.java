@@ -20,7 +20,7 @@
 
 package org.apache.james.modules.server;
 
-import org.apache.james.task.eventsourcing.Hostname;
+import org.apache.james.task.Hostname;
 
 import com.google.inject.AbstractModule;
 

@@ -25,9 +25,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.eventsourcing.AggregateId;
 import org.apache.james.eventsourcing.eventstore.History;
 import org.apache.james.mailbox.model.Quota;
@@ -62,30 +64,30 @@ public class UserQuotaThresholds {
             if (keyParts.size() != 3 || !keyParts.get(PREFIX_INDEX).equals(PREFIX)) {
                 throw new IllegalArgumentException();
             }
-            return new Id(User.fromUsername(keyParts.get(USER_INDEX)), keyParts.get(NAME_INDEX));
+            return new Id(Username.of(keyParts.get(USER_INDEX)), keyParts.get(NAME_INDEX));
         }
 
-        public static Id from(User user, String name) {
-            return new Id(user, name);
+        public static Id from(Username username, String name) {
+            return new Id(username, name);
         }
 
-        private final User user;
+        private final Username username;
         private final String name;
 
-        private Id(User user, String name) {
-            Preconditions.checkArgument(!user.asString().contains(SEPARATOR));
+        private Id(Username username, String name) {
+            Preconditions.checkArgument(!username.asString().contains(SEPARATOR));
             Preconditions.checkArgument(!name.contains(SEPARATOR));
-            this.user = user;
+            this.username = username;
             this.name = name;
         }
 
-        public User getUser() {
-            return user;
+        public Username getUsername() {
+            return username;
         }
 
         @Override
         public String asAggregateKey() {
-            return Joiner.on(SEPARATOR).join(PREFIX, name, user.asString());
+            return Joiner.on(SEPARATOR).join(PREFIX, name, username.asString());
         }
 
         @Override
@@ -93,7 +95,7 @@ public class UserQuotaThresholds {
             if (o instanceof Id) {
                 Id id = (Id) o;
 
-                return Objects.equals(this.user, id.user)
+                return Objects.equals(this.username, id.username)
                     && Objects.equals(this.name, id.name);
             }
             return false;
@@ -101,13 +103,13 @@ public class UserQuotaThresholds {
 
         @Override
         public final int hashCode() {
-            return Objects.hash(user, name);
+            return Objects.hash(username, name);
         }
 
         @Override
         public String toString() {
             return MoreObjects.toStringHelper(this)
-                .add("user", user)
+                .add("user", username)
                 .add("name", name)
                 .toString();
         }
@@ -142,7 +144,7 @@ public class UserQuotaThresholds {
         return events;
     }
 
-    private List<QuotaThresholdChangedEvent> generateEvents(QuotaThresholds configuration, Duration gracePeriod, Quota<QuotaCount> countQuota, Quota<QuotaSize> sizeQuota, Instant now) {
+    private List<QuotaThresholdChangedEvent> generateEvents(QuotaThresholds configuration, Duration gracePeriod, Quota<QuotaCountLimit, QuotaCountUsage> countQuota, Quota<QuotaSizeLimit, QuotaSizeUsage> sizeQuota, Instant now) {
         QuotaThresholdChange countThresholdChange = new QuotaThresholdChange(configuration.highestExceededThreshold(countQuota), now);
         QuotaThresholdChange sizeThresholdChange = new QuotaThresholdChange(configuration.highestExceededThreshold(sizeQuota), now);
 
@@ -172,7 +174,7 @@ public class UserQuotaThresholds {
                 .collect(Guavate.toImmutableList()));
     }
 
-    private List<QuotaThresholdChangedEvent> generateEvents(HistoryEvolution countHistoryEvolution, HistoryEvolution sizeHistoryEvolution, Quota<QuotaCount> countQuota, Quota<QuotaSize> sizeQuota) {
+    private List<QuotaThresholdChangedEvent> generateEvents(HistoryEvolution countHistoryEvolution, HistoryEvolution sizeHistoryEvolution, Quota<QuotaCountLimit, QuotaCountUsage> countQuota, Quota<QuotaSizeLimit, QuotaSizeUsage> sizeQuota) {
         if (countHistoryEvolution.isChange() || sizeHistoryEvolution.isChange()) {
             return ImmutableList.of(
                 new QuotaThresholdChangedEvent(

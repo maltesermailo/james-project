@@ -22,14 +22,13 @@ import java.util.stream.IntStream;
 
 import javax.mail.Flags;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.MailboxConstants;
 import org.apache.james.mailbox.model.MailboxPath;
-
-import com.github.fge.lambdas.Throwing;
 
 public class DataProvisioner {
     
@@ -79,10 +78,11 @@ public class DataProvisioner {
     public static void provisionDomain(MailboxManager mailboxManager, String domain) {
         IntStream.range(0, USER_COUNT)
             .mapToObj(i -> "user" + i + "@" + domain)
-            .forEach(Throwing.consumer(user -> provisionUser(mailboxManager, user)));
+            .map(Username::of)
+            .forEach(user -> provisionUser(mailboxManager, user));
     }
 
-    private static void provisionUser(MailboxManager mailboxManager, String user) throws MailboxException {
+    private static void provisionUser(MailboxManager mailboxManager, Username user) {
         MailboxSession mailboxSession = mailboxManager.createSystemSession(user);
         mailboxManager.startProcessingRequest(mailboxSession);
 
@@ -94,13 +94,13 @@ public class DataProvisioner {
             .forEach(name ->  createSubSubMailboxes(mailboxManager, mailboxSession, name));
 
         mailboxManager.endProcessingRequest(mailboxSession);
-        mailboxManager.logout(mailboxSession, true);
+        mailboxManager.logout(mailboxSession);
     }
 
     private static void createSubSubMailboxes(MailboxManager mailboxManager,MailboxSession mailboxSession, String subFolderName) {
         IntStream.range(0, SUB_SUB_MAILBOXES_COUNT)
             .mapToObj(i -> subFolderName + ".SUBSUB_FOLDER_" + i)
-            .forEach(name -> createMailbox(mailboxManager, mailboxSession, MailboxPath.forUser(mailboxSession.getUser().asString(), name)));
+            .forEach(name -> createMailbox(mailboxManager, mailboxSession, MailboxPath.forUser(mailboxSession.getUser(), name)));
 
     }
 

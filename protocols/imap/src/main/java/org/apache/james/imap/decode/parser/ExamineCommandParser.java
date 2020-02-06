@@ -18,10 +18,11 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.message.request.AbstractMailboxSelectionRequest;
 import org.apache.james.imap.message.request.ExamineRequest;
 
@@ -30,14 +31,12 @@ import org.apache.james.imap.message.request.ExamineRequest;
  */
 public class ExamineCommandParser extends AbstractSelectionCommandParser {
 
-    public ExamineCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.EXAMINE_COMMAND_NAME));
+    public ExamineCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.EXAMINE_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected AbstractMailboxSelectionRequest createRequest(ImapCommand command, String mailboxName, boolean condstore, Long lastKnownUidValidity, Long knownModSeq, UidRange[] uidSet, UidRange[] knownUidSet, IdRange[] knownSequenceSet, String tag) {
-        return new ExamineRequest(command, mailboxName, condstore, lastKnownUidValidity, knownModSeq, uidSet, knownUidSet, knownSequenceSet, tag);
+    protected AbstractMailboxSelectionRequest createRequest(String mailboxName, boolean condstore, Long lastKnownUidValidity, Long knownModSeq, UidRange[] uidSet, UidRange[] knownUidSet, IdRange[] knownSequenceSet, Tag tag) {
+        return new ExamineRequest(mailboxName, condstore, lastKnownUidValidity, knownModSeq, uidSet, knownUidSet, knownSequenceSet, tag);
     }
-
-
 }

@@ -20,124 +20,30 @@
 package org.apache.james.protocols.api;
 
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.LinkedBlockingQueue;
-
-import org.apache.james.protocols.api.future.FutureResponse;
 
 
 /**
  * Abstract base class for {@link ProtocolTransport} implementation which already takes care of all the complex
- * stuff when handling {@link Response}'s. 
- * 
- * 
- *
+ * stuff when handling {@link Response}'s.
  */
 public abstract class AbstractProtocolTransport implements ProtocolTransport {
-    
     private static final String CRLF = "\r\n";
-
-    
-    // TODO: Should we limit the size ?
-    private final Queue<Response> responses = new LinkedBlockingQueue<>();
-    private volatile boolean isAsync = false;
     
     @Override
     public final void writeResponse(Response response, ProtocolSession session) {
-        // if we already in asynchrnous mode we simply enqueue the response
-        // we do this synchronously because we may have a dequeuer thread working on
-        // isAsync and responses.
-        boolean enqueued = false;
-        synchronized (this) {
-            if (isAsync == true) {
-                responses.offer(response);
-                enqueued = true;
-            }
-        }
-        
-        // if we didn't enqueue then we check if the response is writable or we have to 
-        // set us "asynchrnous" and wait for response to be ready.
-        if (!enqueued) {
-            if (isResponseWritable(response)) {
-                writeResponseToClient(response, session);
-            } else {
-                addDequeuerListener(response, session);
-                isAsync = true;
-            }
-        }
-    }
-    
-    /**
-     * Helper method which tries to write all queued {@link Response}'s to the remote client. This method is aware of {@link FutureResponse} and makes sure the {@link Response}'s are written
-     * in the correct order
-     * 
-     * This is related to PROTOCOLS-36
-     * 
-     * @param session
-     */
-    private  void writeQueuedResponses(ProtocolSession session) {
-        
-        // dequeue Responses until non is left
-        while (true) {
-            
-            Response queuedResponse = null;
-            
-            // synchrnously we check responses and if it is empty we move back to non asynch
-            // behaviour
-            synchronized (this) {
-                queuedResponse = responses.poll();
-                if (queuedResponse == null) {
-                    isAsync = false;
-                    break;
-                }
-            }
-
-            // if we have something in the queue we continue writing until we
-            // find something asynchronous.
-            if (isResponseWritable(queuedResponse)) {
-                writeResponseToClient(queuedResponse, session);
-            } else {
-                addDequeuerListener(queuedResponse, session);
-                // no changes to isAsync here, because in this method we are always already async.
-                break;
-            }
-        }
-    }
-    
-    private boolean isResponseWritable(Response response) {
-        return !(response instanceof FutureResponse) || ((FutureResponse) response).isReady();
-    }
-    
-    private void addDequeuerListener(Response responseFuture, final ProtocolSession session) {
-        ((FutureResponse) responseFuture).addListener(
-            response -> {
-                writeResponseToClient(response, session);
-                writeQueuedResponses(session);
-            });
-    }
-    
-    /**
-     * Write the {@link Response} to the client
-     * 
-     * @param response
-     * @param session
-     */
-    protected void writeResponseToClient(Response response, ProtocolSession session) {
         if (response != null) {
             boolean startTLS = false;
             if (response instanceof StartTlsResponse) {
                 if (isStartTLSSupported()) {
                     startTLS = true;
                 } else {
-                    
                     // StartTls is not supported by this transport, so throw a exception
                     throw new UnsupportedOperationException("StartTls is not supported by this ProtocolTransport implementation");
                 }
             }
-            
-            
+
             if (response instanceof StreamResponse) {
                 writeToClient(toBytes(response), session, false);
                 writeToClient(((StreamResponse) response).getStream(), session, startTLS);
@@ -148,19 +54,16 @@ public abstract class AbstractProtocolTransport implements ProtocolTransport {
             if (startTLS) {
                 session.resetState();
             }
-            
+
             if (response.isEndSession()) {
                 // close the channel if needed after the message was written out
                 close();
-           } 
-         }        
+            }
+        }
     }
-    
 
     /**
      * Take the {@link Response} and encode it to a <code>byte</code> array
-     * 
-     * @param response
      * @return bytes
      */
     protected static byte[] toBytes(Response response) {
@@ -172,13 +75,8 @@ public abstract class AbstractProtocolTransport implements ProtocolTransport {
                 builder.append(CRLF);
             }
         }
-        try {
-            return builder.toString().getBytes("US-ASCII");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("No US-ASCII ?");
-        }
+        return builder.toString().getBytes(StandardCharsets.US_ASCII);
     }
-    
 
     /**
      * Write the given <code>byte's</code> to the remote peer
@@ -197,7 +95,6 @@ public abstract class AbstractProtocolTransport implements ProtocolTransport {
      * @param startTLS true if startTLS should be started after the {@link InputStream} was written to the client
      */
     protected abstract void writeToClient(InputStream in, ProtocolSession session, boolean startTLS);
-
     
     /**
      * Close the Transport

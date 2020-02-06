@@ -22,8 +22,11 @@ package org.apache.james.mpt.host;
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.commons.configuration2.plist.PropertyListConfiguration;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.adapter.mailbox.store.UserRepositoryAuthenticator;
 import org.apache.james.adapter.mailbox.store.UserRepositoryAuthorizator;
+import org.apache.james.core.Username;
+import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.imap.api.ImapConfiguration;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.decode.ImapDecoder;
@@ -44,6 +47,7 @@ import org.apache.james.mpt.imapmailbox.GrantRightsOnHost;
 import org.apache.james.user.memory.MemoryUsersRepository;
 
 public abstract class JamesImapHostSystem implements ImapHostSystem, GrantRightsOnHost {
+    private static final DomainList NO_DOMAIN_LIST = null;
 
     private MemoryUsersRepository memoryUsersRepository;
     protected Authorizator authorizator;
@@ -56,7 +60,7 @@ public abstract class JamesImapHostSystem implements ImapHostSystem, GrantRights
 
     @Override
     public void beforeTest() throws Exception {
-        memoryUsersRepository = MemoryUsersRepository.withoutVirtualHosting();
+        memoryUsersRepository = MemoryUsersRepository.withoutVirtualHosting(NO_DOMAIN_LIST);
         try {
             memoryUsersRepository.configure(userRepositoryConfiguration());
         } catch (ConfigurationException e) {
@@ -79,7 +83,7 @@ public abstract class JamesImapHostSystem implements ImapHostSystem, GrantRights
     }
 
     @Override
-    public boolean addUser(String user, String password) throws Exception {
+    public boolean addUser(Username user, String password) throws Exception {
         memoryUsersRepository.addUser(user, password);
         return true;
     }
@@ -100,22 +104,22 @@ public abstract class JamesImapHostSystem implements ImapHostSystem, GrantRights
         MailboxSession mailboxSession = mailboxManager.createSystemSession(mailboxPath.getUser());
         mailboxManager.startProcessingRequest(mailboxSession);
         mailboxManager.createMailbox(mailboxPath, mailboxSession);
-        mailboxManager.logout(mailboxSession, true);
+        mailboxManager.logout(mailboxSession);
         mailboxManager.endProcessingRequest(mailboxSession);
     }
 
     @Override
-    public void grantRights(MailboxPath mailboxPath, String userName, MailboxACL.Rfc4314Rights rights) throws Exception {
+    public void grantRights(MailboxPath mailboxPath, Username username, MailboxACL.Rfc4314Rights rights) throws Exception {
         MailboxManager mailboxManager = getMailboxManager();
         MailboxSession mailboxSession = mailboxManager.createSystemSession(mailboxPath.getUser());
         mailboxManager.startProcessingRequest(mailboxSession);
         mailboxManager.setRights(mailboxPath,
             MailboxACL.EMPTY.apply(MailboxACL.command()
-                .forUser(userName)
+                .forUser(username)
                 .rights(rights)
                 .asAddition()),
-            mailboxManager.createSystemSession(userName));
-        mailboxManager.logout(mailboxSession, true);
+            mailboxManager.createSystemSession(username));
+        mailboxManager.logout(mailboxSession);
         mailboxManager.endProcessingRequest(mailboxSession);
     }
 
@@ -174,7 +178,7 @@ public abstract class JamesImapHostSystem implements ImapHostSystem, GrantRights
         }
     }
 
-    private HierarchicalConfiguration userRepositoryConfiguration() {
+    private HierarchicalConfiguration<ImmutableNode> userRepositoryConfiguration() {
         PropertyListConfiguration configuration = new PropertyListConfiguration();
         configuration.addProperty("administratorId", "imapuser");
         return configuration;

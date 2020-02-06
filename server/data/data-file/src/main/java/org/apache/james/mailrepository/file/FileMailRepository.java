@@ -27,6 +27,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.annotation.PostConstruct;
 import javax.inject.Inject;
@@ -35,9 +37,12 @@ import javax.mail.internet.MimeMessage;
 
 import org.apache.commons.configuration2.BaseHierarchicalConfiguration;
 import org.apache.commons.configuration2.HierarchicalConfiguration;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.filesystem.api.FileSystem;
+import org.apache.james.lifecycle.api.Configurable;
 import org.apache.james.mailrepository.api.MailKey;
-import org.apache.james.mailrepository.lib.AbstractMailRepository;
+import org.apache.james.mailrepository.api.MailRepository;
+import org.apache.james.repository.api.Initializable;
 import org.apache.james.repository.file.FilePersistentObjectRepository;
 import org.apache.james.repository.file.FilePersistentStreamRepository;
 import org.apache.james.server.core.MimeMessageCopyOnWriteProxy;
@@ -45,6 +50,9 @@ import org.apache.james.server.core.MimeMessageWrapper;
 import org.apache.mailet.Mail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.github.fge.lambdas.Throwing;
+import com.google.common.collect.Iterators;
 
 /**
  * <p>
@@ -62,7 +70,7 @@ import org.slf4j.LoggerFactory;
  * Requires a logger called MailRepository.
  * </p>
  */
-public class FileMailRepository extends AbstractMailRepository {
+public class FileMailRepository implements MailRepository, Configurable, Initializable {
     private static final Logger LOGGER = LoggerFactory.getLogger(FileMailRepository.class);
 
     private FilePersistentStreamRepository streamRepository;
@@ -75,14 +83,44 @@ public class FileMailRepository extends AbstractMailRepository {
     // repositories such as spam and error
     private FileSystem fileSystem;
 
+    /**
+     * A lock used to control access to repository elements, locking access
+     * based on the key
+     */
+    private final Lock accessControlLock = new Lock();
+
+    /**
+     * Releases a lock on a message identified the key
+     *
+     * @param key
+     *            the key of the message to be unlocked
+     *
+     * @return true if successfully released the lock, false otherwise
+     */
+    private boolean unlock(MailKey key) {
+        return accessControlLock.unlock(key);
+    }
+
+    /**
+     * Obtains a lock on a message identified by key
+     *
+     * @param key
+     *            the key of the message to be locked
+     *
+     * @return true if successfully obtained the lock, false otherwise
+     */
+    private boolean lock(MailKey key) {
+        return accessControlLock.lock(key);
+    }
+
+
     @Inject
     public void setFileSystem(FileSystem fileSystem) {
         this.fileSystem = fileSystem;
     }
 
     @Override
-    protected void doConfigure(HierarchicalConfiguration config) throws org.apache.commons.configuration2.ex.ConfigurationException {
-        super.doConfigure(config);
+    public void configure(HierarchicalConfiguration<ImmutableNode> config) {
         destination = config.getString("[@destinationURL]");
         LOGGER.debug("FileMailRepository.destinationURL: {}", destination);
         fifo = config.getBoolean("[@FIFO]", false);
@@ -108,18 +146,13 @@ public class FileMailRepository extends AbstractMailRepository {
             streamRepository.init();
 
             if (cacheKeys) {
-                keys = Collections.synchronizedSet(new HashSet<String>());
+                keys = Collections.synchronizedSet(new HashSet<>());
             }
 
             // Finds non-matching pairs and deletes the extra files
-            HashSet<String> streamKeys = new HashSet<>();
-            for (Iterator<String> i = streamRepository.list(); i.hasNext(); ) {
-                streamKeys.add(i.next());
-            }
-            HashSet<String> objectKeys = new HashSet<>();
-            for (Iterator<String> i = objectRepository.list(); i.hasNext(); ) {
-                objectKeys.add(i.next());
-            }
+
+            HashSet<String> streamKeys = streamRepository.list().collect(Collectors.toCollection(HashSet::new));
+            HashSet<String> objectKeys = objectRepository.list().collect(Collectors.toCollection(HashSet::new));
 
             @SuppressWarnings("unchecked")
             Collection<String> strandedStreams = (Collection<String>) streamKeys.clone();
@@ -141,9 +174,7 @@ public class FileMailRepository extends AbstractMailRepository {
                 // Next get a list from the object repository
                 // and use that for the list of keys
                 keys.clear();
-                for (Iterator<String> i = objectRepository.list(); i.hasNext(); ) {
-                    keys.add(i.next());
-                }
+                objectRepository.list().forEach(keys::add);
             }
             LOGGER.debug("{} created in {}", getClass().getName(), destination);
         } catch (Exception e) {
@@ -153,13 +184,42 @@ public class FileMailRepository extends AbstractMailRepository {
     }
 
     @Override
-    protected void internalStore(Mail mc) throws MessagingException, IOException {
+    public MailKey store(Mail mc) throws MessagingException {
+        boolean wasLocked = true;
+        MailKey key = MailKey.forMail(mc);
+        try {
+            synchronized (this) {
+                wasLocked = accessControlLock.isLocked(key);
+                if (!wasLocked) {
+                    // If it wasn't locked, we want a lock during the store
+                    lock(key);
+                }
+            }
+            internalStore(mc);
+            return key;
+        } catch (MessagingException e) {
+            LOGGER.error("Exception caught while storing mail {}", key, e);
+            throw e;
+        } catch (Exception e) {
+            LOGGER.error("Exception caught while storing mail {}", key, e);
+            throw new MessagingException("Exception caught while storing mail " + key, e);
+        } finally {
+            if (!wasLocked) {
+                // If it wasn't locked, we need to unlock now
+                unlock(key);
+                synchronized (this) {
+                    notify();
+                }
+            }
+        }
+    }
+
+    private void internalStore(Mail mc) throws MessagingException, IOException {
         String key = mc.getName();
-        if (keys != null && !keys.contains(key)) {
+        if (keys != null) {
             keys.add(key);
         }
         boolean saveStream = true;
-        boolean update = true;
 
         MimeMessage message = mc.getMessage();
         // if the message is a Copy on Write proxy we check the wrapped message
@@ -170,12 +230,9 @@ public class FileMailRepository extends AbstractMailRepository {
         }
         if (message instanceof MimeMessageWrapper) {
             MimeMessageWrapper wrapper = (MimeMessageWrapper) message;
-            if (DEEP_DEBUG) {
-                System.out.println("Retrieving from: " + wrapper.getSourceId());
-                String debugBuffer = "Saving to:       " + destination + "/" + mc.getName();
-                System.out.println(debugBuffer);
-                System.out.println("Modified: " + wrapper.isModified());
-            }
+            LOGGER.trace("Retrieving from: {}", wrapper.getSourceId());
+            LOGGER.trace("Saving to:       {}/{}", destination, mc.getName());
+            LOGGER.trace("Modified: {}", wrapper.isModified());
             String destinationBuffer = destination + "/" + mc.getName();
             if (destinationBuffer.equals(wrapper.getSourceId())) {
                 if (!wrapper.isModified()) {
@@ -186,15 +243,12 @@ public class FileMailRepository extends AbstractMailRepository {
                     // retrying to retrieve from a file we'll be overwriting.
                     saveStream = false;
                 }
-
-                // its an update
-                update = true;
             }
         }
         if (saveStream) {
             OutputStream out = null;
             try {
-                if (update && message instanceof MimeMessageWrapper) {
+                if (message instanceof MimeMessageWrapper) {
                     // we need to force the loading of the message from the
                     // stream as we want to override the old message
                     ((MimeMessageWrapper) message).loadMessage();
@@ -244,7 +298,40 @@ public class FileMailRepository extends AbstractMailRepository {
     }
 
     @Override
-    protected void internalRemove(MailKey key) throws MessagingException {
+    public void remove(Mail mail) throws MessagingException {
+        remove(MailKey.forMail(mail));
+    }
+
+    @Override
+    public void remove(Collection<Mail> mails) throws MessagingException {
+        mails.forEach(Throwing.<Mail>consumer(this::remove).sneakyThrow());
+    }
+
+    @Override
+    public void remove(MailKey key) throws MessagingException {
+        if (lock(key)) {
+            try {
+                internalRemove(key);
+            } finally {
+                unlock(key);
+            }
+        } else {
+            throw new MessagingException("Cannot lock " + key + " to remove it");
+        }
+    }
+
+    @Override
+    public long size() {
+        return Iterators.size(list());
+    }
+
+    @Override
+    public void removeAll() {
+        listStream()
+            .forEach(Throwing.<MailKey>consumer(this::remove).sneakyThrow());
+    }
+
+    private void internalRemove(MailKey key) {
         if (keys != null) {
             keys.remove(key.asString());
         }
@@ -254,6 +341,11 @@ public class FileMailRepository extends AbstractMailRepository {
 
     @Override
     public Iterator<MailKey> list() {
+        return listStream()
+            .iterator();
+    }
+
+    private Stream<MailKey> listStream() {
         // Fix ConcurrentModificationException by cloning
         // the keyset before getting an iterator
         final ArrayList<String> clone;
@@ -262,17 +354,14 @@ public class FileMailRepository extends AbstractMailRepository {
                 clone = new ArrayList<>(keys);
             }
         } else {
-            clone = new ArrayList<>();
-            for (Iterator<String> i = objectRepository.list(); i.hasNext(); ) {
-                clone.add(i.next());
-            }
+            clone = objectRepository.list().collect(Collectors.toCollection(ArrayList::new));
         }
         if (fifo) {
             Collections.sort(clone); // Keys is a HashSet; impose FIFO for apps
         }
         // that need it
-        return clone.stream()
-            .map(MailKey::new)
-            .iterator();
+        return clone
+            .stream()
+            .map(MailKey::new);
     }
 }

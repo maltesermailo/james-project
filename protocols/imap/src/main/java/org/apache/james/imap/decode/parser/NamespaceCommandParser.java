@@ -18,26 +18,26 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.NamespaceRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * Parse NAMESPACE commands
  */
 public class NamespaceCommandParser extends AbstractImapCommandParser {
-
-    public NamespaceCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.NAMESPACE_COMMAND_NAME));
+    public NamespaceCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.NAMESPACE_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
-        return new NamespaceRequest(command, tag);
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
+        return new NamespaceRequest(tag);
     }
 }

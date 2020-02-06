@@ -19,6 +19,7 @@
 
 package org.apache.james.imap.processor;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -29,14 +30,15 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionState;
-import org.apache.james.imap.api.ImapSessionUtils;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.imap.api.message.response.ImapResponseMessage;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.encode.FakeImapSession;
 import org.apache.james.imap.message.request.GetQuotaRequest;
 import org.apache.james.imap.message.response.QuotaResponse;
 import org.apache.james.imap.message.response.UnpooledStatusResponseFactory;
@@ -44,13 +46,14 @@ import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
 import org.apache.james.mailbox.exception.MailboxException;
+import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxACL;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.Quota;
 import org.apache.james.mailbox.model.QuotaRoot;
 import org.apache.james.mailbox.quota.QuotaManager;
 import org.apache.james.mailbox.quota.QuotaRootResolver;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -60,43 +63,46 @@ import com.google.common.collect.ImmutableList;
 public class GetQuotaProcessorTest {
 
     private static final QuotaRoot QUOTA_ROOT = QuotaRoot.quotaRoot("plop", Optional.empty());
-    private static final MailboxPath MAILBOX_PATH = new MailboxPath("namespace", "plop", "INBOX");
-    private static final Quota<QuotaCount> MESSAGE_QUOTA =
-        Quota.<QuotaCount>builder().used(QuotaCount.count(24)).computedLimit(QuotaCount.count(1589)).build();
-    private static final Quota<QuotaSize> STORAGE_QUOTA =
-        Quota.<QuotaSize>builder().used(QuotaSize.size(240)).computedLimit(QuotaSize.size(15890)).build();
+    private static final Username PLOP = Username.of("plop");
+    private static final MailboxPath MAILBOX_PATH = new MailboxPath("namespace", PLOP, "INBOX");
+    private static final Quota<QuotaCountLimit, QuotaCountUsage> MESSAGE_QUOTA =
+        Quota.<QuotaCountLimit, QuotaCountUsage>builder().used(QuotaCountUsage.count(24)).computedLimit(QuotaCountLimit.count(1589)).build();
+    private static final Quota<QuotaSizeLimit, QuotaSizeUsage> STORAGE_QUOTA =
+        Quota.<QuotaSizeLimit, QuotaSizeUsage>builder().used(QuotaSizeUsage.size(240)).computedLimit(QuotaSizeLimit.size(15890)).build();
 
     private GetQuotaProcessor testee;
-    private ImapSession mockedImapSession;
+    private ImapSession imapSession;
     private ImapProcessor.Responder mockedResponder;
     private QuotaManager mockedQuotaManager;
     private QuotaRootResolver mockedQuotaRootResolver;
     private MailboxManager mockedMailboxManager;
     private MailboxSession mailboxSession;
+    private Mailbox mailbox;
 
     @Before
     public void setUp() throws Exception {
-        mailboxSession = MailboxSessionUtil.create("plop");
+        mailboxSession = MailboxSessionUtil.create(PLOP);
         UnpooledStatusResponseFactory statusResponseFactory = new UnpooledStatusResponseFactory();
-        mockedImapSession = mock(ImapSession.class);
+        imapSession = new FakeImapSession();
         mockedQuotaManager = mock(QuotaManager.class);
         mockedQuotaRootResolver = mock(QuotaRootResolver.class);
         when(mockedQuotaRootResolver.fromString(eq(QUOTA_ROOT.getValue()))).thenReturn(QUOTA_ROOT);
         mockedResponder = mock(ImapProcessor.Responder.class);
         mockedMailboxManager = mock(MailboxManager.class);
         testee = new GetQuotaProcessor(mock(ImapProcessor.class), mockedMailboxManager,
-            statusResponseFactory, mockedQuotaManager, mockedQuotaRootResolver, new NoopMetricFactory());
+            statusResponseFactory, mockedQuotaManager, mockedQuotaRootResolver, new RecordingMetricFactory());
+        mailbox = mock(Mailbox.class);
+        when(mailbox.generateAssociatedPath()).thenReturn(MAILBOX_PATH);
+        imapSession.authenticated();
+        imapSession.setMailboxSession(mailboxSession);
     }
 
     @Test
     public void processorShouldWorkOnValidRights() throws Exception {
-        GetQuotaRequest getQuotaRequest = new GetQuotaRequest("A004", ImapCommand.anyStateCommand("Name"), QUOTA_ROOT.getValue());
+        GetQuotaRequest getQuotaRequest = new GetQuotaRequest(TAG, QUOTA_ROOT.getValue());
 
-        when(mockedImapSession.getState()).thenReturn(ImapSessionState.AUTHENTICATED);
-        when(mockedImapSession.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY))
-            .thenReturn(mailboxSession);
         when(mockedQuotaRootResolver.retrieveAssociatedMailboxes(QUOTA_ROOT, mailboxSession))
-            .thenReturn(ImmutableList.of(MAILBOX_PATH));
+            .thenReturn(ImmutableList.of(mailbox));
         when(mockedMailboxManager.hasRight(MAILBOX_PATH, MailboxACL.Right.Read, mailboxSession))
             .thenReturn(true);
         when(mockedQuotaManager.getMessageQuota(QUOTA_ROOT)).thenReturn(MESSAGE_QUOTA);
@@ -105,7 +111,7 @@ public class GetQuotaProcessorTest {
         QuotaResponse storageQuotaResponse = new QuotaResponse("STORAGE", "plop", STORAGE_QUOTA);
         QuotaResponse messageQuotaResponse = new QuotaResponse("MESSAGE", "plop", MESSAGE_QUOTA);
 
-        testee.doProcess(getQuotaRequest, mockedResponder, mockedImapSession);
+        testee.doProcess(getQuotaRequest, mockedResponder, imapSession);
 
         ArgumentCaptor<ImapResponseMessage> argumentCaptor = ArgumentCaptor.forClass(ImapResponseMessage.class);
         verify(mockedResponder, times(3)).respond(argumentCaptor.capture());
@@ -120,19 +126,16 @@ public class GetQuotaProcessorTest {
 
     @Test
     public void processorShouldWorkOnExceptionThrown() throws Exception {
-        GetQuotaRequest getQuotaRequest = new GetQuotaRequest("A004", ImapCommand.anyStateCommand("Name"), QUOTA_ROOT.getValue());
+        GetQuotaRequest getQuotaRequest = new GetQuotaRequest(TAG, QUOTA_ROOT.getValue());
 
-        when(mockedImapSession.getState()).thenReturn(ImapSessionState.AUTHENTICATED);
-        when(mockedImapSession.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY))
-            .thenReturn(mailboxSession);
         when(mockedQuotaRootResolver.retrieveAssociatedMailboxes(QUOTA_ROOT, mailboxSession))
-            .thenReturn(ImmutableList.of(MAILBOX_PATH));
+            .thenReturn(ImmutableList.of(mailbox));
         when(mockedMailboxManager.hasRight(MAILBOX_PATH, MailboxACL.Right.Read, mailboxSession))
             .thenReturn(true);
         when(mockedQuotaManager.getMessageQuota(QUOTA_ROOT)).thenThrow(new MailboxException());
         when(mockedQuotaManager.getStorageQuota(QUOTA_ROOT)).thenReturn(STORAGE_QUOTA);
 
-        testee.doProcess(getQuotaRequest, mockedResponder, mockedImapSession);
+        testee.doProcess(getQuotaRequest, mockedResponder, imapSession);
 
         ArgumentCaptor<ImapResponseMessage> argumentCaptor = ArgumentCaptor.forClass(ImapResponseMessage.class);
         verify(mockedResponder).respond(argumentCaptor.capture());
@@ -145,17 +148,14 @@ public class GetQuotaProcessorTest {
 
     @Test
     public void processorShouldWorkOnNoRights() throws Exception {
-        GetQuotaRequest getQuotaRequest = new GetQuotaRequest("A004", ImapCommand.anyStateCommand("Name"), QUOTA_ROOT.getValue());
+        GetQuotaRequest getQuotaRequest = new GetQuotaRequest(TAG, QUOTA_ROOT.getValue());
 
-        when(mockedImapSession.getState()).thenReturn(ImapSessionState.AUTHENTICATED);
-        when(mockedImapSession.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY))
-            .thenReturn(mailboxSession);
         when(mockedQuotaRootResolver.retrieveAssociatedMailboxes(QUOTA_ROOT, mailboxSession))
-            .thenReturn(ImmutableList.of(MAILBOX_PATH));
+            .thenReturn(ImmutableList.of(mailbox));
         when(mockedMailboxManager.hasRight(MAILBOX_PATH, MailboxACL.Right.Read, mailboxSession))
             .thenReturn(false);
 
-        testee.doProcess(getQuotaRequest, mockedResponder, mockedImapSession);
+        testee.doProcess(getQuotaRequest, mockedResponder, imapSession);
 
         ArgumentCaptor<ImapResponseMessage> argumentCaptor = ArgumentCaptor.forClass(ImapResponseMessage.class);
         verify(mockedResponder).respond(argumentCaptor.capture());
@@ -165,5 +165,4 @@ public class GetQuotaProcessorTest {
             .hasSize(1)
             .allMatch(StatusResponseTypeMatcher.NO_RESPONSE_MATCHER::matches);
     }
-
 }

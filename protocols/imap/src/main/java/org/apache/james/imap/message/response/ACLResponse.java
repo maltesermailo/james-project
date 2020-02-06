@@ -20,6 +20,7 @@
 package org.apache.james.imap.message.response;
 
 import java.util.Map.Entry;
+import java.util.Objects;
 
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.message.response.ImapResponseMessage;
@@ -33,24 +34,11 @@ import org.apache.james.mailbox.model.MailboxACL.Rfc4314Rights;
  */
 public final class ACLResponse implements ImapResponseMessage {
     private final MailboxACL acl;
-
     private final String mailboxName;
 
     public ACLResponse(String mailboxName, MailboxACL acl) {
-        super();
         this.mailboxName = mailboxName;
         this.acl = acl;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o instanceof ACLResponse) {
-            ACLResponse other = (ACLResponse) o;
-            return (this.acl == other.acl || (this.acl != null && this.acl.equals(other.acl)))
-                    && (this.mailboxName == other.mailboxName || (this.mailboxName != null && this.mailboxName.equals(other.mailboxName)))
-                    ;
-        }
-        return false;
     }
 
     public MailboxACL getAcl() {
@@ -62,9 +50,19 @@ public final class ACLResponse implements ImapResponseMessage {
     }
 
     @Override
-    public int hashCode() {
-        final int PRIME = 31;
-        return PRIME * acl.hashCode() + mailboxName.hashCode();
+    public final boolean equals(Object o) {
+        if (o instanceof ACLResponse) {
+            ACLResponse other = (ACLResponse) o;
+
+            return Objects.equals(this.acl, other.acl)
+                && Objects.equals(this.mailboxName, other.mailboxName);
+        }
+        return false;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(acl, mailboxName);
     }
 
     @Override

@@ -24,14 +24,12 @@ import java.util.Optional;
 import javax.inject.Inject;
 
 import org.apache.james.core.Domain;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.quota.MaxQuotaManager;
-import org.apache.james.webadmin.dto.QuotaDTO;
 import org.apache.james.webadmin.dto.QuotaDomainDTO;
-
-import com.github.fge.lambdas.Throwing;
+import org.apache.james.webadmin.dto.ValidatedQuotaDTO;
 
 public class DomainQuotaService {
 
@@ -42,11 +40,11 @@ public class DomainQuotaService {
         this.maxQuotaManager = maxQuotaManager;
     }
 
-    public Optional<QuotaCount> getMaxCountQuota(Domain domain) {
+    public Optional<QuotaCountLimit> getMaxCountQuota(Domain domain) {
         return maxQuotaManager.getDomainMaxMessage(domain);
     }
 
-    public void setMaxCountQuota(Domain domain, QuotaCount quotaCount) throws MailboxException {
+    public void setMaxCountQuota(Domain domain, QuotaCountLimit quotaCount) throws MailboxException {
         maxQuotaManager.setDomainMaxMessage(domain, quotaCount);
     }
 
@@ -54,11 +52,11 @@ public class DomainQuotaService {
         maxQuotaManager.removeDomainMaxMessage(domain);
     }
 
-    public Optional<QuotaSize> getMaxSizeQuota(Domain domain) {
+    public Optional<QuotaSizeLimit> getMaxSizeQuota(Domain domain) {
         return maxQuotaManager.getDomainMaxStorage(domain);
     }
 
-    public void setMaxSizeQuota(Domain domain, QuotaSize quotaSize) throws MailboxException {
+    public void setMaxSizeQuota(Domain domain, QuotaSizeLimit quotaSize) throws MailboxException {
         maxQuotaManager.setDomainMaxStorage(domain, quotaSize);
     }
 
@@ -68,25 +66,36 @@ public class DomainQuotaService {
 
     public QuotaDomainDTO getQuota(Domain domain) throws MailboxException {
         return QuotaDomainDTO.builder()
-            .domain(QuotaDTO
+            .domain(ValidatedQuotaDTO
                 .builder()
                 .count(maxQuotaManager.getDomainMaxMessage(domain))
                 .size(maxQuotaManager.getDomainMaxStorage(domain)))
-            .global(QuotaDTO
+            .global(ValidatedQuotaDTO
                 .builder()
                 .count(maxQuotaManager.getGlobalMaxMessage())
                 .size(maxQuotaManager.getGlobalMaxStorage()))
-            .computed(QuotaDTO
+            .computed(ValidatedQuotaDTO
                 .builder()
                 .count(maxQuotaManager.getComputedMaxMessage(domain))
                 .size(maxQuotaManager.getComputedMaxStorage(domain)))
             .build();
     }
 
-    public void defineQuota(Domain domain, QuotaDTO quota) {
-        quota.getCount()
-            .ifPresent(Throwing.consumer(count -> maxQuotaManager.setDomainMaxMessage(domain, count)));
-        quota.getSize()
-            .ifPresent(Throwing.consumer(size -> maxQuotaManager.setDomainMaxStorage(domain, size)));
+    public void defineQuota(Domain domain, ValidatedQuotaDTO quota) {
+        try {
+            if (quota.getCount().isPresent()) {
+                maxQuotaManager.setDomainMaxMessage(domain, quota.getCount().get());
+            } else {
+                maxQuotaManager.removeDomainMaxMessage(domain);
+            }
+
+            if (quota.getSize().isPresent()) {
+                maxQuotaManager.setDomainMaxStorage(domain, quota.getSize().get());
+            } else {
+                maxQuotaManager.removeDomainMaxStorage(domain);
+            }
+        } catch (MailboxException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

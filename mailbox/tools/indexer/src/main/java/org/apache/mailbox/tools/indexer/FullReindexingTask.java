@@ -20,7 +20,6 @@
 package org.apache.mailbox.tools.indexer;
 
 import java.util.Optional;
-import java.util.function.Function;
 
 import javax.inject.Inject;
 
@@ -30,25 +29,26 @@ import org.apache.james.server.task.json.dto.TaskDTO;
 import org.apache.james.server.task.json.dto.TaskDTOModule;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
+import org.apache.james.task.TaskType;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class FullReindexingTask implements Task {
 
-    public static final String FULL_RE_INDEXING = "FullReIndexing";
+    public static final TaskType FULL_RE_INDEXING = TaskType.of("full-reindexing");
 
     private final ReIndexerPerformer reIndexerPerformer;
-    private final ReprocessingContextInformation additionalInformation;
     private final ReprocessingContext reprocessingContext;
 
-    public static final Function<FullReindexingTask.Factory, TaskDTOModule<FullReindexingTask, FullReindexingTaskDTO>> MODULE = (factory) ->
-        DTOModule
+    public static TaskDTOModule<FullReindexingTask, FullReindexingTaskDTO> module(ReIndexerPerformer reIndexerPerformer) {
+        return DTOModule
             .forDomainObject(FullReindexingTask.class)
             .convertToDTO(FullReindexingTask.FullReindexingTaskDTO.class)
-            .toDomainObjectConverter(factory::create)
+            .toDomainObjectConverter(dto -> new FullReindexingTask(reIndexerPerformer))
             .toDTOConverter((task, type) -> new FullReindexingTaskDTO(type))
-            .typeName(FULL_RE_INDEXING)
+            .typeName(FULL_RE_INDEXING.asString())
             .withFactory(TaskDTOModule::new);
+    }
 
     public static class FullReindexingTaskDTO implements TaskDTO {
 
@@ -65,25 +65,10 @@ public class FullReindexingTask implements Task {
 
     }
 
-    public static class Factory {
-
-        private final ReIndexerPerformer reIndexerPerformer;
-
-        @Inject
-        public Factory(ReIndexerPerformer reIndexerPerformer) {
-            this.reIndexerPerformer = reIndexerPerformer;
-        }
-
-        public FullReindexingTask create(FullReindexingTaskDTO dto) {
-            return new FullReindexingTask(reIndexerPerformer);
-        }
-    }
-
     @Inject
     public FullReindexingTask(ReIndexerPerformer reIndexerPerformer) {
         this.reIndexerPerformer = reIndexerPerformer;
         this.reprocessingContext = new ReprocessingContext();
-        this.additionalInformation = new ReprocessingContextInformation(reprocessingContext);
     }
 
     @Override
@@ -96,12 +81,12 @@ public class FullReindexingTask implements Task {
     }
 
     @Override
-    public String type() {
+    public TaskType type() {
         return FULL_RE_INDEXING;
     }
 
     @Override
     public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-        return Optional.of(additionalInformation);
+        return Optional.of(ReprocessingContextInformation.forFullReindexingTask(reprocessingContext));
     }
 }

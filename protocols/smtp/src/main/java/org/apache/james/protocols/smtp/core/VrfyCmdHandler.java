@@ -17,14 +17,10 @@
  * under the License.                                           *
  ****************************************************************/
 
-
-
 package org.apache.james.protocols.smtp.core;
 
 import java.util.Collection;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.james.protocols.api.Request;
 import org.apache.james.protocols.api.Response;
 import org.apache.james.protocols.api.handler.CommandHandler;
@@ -48,7 +44,6 @@ public class VrfyCmdHandler implements CommandHandler<SMTPSession> {
      * Handler method called upon receipt of a VRFY command.
      * This method informs the client that the command is
      * not implemented.
-     *
      */
     @Override
     public Response onCommand(SMTPSession session, Request request) {
@@ -58,15 +53,5 @@ public class VrfyCmdHandler implements CommandHandler<SMTPSession> {
     @Override
     public Collection<String> getImplCommands() {
         return COMMANDS;
-    }
-
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
     }
 }

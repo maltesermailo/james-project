@@ -19,16 +19,18 @@
 
 package org.apache.james.imap.decode.parser;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.mockito.Mockito.mock;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 
 import javax.mail.Flags;
 
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.message.IdRange;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.ImapRequestStreamLineReader;
@@ -38,15 +40,12 @@ import org.junit.Test;
 public class StoreCommandParserTest {
 
     StoreCommandParser parser;
-    ImapCommand command;
-    ImapMessage message;
 
     private ImapSession session;
 
     @Before
     public void setUp() throws Exception {
-        parser = new StoreCommandParser();
-        command = ImapCommand.anyStateCommand("Command");
+        parser = new StoreCommandParser(mock(StatusResponseFactory.class));
         session = mock(ImapSession.class);
     }
 
@@ -57,7 +56,7 @@ public class StoreCommandParserTest {
         flags.add(Flags.Flag.DRAFT);
         flags.add(Flags.Flag.FLAGGED);
         check("1 FLAGS.SILENT (\\Draft \\Flagged)\r\n", ranges, true, null,
-                flags, false, "A01");
+                flags, false, TAG);
     }
 
 
@@ -68,16 +67,16 @@ public class StoreCommandParserTest {
         flags.add(Flags.Flag.DRAFT);
         flags.add(Flags.Flag.FLAGGED);
         check("1 (UNCHANGEDSINCE 100) FLAGS.SILENT (\\Draft \\Flagged)\r\n", ranges, true, null,
-                flags, false, "A01");
+                flags, false, TAG);
     }
     
     private void check(String input, IdRange[] idSet, boolean silent,
-            final Boolean sign, Flags flags, boolean useUids, String tag)
+            final Boolean sign, Flags flags, boolean useUids, Tag tag)
             throws Exception {
         ImapRequestLineReader reader = new ImapRequestStreamLineReader(
-                new ByteArrayInputStream(input.getBytes("US-ASCII")),
+                new ByteArrayInputStream(input.getBytes(StandardCharsets.US_ASCII)),
                 new ByteArrayOutputStream());
 
-        parser.decode(command, reader, tag, useUids, session);
+        parser.decode(reader, tag, useUids, session);
     }
 }

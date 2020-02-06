@@ -20,6 +20,7 @@
 package org.apache.james.domainlist.lib;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyZeroInteractions;
@@ -30,6 +31,7 @@ import java.util.List;
 
 import org.apache.james.core.Domain;
 import org.apache.james.dnsservice.api.DNSService;
+import org.apache.james.domainlist.api.AutoDetectedDomainRemovalException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -68,7 +70,7 @@ public class AbstractDomainListPrivateMethodsTest {
         }
 
         @Override
-        public void removeDomain(Domain domain) {
+        public void doRemoveDomain(Domain domain) {
             domains.remove(domain);
         }
 
@@ -315,6 +317,43 @@ public class AbstractDomainListPrivateMethodsTest {
             .autoDetectIp(false));
 
         assertThat(domainList.containsDomain(Domain.of(envDomain))).isTrue();
+    }
+
+    @Test
+    public void removeDomainShouldThrowWhenRemovingAutoDetectedDomains() throws Exception {
+        domainList.configure(DomainListConfiguration.builder()
+            .autoDetect(true)
+            .autoDetectIp(false));
+
+        String detected = "detected.tld";
+        when(dnsService.getLocalHost()).thenReturn(InetAddress.getByName("127.0.0.1"));
+        when(dnsService.getHostName(any(InetAddress.class))).thenReturn(detected);
+
+        assertThatThrownBy(() -> domainList.removeDomain(Domain.of(detected)))
+            .isInstanceOf(AutoDetectedDomainRemovalException.class);
+    }
+
+    @Test
+    public void removeDomainShouldThrowWhenRemovingAutoDetectedIps() throws Exception {
+        String detected = "detected.tld";
+        String detectedIp = "148.25.32.1";
+        when(dnsService.getLocalHost()).thenReturn(InetAddress.getByName("127.0.0.1"));
+        when(dnsService.getHostName(any(InetAddress.class))).thenReturn(detected);
+        InetAddress detectedAddress = mock(InetAddress.class);
+        when(detectedAddress.getHostAddress()).thenReturn(detectedIp);
+        when(dnsService.getAllByName(detected)).thenReturn(ImmutableList.of(detectedAddress));
+
+        assertThatThrownBy(() -> domainList.removeDomain(Domain.of(detectedIp)))
+            .isInstanceOf(AutoDetectedDomainRemovalException.class);
+    }
+
+    @Test
+    public void removeDomainShouldThrowWhenRemovingDefaultDomain() throws Exception {
+        Domain defaultDomain = Domain.of("default.tld");
+        domainList.configureDefaultDomain(defaultDomain);
+
+        assertThatThrownBy(() -> domainList.removeDomain(defaultDomain))
+            .isInstanceOf(AutoDetectedDomainRemovalException.class);
     }
 
     @Test

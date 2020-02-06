@@ -29,9 +29,11 @@ import java.time.Instant;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.mailbox.events.MailboxListener;
 import org.apache.james.mailbox.model.Quota;
 import org.apache.james.mailbox.model.QuotaRoot;
@@ -39,18 +41,18 @@ import org.junit.jupiter.api.Test;
 
 class QuotaUsageUpdatedEventSerializationTest {
     private static final QuotaRoot QUOTA_ROOT = QuotaRoot.quotaRoot("#private&foo", Optional.empty());
-    private static final Quota<QuotaCount> QUOTA_COUNT = Quota.<QuotaCount>builder()
-        .used(QuotaCount.count(12))
-        .computedLimit(QuotaCount.count(100))
+    private static final Quota<QuotaCountLimit, QuotaCountUsage> QUOTA_COUNT = Quota.<QuotaCountLimit, QuotaCountUsage>builder()
+        .used(QuotaCountUsage.count(12))
+        .computedLimit(QuotaCountLimit.count(100))
         .build();
-    private static final Quota<QuotaSize> QUOTA_SIZE = Quota.<QuotaSize>builder()
-        .used(QuotaSize.size(1234))
-        .computedLimit(QuotaSize.size(10000))
+    private static final Quota<QuotaSizeLimit, QuotaSizeUsage> QUOTA_SIZE = Quota.<QuotaSizeLimit, QuotaSizeUsage>builder()
+        .used(QuotaSizeUsage.size(1234))
+        .computedLimit(QuotaSizeLimit.size(10000))
         .build();
     private static final Instant INSTANT = Instant.parse("2018-11-13T12:00:55Z");
     private final MailboxListener.QuotaUsageUpdatedEvent eventWithUserContainsUsername = new MailboxListener.QuotaUsageUpdatedEvent(
         EVENT_ID,
-        User.fromUsername("onlyUsername"),
+        Username.of("onlyusername"),
         QUOTA_ROOT,
         QUOTA_COUNT,
         QUOTA_SIZE,
@@ -63,7 +65,7 @@ class QuotaUsageUpdatedEventSerializationTest {
         "        \"countQuota\":{\"used\":12,\"limit\":100,\"limits\":{}}," +
         "        \"time\":\"2018-11-13T12:00:55Z\"," +
         "        \"sizeQuota\":{\"used\":1234,\"limit\":10000,\"limits\":{}}," +
-        "        \"user\":\"onlyUsername\"" +
+        "        \"user\":\"onlyusername\"" +
         "    }" +
         "}";
 
@@ -105,7 +107,7 @@ class QuotaUsageUpdatedEventSerializationTest {
             "        \"quotaRoot\":\"#private&foo\"," +
             "        \"time\":\"2018-11-13T12:00:55Z\"," +
             "        \"sizeQuota\":{\"used\":1234,\"limit\":10000,\"limits\":{}}," +
-            "        \"user\":\"onlyUsername\"" +
+            "        \"user\":\"onlyusername\"" +
             "    }" +
             "}";
 
@@ -122,7 +124,7 @@ class QuotaUsageUpdatedEventSerializationTest {
             "        \"quotaRoot\":\"#private&foo\"," +
             "        \"time\":\"2018-11-13T12:00:55Z\"," +
             "        \"countQuota\":{\"used\":12,\"limit\":100,\"limits\":{}}," +
-            "        \"user\":\"onlyUsername\"" +
+            "        \"user\":\"onlyusername\"" +
             "    }" +
             "}";
 

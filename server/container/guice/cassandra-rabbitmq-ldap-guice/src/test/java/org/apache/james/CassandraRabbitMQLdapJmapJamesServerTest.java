@@ -19,7 +19,7 @@
 
 package org.apache.james;
 
-import static org.apache.james.JmapJamesServerContract.JAMES_SERVER_HOST;
+import static org.apache.james.jmap.draft.JmapJamesServerContract.JAMES_SERVER_HOST;
 import static org.apache.james.user.ldap.DockerLdapSingleton.JAMES_USER;
 import static org.apache.james.user.ldap.DockerLdapSingleton.PASSWORD;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 
 import org.apache.commons.net.imap.IMAPClient;
+import org.apache.james.jmap.draft.JmapJamesServerContract;
 import org.apache.james.modules.AwsS3BlobStoreExtension;
 import org.apache.james.modules.RabbitMQExtension;
 import org.apache.james.modules.SwiftBlobStoreExtension;
@@ -39,8 +40,6 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 class CassandraRabbitMQLdapJmapJamesServerTest {
-    private static final int LIMIT_TO_10_MESSAGES = 10;
-
     interface UserFromLdapShouldLogin {
 
         @Test
@@ -48,7 +47,7 @@ class CassandraRabbitMQLdapJmapJamesServerTest {
             IMAPClient imapClient = new IMAPClient();
             imapClient.connect(JAMES_SERVER_HOST, server.getProbe(ImapGuiceProbe.class).getImapPort());
 
-            assertThat(imapClient.login(JAMES_USER, PASSWORD)).isTrue();
+            assertThat(imapClient.login(JAMES_USER.asString(), PASSWORD)).isTrue();
         }
     }
 
@@ -94,7 +93,7 @@ class CassandraRabbitMQLdapJmapJamesServerTest {
             .extension(new LdapTestExtension())
             .server(configuration -> GuiceJamesServer.forConfiguration(configuration)
                 .combineWith(CassandraRabbitMQLdapJamesServerMain.MODULES)
-                .overrideWith(new TestJMAPServerModule(LIMIT_TO_10_MESSAGES))
+                .overrideWith(TestJMAPServerModule.limitToTenMessages())
                 .overrideWith(JmapJamesServerContract.DOMAIN_LIST_CONFIGURATION_MODULE));
     }
 }

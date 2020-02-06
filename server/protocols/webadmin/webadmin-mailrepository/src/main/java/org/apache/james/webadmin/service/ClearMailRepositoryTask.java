@@ -19,37 +19,54 @@
 
 package org.apache.james.webadmin.service;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
+import javax.inject.Inject;
 import javax.mail.MessagingException;
 
-import org.apache.james.json.DTOModule;
 import org.apache.james.mailrepository.api.MailRepository;
 import org.apache.james.mailrepository.api.MailRepositoryPath;
-import org.apache.james.server.task.json.dto.TaskDTO;
-import org.apache.james.server.task.json.dto.TaskDTOModule;
+import org.apache.james.mailrepository.api.MailRepositoryStore;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
+import org.apache.james.task.TaskType;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.fge.lambdas.Throwing;
+import com.github.steveash.guavate.Guavate;
 
 public class ClearMailRepositoryTask implements Task {
 
-    public static final String TYPE = "clearMailRepository";
+    public static final TaskType TYPE = TaskType.of("clear-mail-repository");
+
+    public static class Factory {
+        private final MailRepositoryStore mailRepositoryStore;
+
+        @Inject
+        public Factory(MailRepositoryStore mailRepositoryStore) {
+            this.mailRepositoryStore = mailRepositoryStore;
+        }
+
+        public ClearMailRepositoryTask create(MailRepositoryPath mailRepositoryPath) throws MailRepositoryStore.MailRepositoryStoreException {
+            List<MailRepository> mailRepositories = mailRepositoryStore.getByPath(mailRepositoryPath)
+                .collect(Guavate.toImmutableList());
+            return new ClearMailRepositoryTask(mailRepositories, mailRepositoryPath);
+        }
+    }
 
     public static class AdditionalInformation implements TaskExecutionDetails.AdditionalInformation {
         private final MailRepositoryPath repositoryPath;
-        private final Supplier<Long> countSupplier;
         private final long initialCount;
+        private final long remainingCount;
+        private final Instant timestamp;
 
-        public AdditionalInformation(MailRepositoryPath repositoryPath, Supplier<Long> countSupplier) {
+        public AdditionalInformation(MailRepositoryPath repositoryPath, long initialCount, long remainingCount, Instant timestamp) {
             this.repositoryPath = repositoryPath;
-            this.initialCount = countSupplier.get();
-            this.countSupplier = countSupplier;
+            this.initialCount = initialCount;
+            this.remainingCount = remainingCount;
+            this.timestamp = timestamp;
         }
 
         public String getRepositoryPath() {
@@ -57,11 +74,16 @@ public class ClearMailRepositoryTask implements Task {
         }
 
         public long getRemainingCount() {
-            return countSupplier.get();
+            return remainingCount;
         }
 
         public long getInitialCount() {
             return initialCount;
+        }
+
+        @Override
+        public Instant timestamp() {
+            return timestamp;
         }
     }
 
@@ -79,57 +101,14 @@ public class ClearMailRepositoryTask implements Task {
         }
     }
 
-    private static class ClearMailRepositoryTaskDTO implements TaskDTO {
-
-        public static ClearMailRepositoryTaskDTO toDTO(ClearMailRepositoryTask domainObject, String typeName) {
-            try {
-                return new ClearMailRepositoryTaskDTO(typeName, domainObject.additionalInformation.repositoryPath.urlEncoded());
-            } catch (Exception e) {
-                throw new UrlEncodingFailureSerializationException(domainObject.additionalInformation.repositoryPath);
-            }
-        }
-
-        private final String type;
-        private final String mailRepositoryPath;
-
-        public ClearMailRepositoryTaskDTO(@JsonProperty("type") String type, @JsonProperty("mailRepositoryPath") String mailRepositoryPath) {
-            this.type = type;
-            this.mailRepositoryPath = mailRepositoryPath;
-        }
-
-        public ClearMailRepositoryTask fromDTO(List<MailRepository> mailRepositories) {
-            try {
-                return new ClearMailRepositoryTask(mailRepositories, MailRepositoryPath.fromEncoded(mailRepositoryPath));
-            } catch (Exception e) {
-                throw new InvalidMailRepositoryPathDeserializationException(mailRepositoryPath);
-            }
-        }
-
-        @Override
-        public String getType() {
-            return type;
-        }
-
-        public String getMailRepositoryPath() {
-            return mailRepositoryPath;
-        }
-    }
-
-    public static final Function<List<MailRepository>, TaskDTOModule<ClearMailRepositoryTask, ClearMailRepositoryTaskDTO>> MODULE = (mailRepositories) ->
-        DTOModule
-            .forDomainObject(ClearMailRepositoryTask.class)
-            .convertToDTO(ClearMailRepositoryTaskDTO.class)
-            .toDomainObjectConverter(dto -> dto.fromDTO(mailRepositories))
-            .toDTOConverter(ClearMailRepositoryTaskDTO::toDTO)
-            .typeName(TYPE)
-            .withFactory(TaskDTOModule::new);
-
     private final List<MailRepository> mailRepositories;
-    private final AdditionalInformation additionalInformation;
+    private final MailRepositoryPath mailRepositoryPath;
+    private final long initialCount;
 
     public ClearMailRepositoryTask(List<MailRepository> mailRepositories, MailRepositoryPath path) {
         this.mailRepositories = mailRepositories;
-        this.additionalInformation = new AdditionalInformation(path, this::getRemainingSize);
+        this.mailRepositoryPath = path;
+        this.initialCount = getRemainingSize();
     }
 
     @Override
@@ -148,20 +127,24 @@ public class ClearMailRepositoryTask implements Task {
     }
 
     @Override
-    public String type() {
+    public TaskType type() {
         return TYPE;
+    }
+
+    MailRepositoryPath getMailRepositoryPath() {
+        return mailRepositoryPath;
     }
 
     @Override
     public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-        return Optional.of(additionalInformation);
+        return Optional.of(new AdditionalInformation(mailRepositoryPath, initialCount, getRemainingSize(), Clock.systemUTC().instant()));
     }
 
     public long getRemainingSize() {
         return mailRepositories
-                .stream()
-                .map(Throwing.function(MailRepository::size).sneakyThrow())
-                .mapToLong(Long::valueOf)
-                .sum();
+            .stream()
+            .map(Throwing.function(MailRepository::size).sneakyThrow())
+            .mapToLong(Long::valueOf)
+            .sum();
     }
 }

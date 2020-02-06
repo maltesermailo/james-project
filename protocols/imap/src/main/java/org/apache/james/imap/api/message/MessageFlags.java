@@ -109,36 +109,4 @@ public class MessageFlags {
         }
         return results;
     }
-
-    /**
-     * Returns IMAP formatted String of MessageFlags for named user
-     */
-    public static String format(Flags flags) {
-        StringBuffer buf = new StringBuffer();
-        buf.append("(");
-        if (flags.contains(Flags.Flag.ANSWERED)) {
-            buf.append("\\Answered ");
-        }
-        if (flags.contains(Flags.Flag.DELETED)) {
-            buf.append("\\Deleted ");
-        }
-        if (flags.contains(Flags.Flag.DRAFT)) {
-            buf.append("\\Draft ");
-        }
-        if (flags.contains(Flags.Flag.FLAGGED)) {
-            buf.append("\\Flagged ");
-        }
-        if (flags.contains(Flags.Flag.RECENT)) {
-            buf.append("\\Recent ");
-        }
-        if (flags.contains(Flags.Flag.SEEN)) {
-            buf.append("\\Seen ");
-        }
-        // Remove the trailing space, if necessary.
-        if (buf.length() > 1) {
-            buf.setLength(buf.length() - 1);
-        }
-        buf.append(")");
-        return buf.toString();
-    }
 }

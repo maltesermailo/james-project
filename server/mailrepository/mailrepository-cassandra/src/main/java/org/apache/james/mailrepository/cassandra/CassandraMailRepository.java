@@ -22,30 +22,39 @@ package org.apache.james.mailrepository.cassandra;
 import java.util.Collection;
 import java.util.Iterator;
 
+import javax.inject.Inject;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 
 import org.apache.james.blob.api.Store;
 import org.apache.james.blob.mail.MimeMessagePartsId;
+import org.apache.james.blob.mail.MimeMessageStore;
 import org.apache.james.mailrepository.api.MailKey;
 import org.apache.james.mailrepository.api.MailRepository;
 import org.apache.james.mailrepository.api.MailRepositoryUrl;
+import org.apache.james.mailrepository.cassandra.CassandraMailRepositoryMailDaoAPI.MailDTO;
 import org.apache.mailet.Mail;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 public class CassandraMailRepository implements MailRepository {
-
     private final MailRepositoryUrl url;
     private final CassandraMailRepositoryKeysDAO keysDAO;
     private final CassandraMailRepositoryCountDAO countDAO;
     private final CassandraMailRepositoryMailDaoAPI mailDAO;
     private final Store<MimeMessage, MimeMessagePartsId> mimeMessageStore;
 
-    public CassandraMailRepository(MailRepositoryUrl url, CassandraMailRepositoryKeysDAO keysDAO,
-                                   CassandraMailRepositoryCountDAO countDAO, CassandraMailRepositoryMailDaoAPI mailDAO,
-                                   Store<MimeMessage, MimeMessagePartsId> mimeMessageStore) {
+    @Inject
+    CassandraMailRepository(MailRepositoryUrl url, CassandraMailRepositoryKeysDAO keysDAO,
+                            CassandraMailRepositoryCountDAO countDAO, CassandraMailRepositoryMailDaoAPI mailDAO,
+                            MimeMessageStore.Factory mimeMessageStoreFactory) {
+        this(url, keysDAO, countDAO, mailDAO, mimeMessageStoreFactory.mimeMessageStore());
+    }
+
+    CassandraMailRepository(MailRepositoryUrl url, CassandraMailRepositoryKeysDAO keysDAO,
+                            CassandraMailRepositoryCountDAO countDAO, CassandraMailRepositoryMailDaoAPI mailDAO,
+                            Store<MimeMessage, MimeMessagePartsId> mimeMessageStore) {
         this.url = url;
         this.keysDAO = keysDAO;
         this.countDAO = countDAO;
@@ -84,13 +93,13 @@ public class CassandraMailRepository implements MailRepository {
     @Override
     public Mail retrieve(MailKey key) {
         return mailDAO.read(url, key)
-            .flatMap(Mono::justOrEmpty)
+            .<MailDTO>handle((t, sink) -> t.ifPresent(sink::next))
             .flatMap(this::toMail)
             .blockOptional()
             .orElse(null);
     }
 
-    private Mono<Mail> toMail(CassandraMailRepositoryMailDAO.MailDTO mailDTO) {
+    private Mono<Mail> toMail(MailDTO mailDTO) {
         MimeMessagePartsId parts = MimeMessagePartsId.builder()
             .headerBlobId(mailDTO.getHeaderBlobId())
             .bodyBlobId(mailDTO.getBodyBlobId())
@@ -145,15 +154,5 @@ public class CassandraMailRepository implements MailRepository {
             .flatMap(this::removeAsync)
             .then()
             .block();
-    }
-
-    @Override
-    public boolean lock(MailKey key) {
-        return false;
-    }
-
-    @Override
-    public boolean unlock(MailKey key) {
-        return false;
     }
 }

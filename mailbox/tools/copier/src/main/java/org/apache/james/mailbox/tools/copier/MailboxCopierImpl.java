@@ -20,23 +20,22 @@ package org.apache.james.mailbox.tools.copier;
 
 import java.io.IOException;
 import java.util.Calendar;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 
 import javax.mail.Flags.Flag;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.copier.MailboxCopier;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.exception.MailboxExistsException;
+import org.apache.james.mailbox.model.FetchGroup;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.MessageRange;
 import org.apache.james.mailbox.model.MessageResult;
-import org.apache.james.mailbox.model.MessageResult.FetchGroup;
 import org.apache.james.mailbox.store.streaming.InputStreamContent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,20 +47,6 @@ import org.slf4j.LoggerFactory;
 public class MailboxCopierImpl implements MailboxCopier {
     private static final Logger LOGGER = LoggerFactory.getLogger(MailboxCopierImpl.class.getName());
 
-    private static final FetchGroup GROUP = new FetchGroup() {
-
-        @Override
-        public int content() {
-            return FULL_CONTENT;
-        }
-
-        @Override
-        public Set<PartContentDescriptor> getPartContentDescriptors() {
-            return new HashSet<>();
-        }
-        
-    };
-
     @Override
     public void copyMailboxes(MailboxManager srcMailboxManager, MailboxManager dstMailboxManager) throws MailboxException, IOException {
         
@@ -72,7 +57,7 @@ public class MailboxCopierImpl implements MailboxCopier {
 
         List<MailboxPath> mailboxPathList = null;
 
-        srcMailboxSession = srcMailboxManager.createSystemSession("manager");
+        srcMailboxSession = srcMailboxManager.createSystemSession(Username.of("manager"));
         srcMailboxManager.startProcessingRequest(srcMailboxSession);
         mailboxPathList = srcMailboxManager.list(srcMailboxSession);
         srcMailboxManager.endProcessingRequest(srcMailboxSession);
@@ -114,7 +99,7 @@ public class MailboxCopierImpl implements MailboxCopier {
                 MessageManager dstMessageManager = dstMailboxManager.getMailbox(mailboxPath, dstMailboxSession);
 
                 int j = 0;
-                Iterator<MessageResult> messageResultIterator = srcMessageManager.getMessages(MessageRange.all(), GROUP, srcMailboxSession);
+                Iterator<MessageResult> messageResultIterator = srcMessageManager.getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, srcMailboxSession);
                 
                 while (messageResultIterator.hasNext()) {
 

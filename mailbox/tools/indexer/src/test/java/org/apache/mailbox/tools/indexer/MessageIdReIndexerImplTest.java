@@ -25,6 +25,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.inmemory.InMemoryMailboxManager;
@@ -41,20 +42,22 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 public class MessageIdReIndexerImplTest {
-    private static final String USERNAME = "benwa@apache.org";
-    public static final MailboxPath INBOX = MailboxPath.forUser(USERNAME, "INBOX");
+    private static final Username USERNAME = Username.of("benwa@apache.org");
+    public static final MailboxPath INBOX = MailboxPath.inbox(USERNAME);
 
     private InMemoryMailboxManager mailboxManager;
     private ListeningMessageSearchIndex messageSearchIndex;
 
     private MessageIdReIndexerImpl reIndexer;
+    private ReIndexerPerformer reindexerPerformer;
 
     @BeforeEach
     void setUp() {
         mailboxManager = InMemoryIntegrationResources.defaultResources().getMailboxManager();
         MailboxSessionMapperFactory mailboxSessionMapperFactory = mailboxManager.getMapperFactory();
         messageSearchIndex = mock(ListeningMessageSearchIndex.class);
-        reIndexer = new MessageIdReIndexerImpl(mailboxManager, mailboxSessionMapperFactory, messageSearchIndex);
+        reindexerPerformer = new ReIndexerPerformer(mailboxManager, messageSearchIndex, mailboxSessionMapperFactory);
+        reIndexer = new MessageIdReIndexerImpl(reindexerPerformer);
     }
 
     @Test

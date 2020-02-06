@@ -23,10 +23,8 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionUtils;
-import org.apache.james.imap.api.display.CharsetUtil;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.display.ModifiedUtf7;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
@@ -53,29 +51,29 @@ public class LSubProcessor extends AbstractSubscriptionProcessor<LsubRequest> {
     }
 
     @Override
-    protected void doProcessRequest(LsubRequest request, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void doProcessRequest(LsubRequest request, ImapSession session, Responder responder) {
         String referenceName = request.getBaseReferenceName();
         String mailboxPattern = request.getMailboxPattern();
 
         try {
             listSubscriptions(session, responder, referenceName, mailboxPattern);
 
-            okComplete(command, tag, responder);
+            okComplete(request, responder);
         } catch (MailboxException e) {
             LOGGER.error("LSub failed for reference {} and pattern {}", referenceName, mailboxPattern, e);
-            no(command, tag, responder, HumanReadableText.GENERIC_LSUB_FAILURE);
+            no(request, responder, HumanReadableText.GENERIC_LSUB_FAILURE);
         }
     }
 
     private void listSubscriptions(ImapSession session, Responder responder, String referenceName, String mailboxName) throws SubscriptionException, MailboxException {
-        MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
+        MailboxSession mailboxSession = session.getMailboxSession();
         Collection<String> mailboxes = getSubscriptionManager().subscriptions(mailboxSession);
 
-        String decodedMailName = CharsetUtil.decodeModifiedUTF7(referenceName);
+        String decodedMailName = ModifiedUtf7.decodeModifiedUTF7(referenceName);
 
         MailboxNameExpression expression = new PrefixedRegex(
             decodedMailName,
-            CharsetUtil.decodeModifiedUTF7(mailboxName),
+            ModifiedUtf7.decodeModifiedUTF7(mailboxName),
             mailboxSession.getPathDelimiter());
         Collection<String> mailboxResponses = new ArrayList<>();
 
@@ -102,11 +100,11 @@ public class LSubProcessor extends AbstractSubscriptionProcessor<LsubRequest> {
     }
 
     @Override
-    protected Closeable addContextToMDC(LsubRequest message) {
+    protected Closeable addContextToMDC(LsubRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "LSUB")
-            .addContext("base", message.getBaseReferenceName())
-            .addContext("pattern", message.getMailboxPattern())
+            .addContext("base", request.getBaseReferenceName())
+            .addContext("pattern", request.getMailboxPattern())
             .build();
     }
 }

@@ -26,7 +26,7 @@
     <parent>
         <groupId>org.apache.james</groupId>
         <artifactId>james-project</artifactId>
-        <version>3.4.0</version>
+        <version>3.5.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>james-server</artifactId>
@@ -84,8 +84,8 @@
         <module>mailrepository/mailrepository-memory</module>
 
         <module>protocols/fetchmail</module>
-        <module>protocols/jmap</module>
-        <module>protocols/jmap-integration-testing</module>
+        <module>protocols/jmap-draft</module>
+        <module>protocols/jmap-draft-integration-testing</module>
         <module>protocols/jwt</module>
         <module>protocols/protocols-imap4</module>
         <module>protocols/protocols-library</module>
@@ -103,9 +103,11 @@
         <module>queue/queue-memory</module>
         <module>queue/queue-rabbitmq</module>
 
-        <module>task</module>
-        <module>task-distributed</module>
-        <module>task-json</module>
+        <module>task/task-api</module>
+        <module>task/task-distributed</module>
+        <module>task/task-json</module>
+        <module>task/task-memory</module>
+
         <module>testing</module>
     </modules>
 

@@ -22,11 +22,11 @@ package org.apache.james.mailbox.store.mail.model;
 import java.util.List;
 
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MessageId;
-import org.apache.james.mailbox.store.mail.AnnotationMapper;
 import org.apache.james.mailbox.store.mail.AttachmentMapper;
 import org.apache.james.mailbox.store.mail.MailboxMapper;
 import org.apache.james.mailbox.store.mail.MessageIdMapper;
@@ -55,15 +55,13 @@ public interface MapperProvider {
 
     AttachmentMapper createAttachmentMapper() throws MailboxException;
 
-    AnnotationMapper createAnnotationMapper() throws MailboxException;
-
     MailboxId generateId();
 
     MessageUid generateMessageUid();
 
-    long generateModSeq(Mailbox mailbox) throws MailboxException;
+    ModSeq generateModSeq(Mailbox mailbox) throws MailboxException;
 
-    long highestModSeq(Mailbox mailbox) throws MailboxException;
+    ModSeq highestModSeq(Mailbox mailbox) throws MailboxException;
 
     boolean supportPartialAttachmentFetch();
     

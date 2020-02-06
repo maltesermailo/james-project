@@ -21,23 +21,25 @@ package org.apache.james.imap.decode.parser;
 import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.ImapRequestLineReader.AtomCharValidator;
 import org.apache.james.imap.message.request.ListRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * Parse LIST commands
  */
 public class ListCommandParser extends AbstractUidCommandParser {
 
-    public ListCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.LIST_COMMAND_NAME));
+    public ListCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.LIST_COMMAND, statusResponseFactory);
     }
 
-    protected ListCommandParser(ImapCommand command) {
-        super(command);
+    protected ListCommandParser(ImapCommand command, StatusResponseFactory statusResponseFactory) {
+        super(command, statusResponseFactory);
     }
 
     /**
@@ -59,7 +61,7 @@ public class ListCommandParser extends AbstractUidCommandParser {
         }
     }
 
-    private class ListCharValidator extends AtomCharValidator {
+    private static class ListCharValidator extends AtomCharValidator {
         @Override
         public boolean isValid(char chr) {
             if (ImapRequestLineReader.isListWildcard(chr)) {
@@ -70,14 +72,14 @@ public class ListCommandParser extends AbstractUidCommandParser {
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, boolean useUids, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, boolean useUids, ImapSession session) throws DecodingException {
         String referenceName = request.mailbox();
         String mailboxPattern = listMailbox(request);
         request.eol();
-        return createMessage(command, referenceName, mailboxPattern, tag);
+        return createMessage(referenceName, mailboxPattern, tag);
     }
 
-    protected ImapMessage createMessage(ImapCommand command, String referenceName, String mailboxPattern, String tag) {
-        return new ListRequest(command, referenceName, mailboxPattern, tag);
+    protected ImapMessage createMessage(String referenceName, String mailboxPattern, Tag tag) {
+        return new ListRequest(referenceName, mailboxPattern, tag);
     }
 }

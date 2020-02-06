@@ -26,7 +26,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.apache.commons.configuration2.Configuration;
-import org.apache.james.backends.cassandra.init.ClusterBuilder;
 import org.apache.james.util.Host;
 
 import com.datastax.driver.core.HostDistance;
@@ -38,6 +37,7 @@ public class ClusterConfiguration {
 
     public static class Builder {
         private ImmutableList.Builder<Host> hosts;
+        private boolean createKeyspace;
         private Optional<String> keyspace;
         private Optional<Integer> replicationFactor;
         private Optional<Integer> minDelay;
@@ -46,9 +46,14 @@ public class ClusterConfiguration {
         private Optional<PoolingOptions> poolingOptions;
         private Optional<Integer> readTimeoutMillis;
         private Optional<Integer> connectTimeoutMillis;
+        private Optional<Boolean> useSsl;
+        private Optional<Boolean> durableWrites;
+        private Optional<String> username;
+        private Optional<String> password;
 
         public Builder() {
             hosts = ImmutableList.builder();
+            createKeyspace = false;
             keyspace = Optional.empty();
             replicationFactor = Optional.empty();
             minDelay = Optional.empty();
@@ -57,6 +62,10 @@ public class ClusterConfiguration {
             poolingOptions = Optional.empty();
             readTimeoutMillis = Optional.empty();
             connectTimeoutMillis = Optional.empty();
+            username = Optional.empty();
+            password = Optional.empty();
+            useSsl = Optional.empty();
+            durableWrites = Optional.empty();
         }
 
         public Builder host(Host host) {
@@ -71,6 +80,11 @@ public class ClusterConfiguration {
 
         public Builder hosts(Host... hosts) {
             this.hosts.addAll(Arrays.asList(hosts));
+            return this;
+        }
+
+        public Builder createKeyspace() {
+            this.createKeyspace = true;
             return this;
         }
 
@@ -138,26 +152,72 @@ public class ClusterConfiguration {
             return this;
         }
 
+        public Builder username(Optional<String> username) {
+            this.username = username;
+            return this;
+        }
+
+        public Builder username(String username) {
+            return username(Optional.of(username));
+        }
+
+        public Builder password(Optional<String> password) {
+            this.password = password;
+            return this;
+        }
+
+        public Builder password(String password) {
+            return password(Optional.of(password));
+        }
+
+        public Builder useSsl(Optional<Boolean> useSsl) {
+            this.useSsl = useSsl;
+            return this;
+        }
+
+        public Builder useSsl(boolean useSsl) {
+            return useSsl(Optional.of(useSsl));
+        }
+
+        public Builder useSsl() {
+            return useSsl(true);
+        }
+
         public Builder connectTimeoutMillis(int connectTimeoutMillis) {
             return connectTimeoutMillis(Optional.of(connectTimeoutMillis));
+        }
+
+        public Builder disableDurableWrites() {
+            this.durableWrites = Optional.of(false);
+
+            return this;
         }
 
         public ClusterConfiguration build() {
             return new ClusterConfiguration(
                 hosts.build(),
+                createKeyspace,
                 keyspace.orElse(DEFAULT_KEYSPACE),
                 replicationFactor.orElse(DEFAULT_REPLICATION_FACTOR),
                 minDelay.orElse(DEFAULT_CONNECTION_MIN_DELAY),
                 maxRetry.orElse(DEFAULT_CONNECTION_MAX_RETRIES),
-                queryLoggerConfiguration.orElse(QueryLoggerConfiguration.DEFAULT),
+                queryLoggerConfiguration,
                 poolingOptions,
                 readTimeoutMillis.orElse(DEFAULT_READ_TIMEOUT_MILLIS),
-                connectTimeoutMillis.orElse(DEFAULT_CONNECT_TIMEOUT_MILLIS));
+                connectTimeoutMillis.orElse(DEFAULT_CONNECT_TIMEOUT_MILLIS),
+                useSsl.orElse(false),
+                username,
+                password,
+                durableWrites.orElse(true));
         }
     }
 
     private static final String CASSANDRA_NODES = "cassandra.nodes";
+    public static final String CASSANDRA_CREATE_KEYSPACE = "cassandra.keyspace.create";
     public static final String CASSANDRA_KEYSPACE = "cassandra.keyspace";
+    public static final String CASSANDRA_USER = "cassandra.user";
+    public static final String CASSANDRA_PASSWORD = "cassandra.password";
+    public static final String CASSANDRA_SSL = "cassandra.ssl";
     public static final String REPLICATION_FACTOR = "cassandra.replication.factor";
     public static final String READ_TIMEOUT_MILLIS = "cassandra.readTimeoutMillis";
     public static final String CONNECT_TIMEOUT_MILLIS = "cassandra.connectTimeoutMillis";
@@ -170,13 +230,20 @@ public class ClusterConfiguration {
     private static final int DEFAULT_CONNECTION_MIN_DELAY = 5000;
     private static final int DEFAULT_READ_TIMEOUT_MILLIS = 5000;
     private static final int DEFAULT_CONNECT_TIMEOUT_MILLIS = 5000;
+    public static final int DEFAULT_CASSANDRA_PORT = 9042;
+
+    private static final boolean DEFAULT_SSL = false;
 
     public static Builder builder() {
         return new Builder();
     }
 
     public static ClusterConfiguration from(Configuration configuration) {
-        return ClusterConfiguration.builder()
+        boolean createKeySpace = Optional.ofNullable(configuration.getBoolean(CASSANDRA_CREATE_KEYSPACE, null))
+            .filter(Boolean::booleanValue)
+            .isPresent();
+
+        ClusterConfiguration.Builder builder = ClusterConfiguration.builder()
             .hosts(listCassandraServers(configuration))
             .keyspace(Optional.ofNullable(configuration.getString(CASSANDRA_KEYSPACE, null)))
             .replicationFactor(Optional.ofNullable(configuration.getInteger(REPLICATION_FACTOR, null)))
@@ -186,14 +253,20 @@ public class ClusterConfiguration {
             .poolingOptions(readPoolingOptions(configuration))
             .readTimeoutMillis(Optional.ofNullable(configuration.getInteger(READ_TIMEOUT_MILLIS, null)))
             .connectTimeoutMillis(Optional.ofNullable(configuration.getInteger(CONNECT_TIMEOUT_MILLIS, null)))
-            .build();
+            .useSsl(Optional.ofNullable(configuration.getBoolean(CASSANDRA_SSL, null)))
+            .username(Optional.ofNullable(configuration.getString(CASSANDRA_USER, null)))
+            .password(Optional.ofNullable(configuration.getString(CASSANDRA_PASSWORD, null)));
+        if (createKeySpace) {
+            builder = builder.createKeyspace();
+        }
+        return builder.build();
     }
 
     private static List<Host> listCassandraServers(Configuration configuration) {
         String[] ipAndPorts = configuration.getStringArray(CASSANDRA_NODES);
 
         return Arrays.stream(ipAndPorts)
-            .map(string -> Host.parseConfString(string, ClusterBuilder.DEFAULT_CASSANDRA_PORT))
+            .map(string -> Host.parseConfString(string, DEFAULT_CASSANDRA_PORT))
             .collect(Guavate.toImmutableList());
     }
 
@@ -229,19 +302,26 @@ public class ClusterConfiguration {
     }
 
     private final List<Host> hosts;
+    private final boolean createKeyspace;
     private final String keyspace;
     private final int replicationFactor;
     private final int minDelay;
     private final int maxRetry;
-    private final QueryLoggerConfiguration queryLoggerConfiguration;
+    private final Optional<QueryLoggerConfiguration> queryLoggerConfiguration;
     private final Optional<PoolingOptions> poolingOptions;
     private final int readTimeoutMillis;
     private final int connectTimeoutMillis;
+    private final boolean useSsl;
+    private final Optional<String> username;
+    private final Optional<String> password;
+    private final boolean durableWrites;
 
-    public ClusterConfiguration(List<Host> hosts, String keyspace, int replicationFactor, int minDelay, int maxRetry,
-                                QueryLoggerConfiguration queryLoggerConfiguration, Optional<PoolingOptions> poolingOptions,
-                                int readTimeoutMillis, int connectTimeoutMillis) {
+    public ClusterConfiguration(List<Host> hosts, boolean createKeyspace, String keyspace, int replicationFactor, int minDelay, int maxRetry,
+                                Optional<QueryLoggerConfiguration> queryLoggerConfiguration, Optional<PoolingOptions> poolingOptions,
+                                int readTimeoutMillis, int connectTimeoutMillis, boolean useSsl, Optional<String> username,
+                                Optional<String> password, boolean durableWrites) {
         this.hosts = hosts;
+        this.createKeyspace = createKeyspace;
         this.keyspace = keyspace;
         this.replicationFactor = replicationFactor;
         this.minDelay = minDelay;
@@ -250,10 +330,22 @@ public class ClusterConfiguration {
         this.poolingOptions = poolingOptions;
         this.readTimeoutMillis = readTimeoutMillis;
         this.connectTimeoutMillis = connectTimeoutMillis;
+        this.useSsl = useSsl;
+        this.username = username;
+        this.password = password;
+        this.durableWrites = durableWrites;
+    }
+
+    public boolean isDurableWrites() {
+        return durableWrites;
     }
 
     public List<Host> getHosts() {
         return hosts;
+    }
+
+    public boolean shouldCreateKeyspace() {
+        return createKeyspace;
     }
 
     public String getKeyspace() {
@@ -272,7 +364,7 @@ public class ClusterConfiguration {
         return maxRetry;
     }
 
-    public QueryLoggerConfiguration getQueryLoggerConfiguration() {
+    public Optional<QueryLoggerConfiguration> getQueryLoggerConfiguration() {
         return queryLoggerConfiguration;
     }
 
@@ -288,6 +380,18 @@ public class ClusterConfiguration {
         return connectTimeoutMillis;
     }
 
+    public boolean useSsl() {
+        return useSsl;
+    }
+
+    public Optional<String> getUsername() {
+        return username;
+    }
+
+    public Optional<String> getPassword() {
+        return password;
+    }
+
     @Override
     public final boolean equals(Object o) {
         if (o instanceof ClusterConfiguration) {
@@ -296,19 +400,23 @@ public class ClusterConfiguration {
             return Objects.equals(this.minDelay, that.minDelay)
                 && Objects.equals(this.maxRetry, that.maxRetry)
                 && Objects.equals(this.hosts, that.hosts)
+                && Objects.equals(this.createKeyspace, that.createKeyspace)
                 && Objects.equals(this.keyspace, that.keyspace)
                 && Objects.equals(this.replicationFactor, that.replicationFactor)
                 && Objects.equals(this.queryLoggerConfiguration, that.queryLoggerConfiguration)
                 && Objects.equals(this.poolingOptions, that.poolingOptions)
                 && Objects.equals(this.readTimeoutMillis, that.readTimeoutMillis)
-                && Objects.equals(this.connectTimeoutMillis, that.connectTimeoutMillis);
+                && Objects.equals(this.connectTimeoutMillis, that.connectTimeoutMillis)
+                && Objects.equals(this.useSsl, that.useSsl)
+                && Objects.equals(this.username, that.username)
+                && Objects.equals(this.password, that.password);
         }
         return false;
     }
 
     @Override
     public final int hashCode() {
-        return Objects.hash(hosts, keyspace, replicationFactor, minDelay, maxRetry, queryLoggerConfiguration, poolingOptions,
-            readTimeoutMillis, connectTimeoutMillis);
+        return Objects.hash(hosts, createKeyspace, keyspace, replicationFactor, minDelay, maxRetry, queryLoggerConfiguration, poolingOptions,
+            readTimeoutMillis, connectTimeoutMillis, username, useSsl, password);
     }
 }

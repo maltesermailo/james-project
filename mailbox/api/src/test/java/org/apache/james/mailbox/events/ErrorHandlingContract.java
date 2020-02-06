@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.james.mailbox.util.EventCollector;
 import org.assertj.core.api.SoftAssertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableSet;
@@ -100,7 +101,7 @@ interface ErrorHandlingContract extends EventBusContract {
         eventBus().dispatch(EVENT, NO_KEYS).block();
 
         WAIT_CONDITION
-            .until(() -> eventCollector.getEvents().size() == 1);
+            .untilAsserted(() -> assertThat(eventCollector.getEvents()).hasSize(1));
     }
 
     @Test
@@ -117,7 +118,7 @@ interface ErrorHandlingContract extends EventBusContract {
         eventBus().dispatch(EVENT, NO_KEYS).block();
 
         WAIT_CONDITION
-            .until(() -> eventCollector.getEvents().size() == 1);
+            .untilAsserted(() -> assertThat(eventCollector.getEvents()).hasSize(1));
     }
 
     @Test
@@ -237,7 +238,7 @@ interface ErrorHandlingContract extends EventBusContract {
         eventBus().dispatch(EVENT, NO_KEYS).block();
 
         WAIT_CONDITION
-            .until(() -> eventCollector.getEvents().size() == 1);
+            .untilAsserted(() -> assertThat(eventCollector.getEvents()).hasSize(1));
 
         assertThat(deadLetter().groupsWithFailedEvents().toIterable())
             .isEmpty();
@@ -279,12 +280,31 @@ interface ErrorHandlingContract extends EventBusContract {
         eventBus().register(eventCollector, GROUP_A);
         eventBus().reDeliver(GROUP_A, EVENT).block();
 
-        WAIT_CONDITION.untilAsserted(() -> assertThat(deadLetter().failedIds(GROUP_A)
-                .flatMap(insertionId -> deadLetter().failedEvent(GROUP_A, insertionId))
-                .toIterable())
-            .containsOnly(EVENT));
-        assertThat(eventCollector.getEvents())
-            .isEmpty();
+        WAIT_CONDITION.untilAsserted(() ->
+                assertThat(
+                        deadLetter()
+                            .failedIds(GROUP_A)
+                            .flatMap(insertionId -> deadLetter().failedEvent(GROUP_A, insertionId))
+                            .toIterable())
+                .containsOnly(EVENT));
+        assertThat(eventCollector.getEvents()).isEmpty();
+    }
+
+    @Disabled("JAMES-2907 redeliver should work as initial dispatch")
+    @Test
+    default void retryShouldDeliverAsManyTimesAsInitialDeliveryAttempt() {
+        EventCollector eventCollector = eventCollector();
+
+        doThrow(new RuntimeException())
+            .doThrow(new RuntimeException())
+            .doThrow(new RuntimeException())
+            .doCallRealMethod()
+            .when(eventCollector).event(EVENT);
+
+        eventBus().register(eventCollector, GROUP_A);
+        eventBus().reDeliver(GROUP_A, EVENT).block();
+
+        WAIT_CONDITION.untilAsserted(() -> assertThat(eventCollector.getEvents()).isNotEmpty());
     }
 
     @Test
@@ -297,7 +317,7 @@ interface ErrorHandlingContract extends EventBusContract {
         eventBus().reDeliver(GROUP_A, EVENT).block();
 
         WAIT_CONDITION
-            .until(() -> eventCollector.getEvents().size() == 1);
+            .untilAsserted(() -> assertThat(eventCollector.getEvents()).hasSize(1));
         assertThat(eventCollector2.getEvents()).isEmpty();
     }
 }

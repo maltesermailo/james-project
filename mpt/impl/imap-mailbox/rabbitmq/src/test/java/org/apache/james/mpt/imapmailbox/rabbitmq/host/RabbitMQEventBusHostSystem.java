@@ -20,13 +20,13 @@
 
 package org.apache.james.mpt.imapmailbox.rabbitmq.host;
 
-import java.net.URISyntaxException;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.james.backend.rabbitmq.DockerRabbitMQ;
-import org.apache.james.backend.rabbitmq.SimpleConnectionPool;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.backends.rabbitmq.DockerRabbitMQ;
+import org.apache.james.backends.rabbitmq.ReactorRabbitMQChannelPool;
+import org.apache.james.backends.rabbitmq.SimpleConnectionPool;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.event.json.EventSerializer;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.encode.main.DefaultImapEncoderFactory;
@@ -43,8 +43,8 @@ import org.apache.james.mailbox.inmemory.InMemoryMessageId;
 import org.apache.james.mailbox.inmemory.manager.InMemoryIntegrationResources;
 import org.apache.james.mailbox.store.StoreSubscriptionManager;
 import org.apache.james.mailbox.store.quota.DefaultUserQuotaRootResolver;
-import org.apache.james.metrics.api.NoopMetricFactory;
 import org.apache.james.metrics.logger.DefaultMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.apache.james.mpt.api.ImapFeatures;
 import org.apache.james.mpt.api.ImapFeatures.Feature;
 import org.apache.james.mpt.host.JamesImapHostSystem;
@@ -63,6 +63,7 @@ public class RabbitMQEventBusHostSystem extends JamesImapHostSystem {
     private RabbitMQEventBus eventBus;
     private SimpleConnectionPool connectionPool;
     private InMemoryIntegrationResources resources;
+    private ReactorRabbitMQChannelPool reactorRabbitMQChannelPool;
 
     RabbitMQEventBusHostSystem(DockerRabbitMQ dockerRabbitMQ) {
         this.dockerRabbitMQ = dockerRabbitMQ;
@@ -73,6 +74,8 @@ public class RabbitMQEventBusHostSystem extends JamesImapHostSystem {
         super.beforeTest();
 
         connectionPool = new SimpleConnectionPool(dockerRabbitMQ.createRabbitConnectionFactory());
+        reactorRabbitMQChannelPool = new ReactorRabbitMQChannelPool(connectionPool);
+        reactorRabbitMQChannelPool.start();
         eventBus = createEventBus();
         eventBus.start();
 
@@ -101,18 +104,19 @@ public class RabbitMQEventBusHostSystem extends JamesImapHostSystem {
             defaultImapProcessorFactory);
     }
 
-    private RabbitMQEventBus createEventBus() throws URISyntaxException {
+    private RabbitMQEventBus createEventBus() {
         InMemoryMessageId.Factory messageIdFactory = new InMemoryMessageId.Factory();
         InMemoryId.Factory mailboxIdFactory = new InMemoryId.Factory();
         EventSerializer eventSerializer = new EventSerializer(mailboxIdFactory, messageIdFactory, new DefaultUserQuotaRootResolver.DefaultQuotaRootDeserializer());
         RoutingKeyConverter routingKeyConverter = new RoutingKeyConverter(ImmutableSet.of(new MailboxIdRegistrationKey.Factory(mailboxIdFactory)));
-        return new RabbitMQEventBus(connectionPool, eventSerializer, RetryBackoffConfiguration.DEFAULT,
-            routingKeyConverter, new MemoryEventDeadLetters(), new NoopMetricFactory());
+        return new RabbitMQEventBus(reactorRabbitMQChannelPool, eventSerializer, RetryBackoffConfiguration.DEFAULT,
+            routingKeyConverter, new MemoryEventDeadLetters(), new RecordingMetricFactory());
     }
 
     @Override
     public void afterTest() {
         eventBus.stop();
+        reactorRabbitMQChannelPool.close();
         connectionPool.close();
     }
 
@@ -127,7 +131,7 @@ public class RabbitMQEventBusHostSystem extends JamesImapHostSystem {
     }
 
     @Override
-    public void setQuotaLimits(QuotaCount maxMessageQuota, QuotaSize maxStorageQuota) {
+    public void setQuotaLimits(QuotaCountLimit maxMessageQuota, QuotaSizeLimit maxStorageQuota) {
         resources.getMaxQuotaManager().setGlobalMaxMessage(maxMessageQuota);
         resources.getMaxQuotaManager().setGlobalMaxStorage(maxStorageQuota);
     }

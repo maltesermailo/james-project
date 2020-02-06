@@ -18,44 +18,35 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
-import org.apache.james.imap.decode.DelegatingImapCommandParser;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapCommandParser;
 import org.apache.james.imap.decode.ImapCommandParserFactory;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
-import org.apache.james.protocols.imap.DecodingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Parse UID commands
  */
-public class UidCommandParser extends AbstractImapCommandParser implements DelegatingImapCommandParser {
+public class UidCommandParser extends AbstractImapCommandParser {
     private static final Logger LOGGER = LoggerFactory.getLogger(UidCommandParser.class);
 
-    private ImapCommandParserFactory parserFactory;
+    private final ImapCommandParserFactory parserFactory;
 
-    public UidCommandParser() {
-        super(ImapCommand.selectedStateCommand(ImapConstants.UID_COMMAND_NAME));
+    public UidCommandParser(ImapCommandParserFactory parserFactory, StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.UID_COMMAND, statusResponseFactory);
+        this.parserFactory = parserFactory;
     }
 
     @Override
-    public ImapCommandParserFactory getParserFactory() {
-        return parserFactory;
-    }
-
-    @Override
-    public void setParserFactory(ImapCommandParserFactory imapCommandFactory) {
-        this.parserFactory = imapCommandFactory;
-    }
-
-    @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
         // TODO: check the logic against the specification:
         // TODO: suspect that it is now bust
         // TODO: the command written may be wrong

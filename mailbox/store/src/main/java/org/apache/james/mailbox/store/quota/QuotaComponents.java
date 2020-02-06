@@ -21,32 +21,29 @@ package org.apache.james.mailbox.store.quota;
 
 import javax.inject.Inject;
 
+import org.apache.james.mailbox.SessionProvider;
 import org.apache.james.mailbox.quota.MaxQuotaManager;
 import org.apache.james.mailbox.quota.QuotaManager;
 import org.apache.james.mailbox.quota.QuotaRootResolver;
 import org.apache.james.mailbox.store.MailboxSessionMapperFactory;
-import org.apache.james.mailbox.store.SessionProvider;
 
 public class QuotaComponents {
     public static QuotaComponents disabled(SessionProvider sessionProvider, MailboxSessionMapperFactory mailboxSessionMapperFactory) {
         return new QuotaComponents(
             new NoMaxQuotaManager(),
             new NoQuotaManager(),
-            new DefaultUserQuotaRootResolver(sessionProvider, mailboxSessionMapperFactory),
-            new NoQuotaUpdater());
+            new DefaultUserQuotaRootResolver(sessionProvider, mailboxSessionMapperFactory));
     }
 
     private final MaxQuotaManager maxQuotaManager;
     private final QuotaManager quotaManager;
     private final QuotaRootResolver quotaRootResolver;
-    private final QuotaUpdater quotaUpdater;
 
     @Inject
-    public QuotaComponents(MaxQuotaManager maxQuotaManager, QuotaManager quotaManager, QuotaRootResolver quotaRootResolver, QuotaUpdater quotaUpdater) {
+    public QuotaComponents(MaxQuotaManager maxQuotaManager, QuotaManager quotaManager, QuotaRootResolver quotaRootResolver) {
         this.maxQuotaManager = maxQuotaManager;
         this.quotaManager = quotaManager;
         this.quotaRootResolver = quotaRootResolver;
-        this.quotaUpdater = quotaUpdater;
     }
 
     public MaxQuotaManager getMaxQuotaManager() {
@@ -59,9 +56,5 @@ public class QuotaComponents {
 
     public QuotaRootResolver getQuotaRootResolver() {
         return quotaRootResolver;
-    }
-
-    public QuotaUpdater getQuotaUpdater() {
-        return quotaUpdater;
     }
 }

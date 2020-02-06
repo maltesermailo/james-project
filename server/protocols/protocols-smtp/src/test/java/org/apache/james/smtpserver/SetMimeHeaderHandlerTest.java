@@ -20,45 +20,28 @@ package org.apache.james.smtpserver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 
+import org.apache.james.core.builder.MimeMessageBuilder;
 import org.apache.james.protocols.smtp.SMTPSession;
 import org.apache.james.protocols.smtp.utils.BaseFakeSMTPSession;
-import org.apache.mailet.Mail;
-import org.junit.Before;
-import org.junit.Test;
+import org.apache.james.server.core.MailImpl;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-public class SetMimeHeaderHandlerTest {
+class SetMimeHeaderHandlerTest {
 
     private static final String HEADER_NAME = "JUNIT";
     private static final String HEADER_VALUE = "test-value";
 
-    private SMTPSession mockedSMTPSession;
-    private MimeMessage mockedMimeMessage;
-    private Mail mockedMail;
-    private String headerName = "defaultHeaderName";
-    private String headerValue = "defaultHeaderValue";
+    private SMTPSession fakeSMTPSession;
 
-    @Before
-    public void setUp() throws Exception {
-        setupMockedSMTPSession();
-    }
-
-    private void setHeaderName(String headerName) {
-        this.headerName = headerName;
-    }
-
-    private void setHeaderValue(String headerValue) {
-        this.headerValue = headerValue;
-    }
-
-    private void setupMockedMimeMessage() throws MessagingException {
-        mockedMimeMessage = Util.createMimeMessage(headerName, headerValue);
-    }
-
-    private void setupMockedSMTPSession() {
-        mockedSMTPSession = new BaseFakeSMTPSession() {
+    @BeforeEach
+    void setUp() {
+        fakeSMTPSession = new BaseFakeSMTPSession() {
 
             @Override
             public int getRcptCount() {
@@ -67,39 +50,53 @@ public class SetMimeHeaderHandlerTest {
         };
     }
 
-    // test if the Header was add
     @Test
-    public void testHeaderIsPresent() throws MessagingException {
-        setHeaderName(HEADER_NAME);
-        setHeaderValue(HEADER_VALUE);
+    void setMimeHeaderHandlerShouldAddSpecifiedHeader() throws MessagingException {
+        MimeMessage mimeMessage = MimeMessageBuilder.mimeMessageBuilder()
+            .setSubject("testmail")
+            .setText("testtext")
+            .addToRecipient("test2@james.apache.org")
+            .addFrom("test@james.apache.org")
+            .build();
 
-        setupMockedMimeMessage();
-        mockedMail = Util.createMockMail2Recipients(mockedMimeMessage);
+        MailImpl mail = MailImpl.builder()
+            .name("ID=" + ThreadLocalRandom.current().nextLong())
+            .mimeMessage(mimeMessage)
+            .addRecipients("test@james.apache.org", "test2@james.apache.org")
+            .build();
 
         SetMimeHeaderHandler header = new SetMimeHeaderHandler();
-
         header.setHeaderName(HEADER_NAME);
         header.setHeaderValue(HEADER_VALUE);
-        header.onMessage(mockedSMTPSession, mockedMail);
 
-        assertThat(mockedMail.getMessage().getHeader(HEADER_NAME)[0]).isEqualTo(HEADER_VALUE);
+        header.onMessage(fakeSMTPSession, mail);
+
+        assertThat(mail.getMessage().getHeader(HEADER_NAME)).containsOnly(HEADER_VALUE);
     }
 
-    // test if the Header was replaced
     @Test
-    public void testHeaderIsReplaced() throws MessagingException {
-        setHeaderName(HEADER_NAME);
-        setHeaderValue(headerValue);
+    void setMimeHeaderHandlerShouldReplaceSpecifiedHeader() throws MessagingException {
 
-        setupMockedMimeMessage();
-        mockedMail = Util.createMockMail2Recipients(mockedMimeMessage);
+        MimeMessage mimeMessage = MimeMessageBuilder.mimeMessageBuilder()
+            .addHeader(HEADER_NAME, "defaultHeaderValue")
+            .setSubject("testmail")
+            .setText("testtext")
+            .addToRecipient("test2@james.apache.org")
+            .addFrom("test@james.apache.org")
+            .build();
+        MailImpl mail = MailImpl.builder()
+            .name("ID=" + ThreadLocalRandom.current().nextLong())
+            .mimeMessage(mimeMessage)
+            .addRecipients("test@james.apache.org", "test2@james.apache.org")
+            .build();
 
         SetMimeHeaderHandler header = new SetMimeHeaderHandler();
-
         header.setHeaderName(HEADER_NAME);
         header.setHeaderValue(HEADER_VALUE);
-        header.onMessage(mockedSMTPSession, mockedMail);
 
-        assertThat(mockedMail.getMessage().getHeader(HEADER_NAME)[0]).isEqualTo(HEADER_VALUE);
+        header.onMessage(fakeSMTPSession, mail);
+
+        assertThat(mail.getMessage().getHeader(HEADER_NAME)).containsOnly(HEADER_VALUE);
     }
+
 }

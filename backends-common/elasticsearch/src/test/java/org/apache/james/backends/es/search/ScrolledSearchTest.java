@@ -24,7 +24,7 @@ import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 
-import org.apache.james.backends.es.DockerElasticSearchRule;
+import org.apache.james.backends.es.DockerElasticSearchExtension;
 import org.apache.james.backends.es.ElasticSearchConfiguration;
 import org.apache.james.backends.es.IndexCreationFactory;
 import org.apache.james.backends.es.IndexName;
@@ -34,17 +34,18 @@ import org.awaitility.Duration;
 import org.awaitility.core.ConditionFactory;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class ScrolledSearchTest {
+class ScrolledSearchTest {
     private static final TimeValue TIMEOUT = TimeValue.timeValueMinutes(1);
     private static final int SIZE = 2;
     private static final String MESSAGE = "message";
@@ -53,13 +54,13 @@ public class ScrolledSearchTest {
 
     private static final ConditionFactory WAIT_CONDITION = await().timeout(Duration.FIVE_SECONDS);
 
-    @Rule
-    public DockerElasticSearchRule elasticSearch = new DockerElasticSearchRule();
+    @RegisterExtension
+    public DockerElasticSearchExtension elasticSearch = new DockerElasticSearchExtension();
     private RestHighLevelClient client;
 
-    @Before
-    public void setUp() {
-        client = elasticSearch.clientProvider().get();
+    @BeforeEach
+    void setUp() {
+        client = elasticSearch.getDockerElasticSearch().clientProvider().get();
         new IndexCreationFactory(ElasticSearchConfiguration.DEFAULT_CONFIGURATION)
             .useIndex(INDEX_NAME)
             .addAlias(ALIAS_NAME)
@@ -67,13 +68,13 @@ public class ScrolledSearchTest {
         elasticSearch.awaitForElasticSearch();
     }
 
-    @After
-    public void tearDown() throws IOException {
+    @AfterEach
+    void tearDown() throws IOException {
         client.close();
     }
 
     @Test
-    public void scrollIterableShouldWorkWhenEmpty() throws Exception {
+    void scrollIterableShouldWorkWhenEmpty() {
         SearchRequest searchRequest = new SearchRequest(INDEX_NAME.getValue())
             .scroll(TIMEOUT)
             .source(new SearchSourceBuilder()
@@ -85,12 +86,13 @@ public class ScrolledSearchTest {
     }
 
     @Test
-    public void scrollIterableShouldWorkWhenOneElement() throws Exception {
+    void scrollIterableShouldWorkWhenOneElement() throws Exception {
         String id = "1";
         client.index(new IndexRequest(INDEX_NAME.getValue())
                 .type(NodeMappingFactory.DEFAULT_MAPPING_NAME)
                 .id(id)
-                .source(MESSAGE, "Sample message"));
+                .source(MESSAGE, "Sample message"),
+            RequestOptions.DEFAULT);
 
         elasticSearch.awaitForElasticSearch();
         WAIT_CONDITION.untilAsserted(() -> hasIdsInIndex(client, id));
@@ -107,18 +109,20 @@ public class ScrolledSearchTest {
     }
 
     @Test
-    public void scrollIterableShouldWorkWhenSizeElement() throws Exception {
+    void scrollIterableShouldWorkWhenSizeElement() throws Exception {
         String id1 = "1";
         client.index(new IndexRequest(INDEX_NAME.getValue())
                 .type(NodeMappingFactory.DEFAULT_MAPPING_NAME)
                 .id(id1)
-                .source(MESSAGE, "Sample message"));
+                .source(MESSAGE, "Sample message"),
+            RequestOptions.DEFAULT);
 
         String id2 = "2";
         client.index(new IndexRequest(INDEX_NAME.getValue())
                 .type(NodeMappingFactory.DEFAULT_MAPPING_NAME)
                 .id(id2)
-                .source(MESSAGE, "Sample message"));
+                .source(MESSAGE, "Sample message"),
+            RequestOptions.DEFAULT);
 
         elasticSearch.awaitForElasticSearch();
         WAIT_CONDITION.untilAsserted(() -> hasIdsInIndex(client, id1, id2));
@@ -135,24 +139,27 @@ public class ScrolledSearchTest {
     }
 
     @Test
-    public void scrollIterableShouldWorkWhenMoreThanSizeElement() throws Exception {
+    void scrollIterableShouldWorkWhenMoreThanSizeElement() throws Exception {
         String id1 = "1";
         client.index(new IndexRequest(INDEX_NAME.getValue())
                 .type(NodeMappingFactory.DEFAULT_MAPPING_NAME)
                 .id(id1)
-                .source(MESSAGE, "Sample message"));
+                .source(MESSAGE, "Sample message"),
+            RequestOptions.DEFAULT);
 
         String id2 = "2";
         client.index(new IndexRequest(INDEX_NAME.getValue())
                 .type(NodeMappingFactory.DEFAULT_MAPPING_NAME)
                 .id(id2)
-                .source(MESSAGE, "Sample message"));
+                .source(MESSAGE, "Sample message"),
+            RequestOptions.DEFAULT);
 
         String id3 = "3";
         client.index(new IndexRequest(INDEX_NAME.getValue())
                 .type(NodeMappingFactory.DEFAULT_MAPPING_NAME)
                 .id(id3)
-                .source(MESSAGE, "Sample message"));
+                .source(MESSAGE, "Sample message"),
+            RequestOptions.DEFAULT);
 
         elasticSearch.awaitForElasticSearch();
         WAIT_CONDITION.untilAsserted(() -> hasIdsInIndex(client, id1, id2, id3));
@@ -174,7 +181,7 @@ public class ScrolledSearchTest {
             .source(new SearchSourceBuilder()
                 .query(QueryBuilders.matchAllQuery()));
 
-        SearchHit[] hits = client.search(searchRequest)
+        SearchHit[] hits = client.search(searchRequest, RequestOptions.DEFAULT)
             .getHits()
             .getHits();
 

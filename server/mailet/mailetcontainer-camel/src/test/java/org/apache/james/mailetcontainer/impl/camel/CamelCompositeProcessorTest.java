@@ -20,23 +20,24 @@ package org.apache.james.mailetcontainer.impl.camel;
 
 import org.apache.camel.impl.DefaultCamelContext;
 import org.apache.commons.configuration2.HierarchicalConfiguration;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.mailetcontainer.api.mock.MockMailetLoader;
 import org.apache.james.mailetcontainer.api.mock.MockMatcherLoader;
 import org.apache.james.mailetcontainer.lib.AbstractStateCompositeProcessor;
 import org.apache.james.mailetcontainer.lib.AbstractStateCompositeProcessorTest;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.apache.mailet.base.test.FakeMailContext;
 
 public class CamelCompositeProcessorTest extends AbstractStateCompositeProcessorTest {
 
     @Override
-    protected AbstractStateCompositeProcessor createProcessor(HierarchicalConfiguration config) throws Exception {
-        CamelCompositeProcessor processor = new CamelCompositeProcessor(new NoopMetricFactory());
+    protected AbstractStateCompositeProcessor createProcessor(HierarchicalConfiguration<ImmutableNode> config) throws Exception {
+        CamelCompositeProcessor processor = new CamelCompositeProcessor(new RecordingMetricFactory(),
+            FakeMailContext.defaultContext(),
+            new MockMatcherLoader(),
+            new MockMailetLoader());
         try {
             processor.setCamelContext(new DefaultCamelContext());
-            processor.setMailetLoader(new MockMailetLoader());
-            processor.setMatcherLoader(new MockMatcherLoader());
-            processor.setMailetContext(FakeMailContext.defaultContext());
             processor.configure(config);
             processor.init();
             return processor;

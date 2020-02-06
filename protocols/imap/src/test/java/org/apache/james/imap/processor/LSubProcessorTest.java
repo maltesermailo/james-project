@@ -19,6 +19,7 @@
 
 package org.apache.james.imap.processor;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
@@ -28,13 +29,14 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionUtils;
+import org.apache.james.core.Username;
+import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.response.StatusResponse;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.encode.FakeImapSession;
 import org.apache.james.imap.message.request.LsubRequest;
 import org.apache.james.imap.message.response.LSubResponse;
 import org.apache.james.mailbox.MailboxManager;
@@ -42,7 +44,7 @@ import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
 import org.apache.james.mailbox.SubscriptionManager;
 import org.apache.james.mailbox.model.MailboxMetaData;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -67,8 +69,7 @@ public class LSubProcessorTest {
 
     private static final String MAILBOX_A = "A.MAILBOX";
 
-    private static final String TAG = "TAG";
-    public static final String USER = "test";
+    public static final Username USER = Username.of("test");
 
     LSubProcessor processor;
     ImapProcessor next;
@@ -80,15 +81,13 @@ public class LSubProcessorTest {
     StatusResponseFactory serverResponseFactory;
     StatusResponse statusResponse;
     Collection<String> subscriptions;
-    ImapCommand command;
     private ImapProcessor.Responder responderImpl;
 
     @Before
     public void setUp() throws Exception {
         subscriptions = new ArrayList<>();
         serverResponseFactory = mock(StatusResponseFactory.class);
-        session = mock(ImapSession.class);
-        command = ImapCommand.anyStateCommand("Command");
+        session = new FakeImapSession();
         next = mock(ImapProcessor.class);
         responder = mock(ImapProcessor.Responder.class);
         result = mock(MailboxMetaData.class);
@@ -96,7 +95,8 @@ public class LSubProcessorTest {
         responderImpl = responder;
         manager =  mock(SubscriptionManager.class);
         mailboxSession = MailboxSessionUtil.create(USER);
-        processor = new LSubProcessor(next, mock(MailboxManager.class), manager, serverResponseFactory, new NoopMetricFactory());
+        processor = new LSubProcessor(next, mock(MailboxManager.class), manager, serverResponseFactory, new RecordingMetricFactory());
+        session.setMailboxSession(mailboxSession);
     }
 
     @Test
@@ -109,12 +109,12 @@ public class LSubProcessorTest {
         subscriptions.add(CHILD_TWO);
 
         expectSubscriptions();
-        when(serverResponseFactory.taggedOk(eq(TAG), same(command), eq(HumanReadableText.COMPLETED)))
+        when(serverResponseFactory.taggedOk(eq(TAG), same(ImapConstants.LSUB_COMMAND), eq(HumanReadableText.COMPLETED)))
             .thenReturn(statusResponse);
 
-        LsubRequest request = new LsubRequest(command, "", PARENT
+        LsubRequest request = new LsubRequest("", PARENT
                 + HIERARCHY_DELIMITER + "%", TAG);
-        processor.doProcessRequest(request, session, TAG, command, responderImpl);
+        processor.doProcessRequest(request, session, responderImpl);
 
         verify(responder).respond(new LSubResponse(CHILD_ONE, false, HIERARCHY_DELIMITER));
         verify(responder).respond(new LSubResponse(CHILD_TWO, false, HIERARCHY_DELIMITER));
@@ -131,12 +131,12 @@ public class LSubProcessorTest {
         subscriptions.add(CHILD_TWO);
 
         expectSubscriptions();
-        when(serverResponseFactory.taggedOk(eq(TAG), same(command), eq(HumanReadableText.COMPLETED)))
+        when(serverResponseFactory.taggedOk(eq(TAG), same(ImapConstants.LSUB_COMMAND), eq(HumanReadableText.COMPLETED)))
             .thenReturn(statusResponse);
 
-        LsubRequest request = new LsubRequest(command, "", ROOT
+        LsubRequest request = new LsubRequest("", ROOT
                 + HIERARCHY_DELIMITER + "%", TAG);
-        processor.doProcessRequest(request, session, TAG, command, responderImpl);
+        processor.doProcessRequest(request, session, responderImpl);
 
         verify(responder).respond(new LSubResponse(PARENT, true, HIERARCHY_DELIMITER));
         verify(responder).respond(statusResponse);
@@ -153,12 +153,12 @@ public class LSubProcessorTest {
         subscriptions.add(CHILD_TWO);
 
         expectSubscriptions();
-        when(serverResponseFactory.taggedOk(eq(TAG), same(command), eq(HumanReadableText.COMPLETED)))
+        when(serverResponseFactory.taggedOk(eq(TAG), same(ImapConstants.LSUB_COMMAND), eq(HumanReadableText.COMPLETED)))
             .thenReturn(statusResponse);
 
-        LsubRequest request = new LsubRequest(command, "", ROOT
+        LsubRequest request = new LsubRequest("", ROOT
                 + HIERARCHY_DELIMITER + "%", TAG);
-        processor.doProcessRequest(request, session, TAG, command, responderImpl);
+        processor.doProcessRequest(request, session, responderImpl);
 
         verify(responder).respond(new LSubResponse(PARENT, false, HIERARCHY_DELIMITER));
         verify(responder).respond(statusResponse);
@@ -170,11 +170,11 @@ public class LSubProcessorTest {
         subscriptions.add(MAILBOX_B);
         subscriptions.add(MAILBOX_C);
         expectSubscriptions();
-        when(serverResponseFactory.taggedOk(eq(TAG), same(command), eq(HumanReadableText.COMPLETED)))
+        when(serverResponseFactory.taggedOk(eq(TAG), same(ImapConstants.LSUB_COMMAND), eq(HumanReadableText.COMPLETED)))
             .thenReturn(statusResponse);
 
-        LsubRequest request = new LsubRequest(command, "", "*", TAG);
-        processor.doProcessRequest(request, session, TAG, command, responderImpl);
+        LsubRequest request = new LsubRequest("", "*", TAG);
+        processor.doProcessRequest(request, session, responderImpl);
 
         verify(responder).respond(new LSubResponse(MAILBOX_A, false, HIERARCHY_DELIMITER));
         verify(responder).respond(new LSubResponse(MAILBOX_B, false, HIERARCHY_DELIMITER));
@@ -183,7 +183,6 @@ public class LSubProcessorTest {
     }
 
     private void expectSubscriptions() throws Exception {
-        when(session.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY)).thenReturn(mailboxSession);
         when(manager.subscriptions(mailboxSession)).thenReturn(subscriptions);
     }
 }

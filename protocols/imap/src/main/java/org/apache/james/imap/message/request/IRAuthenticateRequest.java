@@ -18,24 +18,21 @@
  ****************************************************************/
 package org.apache.james.imap.message.request;
 
-import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.imap.api.Tag;
 
 /**
  * A {@link AuthenticateRequest} which also contains the initialClientResponse as stated in RFC4959
  *
  */
 public class IRAuthenticateRequest extends AuthenticateRequest {
-
     private final String initialClientResponse;
 
-    public IRAuthenticateRequest(ImapCommand command, String authType, String tag, String initialClientResponse) {
-        super(command, authType, tag);
+    public IRAuthenticateRequest(String authType, Tag tag, String initialClientResponse) {
+        super(authType, tag);
         this.initialClientResponse = initialClientResponse;
     }
     
     public String getInitialClientResponse() {
         return initialClientResponse;
     }
-   
-
 }

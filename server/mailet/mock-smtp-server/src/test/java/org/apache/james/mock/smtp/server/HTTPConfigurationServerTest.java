@@ -24,10 +24,8 @@ import static io.restassured.RestAssured.when;
 import static io.restassured.RestAssured.with;
 import static io.restassured.config.EncoderConfig.encoderConfig;
 import static io.restassured.config.RestAssuredConfig.newConfig;
+import static javax.servlet.http.HttpServletResponse.SC_NO_CONTENT;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
-import static org.apache.james.mock.smtp.server.Fixture.ALICE;
-import static org.apache.james.mock.smtp.server.Fixture.BOB;
-import static org.apache.james.mock.smtp.server.Fixture.JACK;
 import static org.apache.james.mock.smtp.server.Fixture.JSON_BEHAVIORS;
 import static org.apache.james.mock.smtp.server.Fixture.JSON_MAIL;
 import static org.apache.james.mock.smtp.server.Fixture.JSON_MAILS_LIST;
@@ -35,15 +33,12 @@ import static org.hamcrest.Matchers.hasSize;
 
 import java.nio.charset.StandardCharsets;
 
-import org.apache.james.core.MailAddress;
-import org.apache.james.mock.smtp.server.model.Mail;
+import org.apache.james.mock.smtp.server.Fixture.MailsFixutre;
 import org.eclipse.jetty.http.HttpStatus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-
-import com.google.common.collect.ImmutableList;
 
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
@@ -52,14 +47,14 @@ import net.javacrumbs.jsonunit.core.Option;
 import net.javacrumbs.jsonunit.core.internal.Options;
 
 class HTTPConfigurationServerTest {
-    private HTTPConfigurationServer server;
+    private HTTPConfigurationServer.RunningStage server;
 
     @Nested
     class SMTPBehaviorsTest {
         @BeforeEach
         void setUp() throws Exception {
-            server = HTTPConfigurationServer.onRandomPort(new SMTPBehaviorRepository(), new ReceivedMailRepository());
-            server.start();
+            server = HTTPConfigurationServer.onRandomPort(new SMTPBehaviorRepository(), new ReceivedMailRepository())
+                .start();
 
             RestAssured.requestSpecification = new RequestSpecBuilder()
                 .setContentType(ContentType.JSON)
@@ -147,15 +142,13 @@ class HTTPConfigurationServerTest {
     @Nested
     class SMTPMailsTest {
         private ReceivedMailRepository mailRepository;
-        private Mail mail1;
-        private Mail mail2;
 
         @BeforeEach
         void setUp() throws Exception {
             mailRepository = new ReceivedMailRepository();
 
-            server = HTTPConfigurationServer.onRandomPort(new SMTPBehaviorRepository(), mailRepository);
-            server.start();
+            server = HTTPConfigurationServer.onRandomPort(new SMTPBehaviorRepository(), mailRepository)
+                .start();
 
             RestAssured.requestSpecification = new RequestSpecBuilder()
                 .setContentType(ContentType.JSON)
@@ -164,18 +157,6 @@ class HTTPConfigurationServerTest {
                 .setPort(server.getPort().getValue())
                 .setBasePath("/smtpMails")
                 .build();
-
-            mail1 = new Mail(
-                new Mail.Envelope(
-                    new MailAddress(BOB),
-                    ImmutableList.of(new MailAddress(ALICE), new MailAddress(JACK))),
-                "bob to alice and jack");
-
-            mail2 = new Mail(
-                new Mail.Envelope(
-                    new MailAddress(ALICE),
-                    ImmutableList.of(new MailAddress(BOB))),
-                "alice to bob");
         }
 
         @AfterEach
@@ -193,8 +174,8 @@ class HTTPConfigurationServerTest {
         }
 
         @Test
-        void getShouldReturnPreviouslyStoredData() throws Exception {
-            mailRepository.store(mail1);
+        void getShouldReturnPreviouslyStoredData() {
+            mailRepository.store(MailsFixutre.MAIL_1);
 
             String response = when()
                     .get()
@@ -209,9 +190,9 @@ class HTTPConfigurationServerTest {
         }
 
         @Test
-        void getShouldReturnMultipleEmails() throws Exception {
-            mailRepository.store(mail1);
-            mailRepository.store(mail2);
+        void getShouldReturnMultipleEmails() {
+            mailRepository.store(MailsFixutre.MAIL_1);
+            mailRepository.store(MailsFixutre.MAIL_2);
 
             String response = when()
                     .get()
@@ -226,8 +207,30 @@ class HTTPConfigurationServerTest {
         }
 
         @Test
+        void getShouldNotReturnClearedEmails() {
+            mailRepository.store(MailsFixutre.MAIL_1);
+            mailRepository.store(MailsFixutre.MAIL_2);
+
+            with()
+                .delete();
+
+            when()
+                .get()
+            .then()
+                .body(".", hasSize(0));
+        }
+
+        @Test
+        void deleteShouldReturnNoContent() {
+            when()
+                .delete()
+            .then()
+                .statusCode(SC_NO_CONTENT);
+        }
+
+        @Test
         void getShouldReturnEmptyAfterClear() {
-            mailRepository.store(mail1);
+            mailRepository.store(MailsFixutre.MAIL_1);
 
             mailRepository.clear();
 

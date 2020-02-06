@@ -19,7 +19,11 @@
 
 package org.apache.james.imap.api.process;
 
+import java.util.Optional;
+
+import org.apache.james.core.Username;
 import org.apache.james.imap.api.ImapSessionState;
+import org.apache.james.mailbox.MailboxSession;
 
 /**
  * Encapsulates all state held for an ongoing Imap session, which commences when
@@ -29,6 +33,7 @@ import org.apache.james.imap.api.ImapSessionState;
  * @version $Revision: 109034 $
  */
 public interface ImapSession {
+    String MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY = "org.apache.james.api.imap.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY";
 
     /**
      * Logs out the session. Marks the connection for closure;
@@ -139,30 +144,36 @@ public interface ImapSession {
 
     /**
      * Push in a new {@link ImapLineHandler} which is called for the next line received
-     * 
-     * @param lineHandler
      */
     void pushLineHandler(ImapLineHandler lineHandler);
 
     /**
      * Pop the current {@link ImapLineHandler}
-     * 
      */
     void popLineHandler();
     
     /**
      * Return true if multiple namespaces are supported
-     * 
-     * @return multipleNamespaces
      */
     boolean supportMultipleNamespaces();
     
     /**
      * Return true if the login / authentication via plain username / password is
      * disallowed
-     * 
-     * @return plainDisallowed
      */
     boolean isPlainAuthDisallowed();
 
+    default void setMailboxSession(MailboxSession mailboxSession) {
+        setAttribute(MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY, mailboxSession);
+    }
+
+    default MailboxSession getMailboxSession() {
+        return (MailboxSession) getAttribute(MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY);
+    }
+
+    default Username getUserName() {
+        return Optional.ofNullable(getMailboxSession())
+            .map(MailboxSession::getUser)
+            .orElse(null);
+    }
 }

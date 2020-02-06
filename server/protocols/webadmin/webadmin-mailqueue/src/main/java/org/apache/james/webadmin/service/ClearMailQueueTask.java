@@ -19,35 +19,31 @@
 
 package org.apache.james.webadmin.service;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
-import org.apache.james.json.DTOModule;
 import org.apache.james.queue.api.MailQueue;
-import org.apache.james.queue.api.MailQueueFactory;
 import org.apache.james.queue.api.ManageableMailQueue;
-import org.apache.james.server.task.json.dto.TaskDTO;
-import org.apache.james.server.task.json.dto.TaskDTOModule;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
-
+import org.apache.james.task.TaskType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class ClearMailQueueTask implements Task {
 
     public static class AdditionalInformation implements TaskExecutionDetails.AdditionalInformation {
         private final String mailQueueName;
         private final long initialCount;
-        private final Supplier<Long> countSupplier;
+        private final long remainingCount;
+        private final Instant timestamp;
 
-        public AdditionalInformation(String mailQueueName, Supplier<Long> countSupplier) {
+        public AdditionalInformation(String mailQueueName, long initialCount, long remainingCount, Instant timestamp) {
             this.mailQueueName = mailQueueName;
-            this.countSupplier = countSupplier;
-            this.initialCount = countSupplier.get();
+            this.initialCount = initialCount;
+            this.remainingCount = remainingCount;
+            this.timestamp = timestamp;
         }
 
         public String getMailQueueName() {
@@ -59,7 +55,12 @@ public class ClearMailQueueTask implements Task {
         }
 
         public long getRemainingCount() {
-            return countSupplier.get();
+            return remainingCount;
+        }
+
+        @Override
+        public Instant timestamp() {
+            return timestamp;
         }
     }
 
@@ -69,51 +70,15 @@ public class ClearMailQueueTask implements Task {
         }
     }
 
-    private static class ClearMailQueueTaskDTO implements TaskDTO {
-
-        public static ClearMailQueueTaskDTO toDTO(ClearMailQueueTask domainObject, String typeName) {
-            return new ClearMailQueueTaskDTO(typeName, domainObject.queue.getName());
-        }
-
-        private final String type;
-        private final String queue;
-
-        public ClearMailQueueTaskDTO(@JsonProperty("type") String type, @JsonProperty("queue") String queue) {
-            this.type = type;
-            this.queue = queue;
-        }
-
-        public ClearMailQueueTask fromDTO(MailQueueFactory<ManageableMailQueue> mailQueueFactory) {
-            return new ClearMailQueueTask(mailQueueFactory.getQueue(queue).orElseThrow(() -> new UnknownSerializedQueue(queue)));
-        }
-
-        @Override
-        public String getType() {
-            return type;
-        }
-
-        public String getQueue() {
-            return queue;
-        }
-    }
-
     private static final Logger LOGGER = LoggerFactory.getLogger(ClearMailQueueTask.class);
-    public static final String TYPE = "clear-mail-queue";
-    public static final Function<MailQueueFactory<ManageableMailQueue>, TaskDTOModule<ClearMailQueueTask, ClearMailQueueTaskDTO>> MODULE = (mailQueueFactory) ->
-        DTOModule
-            .forDomainObject(ClearMailQueueTask.class)
-            .convertToDTO(ClearMailQueueTaskDTO.class)
-            .toDomainObjectConverter(dto -> dto.fromDTO(mailQueueFactory))
-            .toDTOConverter(ClearMailQueueTaskDTO::toDTO)
-            .typeName(TYPE)
-            .withFactory(TaskDTOModule::new);
+    public static final TaskType TYPE = TaskType.of("clear-mail-queue");
 
     private final ManageableMailQueue queue;
-    private final AdditionalInformation additionalInformation;
+    private final long initialCount;
 
     public ClearMailQueueTask(ManageableMailQueue queue) {
         this.queue = queue;
-        additionalInformation = new AdditionalInformation(queue.getName(), this::getRemainingSize);
+        initialCount = getRemainingSize();
     }
 
     @Override
@@ -129,13 +94,17 @@ public class ClearMailQueueTask implements Task {
     }
 
     @Override
-    public String type() {
+    public TaskType type() {
         return TYPE;
     }
 
     @Override
     public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-        return Optional.of(additionalInformation);
+        return Optional.of(new AdditionalInformation(queue.getName(), initialCount, getRemainingSize(), Clock.systemUTC().instant()));
+    }
+
+    ManageableMailQueue getQueue() {
+        return queue;
     }
 
     private long getRemainingSize() {

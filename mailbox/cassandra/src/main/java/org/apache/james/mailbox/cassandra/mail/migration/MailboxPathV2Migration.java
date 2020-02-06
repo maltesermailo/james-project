@@ -19,8 +19,9 @@
 
 package org.apache.james.mailbox.cassandra.mail.migration;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
-import java.util.function.Supplier;
 
 import javax.inject.Inject;
 
@@ -30,6 +31,7 @@ import org.apache.james.mailbox.cassandra.mail.CassandraMailboxPathDAOImpl;
 import org.apache.james.mailbox.cassandra.mail.CassandraMailboxPathV2DAO;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
+import org.apache.james.task.TaskType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,34 +39,65 @@ import reactor.core.publisher.Mono;
 
 public class MailboxPathV2Migration implements Migration {
 
-    public static class AdditionalInformation implements TaskExecutionDetails.AdditionalInformation {
-        private final Supplier<Long> countSupplier;
-        private final long initialCount;
+    static class MailboxPathV2MigrationTask implements Task {
+        private final MailboxPathV2Migration migration;
 
-        public AdditionalInformation(Supplier<Long> countSupplier) {
-            this.countSupplier = countSupplier;
-            this.initialCount = countSupplier.get();
+        MailboxPathV2MigrationTask(MailboxPathV2Migration migration) {
+            this.migration = migration;
+        }
+
+        @Override
+        public Result run() throws InterruptedException {
+            return migration.runTask();
+        }
+
+        @Override
+        public TaskType type() {
+            return TYPE;
+        }
+
+        @Override
+        public Optional<TaskExecutionDetails.AdditionalInformation> details() {
+            return Optional.of(migration.getAdditionalInformation());
+        }
+    }
+
+    public static class AdditionalInformation implements TaskExecutionDetails.AdditionalInformation {
+        private final long remainingCount;
+        private final long initialCount;
+        private final Instant timestamp;
+
+        public AdditionalInformation(long remainingCount, long initialCount, Instant timestamp) {
+            this.remainingCount = remainingCount;
+            this.initialCount = initialCount;
+            this.timestamp = timestamp;
         }
 
         public long getRemainingCount() {
-            return countSupplier.get();
+            return remainingCount;
         }
 
         public long getInitialCount() {
             return initialCount;
         }
+
+        @Override
+        public Instant timestamp() {
+            return timestamp;
+        }
     }
 
     public static final Logger LOGGER = LoggerFactory.getLogger(MailboxPathV2Migration.class);
+    public static final TaskType TYPE = TaskType.of("cassandra-mailbox-path-v2-migration");
     private final CassandraMailboxPathDAOImpl daoV1;
     private final CassandraMailboxPathV2DAO daoV2;
-    private final AdditionalInformation additionalInformation;
+    private final long initialCount;
 
     @Inject
     public MailboxPathV2Migration(CassandraMailboxPathDAOImpl daoV1, CassandraMailboxPathV2DAO daoV2) {
         this.daoV1 = daoV1;
         this.daoV2 = daoV2;
-        this.additionalInformation = new AdditionalInformation(() -> daoV1.countAll().block());
+        this.initialCount = getCurrentCount();
     }
 
     @Override
@@ -89,22 +122,14 @@ public class MailboxPathV2Migration implements Migration {
 
     @Override
     public Task asTask() {
-        return new Task() {
-            @Override
-            public Result run() throws InterruptedException {
-                return runTask();
-            }
-
-            @Override
-            public String type() {
-                return "Cassandra_mailboxPathV2Migration";
-            }
-
-            @Override
-            public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-                return Optional.of(additionalInformation);
-            }
-        };
+        return new MailboxPathV2MigrationTask(this);
     }
 
+    AdditionalInformation getAdditionalInformation() {
+        return new AdditionalInformation(getCurrentCount(), initialCount, Clock.systemUTC().instant());
+    }
+
+    private Long getCurrentCount() {
+        return daoV1.countAll().block();
+    }
 }

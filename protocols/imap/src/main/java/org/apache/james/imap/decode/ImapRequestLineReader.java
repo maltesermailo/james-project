@@ -28,24 +28,24 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 import javax.mail.Flags;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.display.CharsetUtil;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.display.HumanReadableText;
+import org.apache.james.imap.api.display.ModifiedUtf7;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
 import org.apache.james.imap.api.message.request.DayMonthYear;
 import org.apache.james.imap.api.process.ImapSession;
 import org.apache.james.imap.api.process.SearchResUtil;
+import org.apache.james.imap.utils.FastByteArrayOutputStream;
 import org.apache.james.mailbox.MessageUid;
-import org.apache.james.protocols.imap.DecodingException;
-import org.apache.james.protocols.imap.utils.DecoderUtils;
-import org.apache.james.protocols.imap.utils.FastByteArrayOutputStream;
 
 /**
  * Wraps the client input reader with a bunch of convenience methods, allowing
@@ -173,8 +173,6 @@ public abstract class ImapRequestLineReader {
 
     /**
      * Consume the rest of the line
-     * 
-     * @throws DecodingException
      */
     public void consumeLine() throws DecodingException {
         char next = nextChar();
@@ -195,9 +193,9 @@ public abstract class ImapRequestLineReader {
     /**
      * Reads a command "tag" from the request.
      */
-    public String tag() throws DecodingException {
+    public Tag tag() throws DecodingException {
         CharacterValidator validator = new TagCharValidator();
-        return consumeWord(validator);
+        return new Tag(consumeWord(validator));
     }
 
     /**
@@ -244,7 +242,7 @@ public abstract class ImapRequestLineReader {
 
     /**
      * 
-     * Reads the mailbox name via {@link #mailboxUTF7()} but also decode it via {@link CharsetUtil#decodeModifiedUTF7(String)}
+     * Reads the mailbox name via {@link #mailboxUTF7()} but also decode it via {@link ModifiedUtf7#decodeModifiedUTF7(String)}
      * 
      * If you really want to get the modified UTF7 version you should use {@link #mailboxUTF7()}
      * 
@@ -252,7 +250,7 @@ public abstract class ImapRequestLineReader {
      * 
      */
     public String mailbox() throws DecodingException {
-       return CharsetUtil.decodeModifiedUTF7(mailboxUTF7());
+       return ModifiedUtf7.decodeModifiedUTF7(mailboxUTF7());
     }
 
     /**
@@ -264,10 +262,7 @@ public abstract class ImapRequestLineReader {
      * variants of ;; INBOX (e.g. "iNbOx") MUST be interpreted as INBOX ;; not
      * as an astring.
      * 
-     * Be aware that mailbox names are encoded via a modified UTF7. For more informations RFC3501
-     * 
-     * 
-     * 
+     * Be aware that mailbox names are encoded via a modified UTF7. For more information RFC3501
      */
     public String mailboxUTF7() throws DecodingException {
         String mailbox = astring();
@@ -282,7 +277,6 @@ public abstract class ImapRequestLineReader {
      * Reads one <code>date</code> argument from the request.
      * 
      * @return <code>DayMonthYear</code>, not null
-     * @throws DecodingException
      */
     public DayMonthYear date() throws DecodingException {
 
@@ -319,7 +313,7 @@ public abstract class ImapRequestLineReader {
     /**
      * Reads a "date-time" argument from the request.
      */
-    public Date dateTime() throws DecodingException {
+    public LocalDateTime dateTime() throws DecodingException {
         char next = nextWordChar();
         String dateString;
         if (next == '"') {
@@ -341,7 +335,7 @@ public abstract class ImapRequestLineReader {
     }
 
     private String consumeWord(CharacterValidator validator, boolean stripParen) throws DecodingException {
-        StringBuffer atom = new StringBuffer();
+        StringBuilder atom = new StringBuilder();
 
         char next = nextWordChar();
         while (!isWhitespace(next) && (stripParen == false || next != ')')) {
@@ -375,36 +369,17 @@ public abstract class ImapRequestLineReader {
         if (charset == null) {
             return consumeLiteral(US_ASCII);
         } else {
-            FastByteArrayOutputStream out = new FastByteArrayOutputStream();
-            InputStream in = null;
-            try {
-                in = consumeLiteral(false);
-                byte[] buf = new byte[ 0xFFFF ];
-                
-                for (int len; (len = in.read(buf)) != -1; ) {
-                    out.write(buf, 0, len);
-                }
-                
-                final byte[] bytes = out.toByteArray();
-                final ByteBuffer buffer = ByteBuffer.wrap(bytes);
+            try (FastByteArrayOutputStream out = new FastByteArrayOutputStream();
+                 InputStream in = consumeLiteral(false)) {
+                IOUtils.copy(in, out, 2048);
+                byte[] bytes = out.toByteArray();
+                ByteBuffer buffer = ByteBuffer.wrap(bytes);
                 return decode(charset, buffer);
-                
             } catch (IOException e) {
                 throw new DecodingException(HumanReadableText.BAD_IO_ENCODING, "Bad character encoding", e);
-            } finally {
-                if (in != null) {
-                    try {
-                        in.close();
-                    } catch (IOException e) {
-                        // ignore on close
-                    }
-                }
-                try {
-                    out.close();
-                } catch (IOException e) {
-                    // ignore on close
-                }
             }
+            // ignore on close
+            // ignore on close
 
         }
     }
@@ -413,7 +388,7 @@ public abstract class ImapRequestLineReader {
         // The 1st character must be '{'
         consumeChar('{');
 
-        StringBuffer digits = new StringBuffer();
+        StringBuilder digits = new StringBuilder();
         char next = nextChar();
         while (next != '}' && next != '+') {
             digits.append(next);
@@ -456,9 +431,6 @@ public abstract class ImapRequestLineReader {
     /**
      * Consumes a CRLF from the request. TODO: This is too liberal, the spec
      * insists on \r\n for new lines.
-     * 
-     * @param request
-     * @throws DecodingException
      */
     private void consumeCRLF() throws DecodingException {
         char next = nextChar();
@@ -541,10 +513,9 @@ public abstract class ImapRequestLineReader {
     }
 
     /**
-     * Calls {@link #number()} with argument of false
+     * Calls {@link #number(boolean)} with argument of false
      * 
      * @return number
-     * @throws DecodingException
      */
     public long number() throws DecodingException {
         return number(false);
@@ -736,10 +707,8 @@ public abstract class ImapRequestLineReader {
     
     /**
      * Parse a range which use a ":" as delimiter
-     * 
-     * @param range
+     *
      * @return idRange
-     * @throws DecodingException
      */
     private IdRange parseRange(String range) throws DecodingException {
         int pos = range.indexOf(':');

@@ -26,6 +26,7 @@ import java.util.stream.Stream;
 import org.apache.james.backends.es.AliasName;
 import org.apache.james.backends.es.NodeMappingFactory;
 import org.apache.james.backends.es.ReadAliasName;
+import org.apache.james.backends.es.RoutingKey;
 import org.apache.james.backends.es.search.ScrolledSearch;
 import org.apache.james.mailbox.MessageUid;
 import org.apache.james.mailbox.elasticsearch.json.JsonMessageConstants;
@@ -59,16 +60,18 @@ public class ElasticSearchSearcher {
     private final MailboxId.Factory mailboxIdFactory;
     private final MessageId.Factory messageIdFactory;
     private final AliasName aliasName;
+    private final RoutingKey.Factory<MailboxId> routingKeyFactory;
 
     public ElasticSearchSearcher(RestHighLevelClient client, QueryConverter queryConverter, int size,
                                  MailboxId.Factory mailboxIdFactory, MessageId.Factory messageIdFactory,
-                                 ReadAliasName aliasName) {
+                                 ReadAliasName aliasName, RoutingKey.Factory<MailboxId> routingKeyFactory) {
         this.client = client;
         this.queryConverter = queryConverter;
         this.size = size;
         this.mailboxIdFactory = mailboxIdFactory;
         this.messageIdFactory = messageIdFactory;
         this.aliasName = aliasName;
+        this.routingKeyFactory = routingKeyFactory;
     }
 
     public Stream<MessageSearchIndex.SearchResult> search(Collection<MailboxId> mailboxIds, SearchQuery query,
@@ -82,9 +85,9 @@ public class ElasticSearchSearcher {
             .orElse(pairStream);
     }
 
-    private SearchRequest prepareSearch(Collection<MailboxId> users, SearchQuery query, Optional<Integer> limit) {
+    private SearchRequest prepareSearch(Collection<MailboxId> mailboxIds, SearchQuery query, Optional<Integer> limit) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
-            .query(queryConverter.from(users, query))
+            .query(queryConverter.from(mailboxIds, query))
             .size(computeRequiredSize(limit))
             .storedFields(STORED_FIELDS);
 
@@ -96,7 +99,15 @@ public class ElasticSearchSearcher {
         return new SearchRequest(aliasName.getValue())
             .types(NodeMappingFactory.DEFAULT_MAPPING_NAME)
             .scroll(TIMEOUT)
-            .source(searchSourceBuilder);
+            .source(searchSourceBuilder)
+            .routing(toRoutingKeys(mailboxIds));
+    }
+
+    private String[] toRoutingKeys(Collection<MailboxId> mailboxIds) {
+        return mailboxIds.stream()
+            .map(routingKeyFactory::from)
+            .map(RoutingKey::asString)
+            .toArray(String[]::new);
     }
 
     private int computeRequiredSize(Optional<Integer> limit) {

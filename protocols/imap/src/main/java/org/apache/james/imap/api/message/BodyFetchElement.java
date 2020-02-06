@@ -20,6 +20,7 @@ package org.apache.james.imap.api.message;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.apache.james.imap.api.ImapConstants;
@@ -28,24 +29,11 @@ import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 
 public class BodyFetchElement {
+    private static final BodyFetchElement rfc822 = new BodyFetchElement(ImapConstants.FETCH_RFC822, SectionType.CONTENT, null, null, null, null);
 
-    public static final int TEXT = 0;
+    private static final BodyFetchElement rfc822Header = new BodyFetchElement(ImapConstants.FETCH_RFC822_HEADER, SectionType.HEADER, null, null, null, null);
 
-    public static final int MIME = 1;
-
-    public static final int HEADER = 2;
-
-    public static final int HEADER_FIELDS = 3;
-
-    public static final int HEADER_NOT_FIELDS = 4;
-
-    public static final int CONTENT = 5;
-
-    private static final BodyFetchElement rfc822 = new BodyFetchElement(ImapConstants.FETCH_RFC822, CONTENT, null, null, null, null);
-
-    private static final BodyFetchElement rfc822Header = new BodyFetchElement(ImapConstants.FETCH_RFC822_HEADER, HEADER, null, null, null, null);
-
-    private static final BodyFetchElement rfc822Text = new BodyFetchElement(ImapConstants.FETCH_RFC822_TEXT, TEXT, null, null, null, null);
+    private static final BodyFetchElement rfc822Text = new BodyFetchElement(ImapConstants.FETCH_RFC822_TEXT, SectionType.TEXT, null, null, null, null);
 
     public static final BodyFetchElement createRFC822() {
         return rfc822;
@@ -60,18 +48,13 @@ public class BodyFetchElement {
     }
 
     private final Long firstOctet;
-
     private final Long numberOfOctets;
-
     private final String name;
-
-    private final int sectionType;
-
+    private final SectionType sectionType;
     private final int[] path;
-
     private final Collection<String> fieldNames;
 
-    public BodyFetchElement(String name, int sectionType, int[] path, Collection<String> fieldNames, Long firstOctet, Long numberOfOctets) {
+    public BodyFetchElement(String name, SectionType sectionType, int[] path, Collection<String> fieldNames, Long firstOctet, Long numberOfOctets) {
         this.name = name;
         this.sectionType = sectionType;
         this.fieldNames = fieldNames;
@@ -87,8 +70,8 @@ public class BodyFetchElement {
     /**
      * Gets field names.
      * 
-     * @return <code>String</code> collection, when {@link #HEADER_FIELDS} or
-     *         {@link #HEADER_NOT_FIELDS} or null otherwise
+     * @return <code>String</code> collection, when {@link SectionType#HEADER_FIELDS} or
+     *         {@link SectionType#HEADER_NOT_FIELDS} or null otherwise
      */
     public final Collection<String> getFieldNames() {
         return fieldNames;
@@ -105,11 +88,8 @@ public class BodyFetchElement {
 
     /**
      * Gets the type of section.
-     * 
-     * @return {@link #HEADER_FIELDS}, {@link #TEXT}, {@link #CONTENT},
-     *         {@link #HEADER}, {@link #MIME} or {@link #HEADER_NOT_FIELDS}
      */
-    public final int getSectionType() {
+    public final SectionType getSectionType() {
         return sectionType;
     }
 
@@ -131,64 +111,24 @@ public class BodyFetchElement {
         return numberOfOctets;
     }
 
-    public int hashCode() {
-        final int PRIME = 31;
-        int result = 1;
-        result = PRIME * result + ((fieldNames == null) ? 0 : fieldNames.hashCode());
-        result = PRIME * result + ((firstOctet == null) ? 0 : firstOctet.hashCode());
-        result = PRIME * result + ((name == null) ? 0 : name.hashCode());
-        result = PRIME * result + ((numberOfOctets == null) ? 0 : numberOfOctets.hashCode());
-        result = PRIME * result + ((path == null) ? 0 : path.length);
-        result = PRIME * result + sectionType;
-        return result;
+    @Override
+    public final boolean equals(Object o) {
+        if (o instanceof BodyFetchElement) {
+            BodyFetchElement that = (BodyFetchElement) o;
+
+            return Objects.equals(this.sectionType, that.sectionType)
+                && Objects.equals(this.firstOctet, that.firstOctet)
+                && Objects.equals(this.numberOfOctets, that.numberOfOctets)
+                && Objects.equals(this.name, that.name)
+                && Arrays.equals(this.path, that.path)
+                && Objects.equals(this.fieldNames, that.fieldNames);
+        }
+        return false;
     }
 
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final BodyFetchElement other = (BodyFetchElement) obj;
-        if (fieldNames == null) {
-            if (other.fieldNames != null) {
-                return false;
-            }
-        } else if (!fieldNames.equals(other.fieldNames)) {
-            return false;
-        }
-        if (firstOctet == null) {
-            if (other.firstOctet != null) {
-                return false;
-            }
-        } else if (!firstOctet.equals(other.firstOctet)) {
-            return false;
-        }
-        if (name == null) {
-            if (other.name != null) {
-                return false;
-            }
-        } else if (!name.equals(other.name)) {
-            return false;
-        }
-        if (numberOfOctets == null) {
-            if (other.numberOfOctets != null) {
-                return false;
-            }
-        } else if (!numberOfOctets.equals(other.numberOfOctets)) {
-            return false;
-        }
-        if (!Arrays.equals(path, other.path)) {
-            return false;
-        }
-        if (sectionType != other.sectionType) {
-            return false;
-        }
-        return true;
+    @Override
+    public final int hashCode() {
+        return Objects.hash(firstOctet, numberOfOctets, name, sectionType, Arrays.hashCode(path), fieldNames);
     }
 
     @Override

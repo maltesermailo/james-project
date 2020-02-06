@@ -20,27 +20,27 @@
 package org.apache.james.mailbox.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Set;
 
 import javax.mail.Flags;
 import javax.mail.util.SharedByteArrayInputStream;
 
-import org.apache.commons.lang3.NotImplementedException;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
+import org.apache.james.mailbox.model.FetchGroup;
 import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxCounters;
 import org.apache.james.mailbox.model.MessageMetaData;
 import org.apache.james.mailbox.model.MessageRange;
-import org.apache.james.mailbox.model.MessageResult.FetchGroup;
 import org.apache.james.mailbox.model.TestId;
 import org.apache.james.mailbox.model.UpdatedFlags;
 import org.apache.james.mailbox.store.mail.MessageMapper;
@@ -48,27 +48,13 @@ import org.apache.james.mailbox.store.mail.model.DefaultMessageId;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
 import org.apache.james.mailbox.store.mail.model.impl.PropertyBuilder;
 import org.apache.james.mailbox.store.mail.model.impl.SimpleMailboxMessage;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Iterables;
 
-public class StoreMailboxMessageResultIteratorTest {
-
-    private final class TestFetchGroup implements FetchGroup {
-        @Override
-        public Set<PartContentDescriptor> getPartContentDescriptors() {
-            return new HashSet<>();
-        }
-
-        @Override
-        public int content() {
-            return FetchGroup.MINIMAL;
-        }
-    }
+class StoreMailboxMessageResultIteratorTest {
 
     private final class TestMessageMapper implements MessageMapper {
-        
-
         private final MessageRange messageRange;
 
         public TestMessageMapper(MessageRange messageRange) {
@@ -93,9 +79,15 @@ public class StoreMailboxMessageResultIteratorTest {
         @Override
         public MailboxCounters getMailboxCounters(Mailbox mailbox) throws MailboxException {
             return MailboxCounters.builder()
+                .mailboxId(mailbox.getMailboxId())
                 .count(countMessagesInMailbox(mailbox))
                 .unseen(countUnseenMessagesInMailbox(mailbox))
                 .build();
+        }
+
+        @Override
+        public List<MailboxCounters> getMailboxCounters(Collection<Mailbox> mailboxes) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -178,7 +170,7 @@ public class StoreMailboxMessageResultIteratorTest {
         }
 
         @Override
-        public long getHighestModSeq(Mailbox mailbox) throws MailboxException {
+        public ModSeq getHighestModSeq(Mailbox mailbox) throws MailboxException {
             throw new UnsupportedOperationException();
         }
 
@@ -190,15 +182,15 @@ public class StoreMailboxMessageResultIteratorTest {
 
         @Override
         public Flags getApplicableFlag(Mailbox mailbox) throws MailboxException {
-            throw new NotImplementedException("Not implemented");
+            throw new UnsupportedOperationException();
         }
     }
 
     @Test
-    public void testBatching() {
+    void testBatching() {
         MessageRange range = MessageRange.range(MessageUid.of(1), MessageUid.of(10));
         BatchSizes batchSize = BatchSizes.uniqueBatchSize(3);
-        StoreMessageResultIterator it = new StoreMessageResultIterator(new TestMessageMapper(MessageRange.all()), null, range, batchSize, new TestFetchGroup());
+        StoreMessageResultIterator it = new StoreMessageResultIterator(new TestMessageMapper(MessageRange.all()), null, range, batchSize, FetchGroup.MINIMAL);
 
         assertThat(it).toIterable()
             .extracting(input -> input.getUid().asLong())
@@ -206,28 +198,32 @@ public class StoreMailboxMessageResultIteratorTest {
     }
 
     @Test
-    public void nextShouldReturnFirstElement() {
+    void nextShouldReturnFirstElement() {
         MessageRange range = MessageUid.of(1).toRange();
         BatchSizes batchSize = BatchSizes.uniqueBatchSize(42);
-        StoreMessageResultIterator iterator = new StoreMessageResultIterator(new TestMessageMapper(range), null, range, batchSize, new TestFetchGroup());
+        StoreMessageResultIterator iterator = new StoreMessageResultIterator(new TestMessageMapper(range), null, range, batchSize, FetchGroup.MINIMAL);
+
         assertThat(iterator.next()).isNotNull();
     }
     
-    @Test(expected = NoSuchElementException.class)
-    public void nextShouldThrowWhenNoElement() {
+    @Test
+    void nextShouldThrowWhenNoElement() {
         MessageRange messages = MessageUid.of(1).toRange();
         MessageRange findRange = MessageUid.of(2).toRange();
         BatchSizes batchSize = BatchSizes.uniqueBatchSize(42);
-        StoreMessageResultIterator iterator = new StoreMessageResultIterator(new TestMessageMapper(messages), null, findRange, batchSize, new TestFetchGroup());
-        iterator.next();
+        StoreMessageResultIterator iterator = new StoreMessageResultIterator(new TestMessageMapper(messages), null, findRange, batchSize, FetchGroup.MINIMAL);
+
+        assertThatThrownBy(() -> iterator.next())
+            .isInstanceOf(NoSuchElementException.class);
     }
     
     @Test
-    public void hasNextShouldReturnFalseWhenNoElement() {
+    void hasNextShouldReturnFalseWhenNoElement() {
         MessageRange messages = MessageUid.of(1).toRange();
         MessageRange findRange = MessageUid.of(2).toRange();
         BatchSizes batchSize = BatchSizes.uniqueBatchSize(42);
-        StoreMessageResultIterator iterator = new StoreMessageResultIterator(new TestMessageMapper(messages), null, findRange, batchSize, new TestFetchGroup());
+        StoreMessageResultIterator iterator = new StoreMessageResultIterator(new TestMessageMapper(messages), null, findRange, batchSize, FetchGroup.MINIMAL);
+
         assertThat(iterator.hasNext()).isFalse();
     }
 }

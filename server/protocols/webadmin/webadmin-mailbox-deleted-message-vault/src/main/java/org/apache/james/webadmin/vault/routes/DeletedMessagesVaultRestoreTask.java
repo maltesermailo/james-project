@@ -21,136 +21,72 @@ package org.apache.james.webadmin.vault.routes;
 
 import static org.apache.james.webadmin.vault.routes.RestoreService.RestoreResult.RESTORE_SUCCEED;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 
-import javax.inject.Inject;
-
-import org.apache.james.core.User;
-import org.apache.james.json.DTOModule;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.exception.MailboxException;
-import org.apache.james.server.task.json.dto.TaskDTO;
-import org.apache.james.server.task.json.dto.TaskDTOModule;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
-import org.apache.james.vault.dto.query.QueryDTO;
-import org.apache.james.vault.dto.query.QueryTranslator;
+import org.apache.james.task.TaskType;
 import org.apache.james.vault.search.Query;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.annotations.VisibleForTesting;
 
-class DeletedMessagesVaultRestoreTask implements Task {
+public class DeletedMessagesVaultRestoreTask implements Task {
 
-    static final String TYPE = "deletedMessages/restore";
-
-    public static final Function<DeletedMessagesVaultRestoreTask.Factory, TaskDTOModule<DeletedMessagesVaultRestoreTask, DeletedMessagesVaultRestoreTaskDTO>> MODULE = (factory) ->
-        DTOModule
-            .forDomainObject(DeletedMessagesVaultRestoreTask.class)
-            .convertToDTO(DeletedMessagesVaultRestoreTask.DeletedMessagesVaultRestoreTaskDTO.class)
-            .toDomainObjectConverter(factory::create)
-            .toDTOConverter(factory::createDTO)
-            .typeName(TYPE)
-            .withFactory(TaskDTOModule::new);
-
-    public static class DeletedMessagesVaultRestoreTaskDTO implements TaskDTO {
-
-        private final String type;
-        private final String userToRestore;
-        private final QueryDTO query;
-
-        public DeletedMessagesVaultRestoreTaskDTO(@JsonProperty("type") String type,
-                                                  @JsonProperty("userToRestore") String userToRestore,
-                                                  @JsonProperty("query") QueryDTO query) {
-            this.type = type;
-            this.userToRestore = userToRestore;
-            this.query = query;
-        }
-
-        public String getUserToRestore() {
-            return userToRestore;
-        }
-
-        public QueryDTO getQuery() {
-            return query;
-        }
-
-        public String getType() {
-            return type;
-        }
-
-    }
-
-    public static class Factory {
-
-        private final RestoreService restoreService;
-        private final QueryTranslator queryTranslator;
-
-        @Inject
-        public Factory(RestoreService restoreService, QueryTranslator queryTranslator) {
-            this.restoreService = restoreService;
-            this.queryTranslator = queryTranslator;
-        }
-
-        public DeletedMessagesVaultRestoreTask create(DeletedMessagesVaultRestoreTask.DeletedMessagesVaultRestoreTaskDTO dto) {
-            User userToRestore = User.fromUsername(dto.userToRestore);
-            Query query = queryTranslator.translate(dto.query);
-            return new DeletedMessagesVaultRestoreTask(restoreService, userToRestore, query);
-        }
-
-        public DeletedMessagesVaultRestoreTask.DeletedMessagesVaultRestoreTaskDTO createDTO(DeletedMessagesVaultRestoreTask task, String type) {
-            return new DeletedMessagesVaultRestoreTask.DeletedMessagesVaultRestoreTaskDTO(type, task.userToRestore.asString(), queryTranslator.toDTO(task.query));
-        }
-    }
+    static final TaskType TYPE = TaskType.of("deleted-messages-restore");
 
     public static class AdditionalInformation implements TaskExecutionDetails.AdditionalInformation {
-        private final User user;
-        private final AtomicLong successfulRestoreCount;
-        private final AtomicLong errorRestoreCount;
+        private final Username username;
+        private final long successfulRestoreCount;
+        private final long errorRestoreCount;
+        private final Instant timestamp;
 
-        AdditionalInformation(User user) {
-            this.user = user;
-            this.successfulRestoreCount = new AtomicLong();
-            this.errorRestoreCount = new AtomicLong();
+        AdditionalInformation(Username username, long successfulRestoreCount, long errorRestoreCount, Instant timestamp) {
+            this.username = username;
+            this.successfulRestoreCount = successfulRestoreCount;
+            this.errorRestoreCount = errorRestoreCount;
+            this.timestamp = timestamp;
         }
 
         public long getSuccessfulRestoreCount() {
-            return successfulRestoreCount.get();
+            return successfulRestoreCount;
         }
 
         public long getErrorRestoreCount() {
-            return errorRestoreCount.get();
+            return errorRestoreCount;
         }
 
-        public String getUser() {
-            return user.asString();
+        public String getUsername() {
+            return username.asString();
         }
 
-        void incrementSuccessfulRestoreCount() {
-            successfulRestoreCount.incrementAndGet();
-        }
-
-        void incrementErrorRestoreCount() {
-            errorRestoreCount.incrementAndGet();
+        @Override
+        public Instant timestamp() {
+            return timestamp;
         }
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DeletedMessagesVaultRestoreTask.class);
 
-    private final User userToRestore;
+    private final Username userToRestore;
     private final RestoreService vaultRestore;
-    private final AdditionalInformation additionalInformation;
+    private final AtomicLong successfulRestoreCount;
+    private final AtomicLong errorRestoreCount;
     @VisibleForTesting
     final Query query;
 
-    DeletedMessagesVaultRestoreTask(RestoreService vaultRestore, User userToRestore, Query query) {
+    DeletedMessagesVaultRestoreTask(RestoreService vaultRestore, Username userToRestore, Query query) {
         this.query = query;
         this.userToRestore = userToRestore;
         this.vaultRestore = vaultRestore;
-        this.additionalInformation = new AdditionalInformation(userToRestore);
+        this.successfulRestoreCount = new AtomicLong();
+        this.errorRestoreCount = new AtomicLong();
     }
 
     @Override
@@ -177,21 +113,33 @@ class DeletedMessagesVaultRestoreTask implements Task {
     private void updateInformation(RestoreService.RestoreResult restoreResult) {
         switch (restoreResult) {
             case RESTORE_FAILED:
-                additionalInformation.incrementErrorRestoreCount();
+                incrementErrorRestoreCount();
                 break;
             case RESTORE_SUCCEED:
-                additionalInformation.incrementSuccessfulRestoreCount();
+                incrementSuccessfulRestoreCount();
                 break;
         }
     }
 
+    private void incrementSuccessfulRestoreCount() {
+        successfulRestoreCount.incrementAndGet();
+    }
+
+    private void incrementErrorRestoreCount() {
+        errorRestoreCount.incrementAndGet();
+    }
+
     @Override
-    public String type() {
+    public TaskType type() {
         return TYPE;
     }
 
     @Override
     public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-        return Optional.of(additionalInformation);
+        return Optional.of(new AdditionalInformation(userToRestore, successfulRestoreCount.get(), errorRestoreCount.get(), Clock.systemUTC().instant()));
+    }
+
+    Username getUserToRestore() {
+        return userToRestore;
     }
 }

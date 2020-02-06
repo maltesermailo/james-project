@@ -90,55 +90,6 @@ public interface UsersRepositoryManagementMBean {
     void setPassword(String userName, String password) throws Exception;
 
     /**
-     * Removes a user's alias which terminates local mail forwarding
-     * 
-     * 
-     * @param userName
-     *            The name of the user whose alias is unset
-     * @throws UsersRepositoryException
-     *             if error
-     */
-    @Deprecated
-    void unsetAlias(String userName) throws Exception;
-
-    /**
-     * Retrieves the user's alias, if set
-     * 
-     * 
-     * @return User's alias, or NULL, if no alias is set
-     * @throws UsersRepositoryException
-     *             if error
-     */
-    @Deprecated
-    String getAlias(String userName) throws Exception;
-
-    /**
-     * Removes a user's forward email address which terminates remote mail
-     * forwarding
-     * 
-     * 
-     * @param userName
-     *            The name of the user whose forward is unset
-     * @throws UsersRepositoryException
-     *             if error
-     */
-    @Deprecated
-    void unsetForwardAddress(String userName) throws Exception;
-
-    /**
-     * Retrieves the user's forward, if set
-     * 
-     * 
-     * @param userName
-     *            The name of the user whose forward is set
-     * @return User's forward email address, or NULL, if no forward is set
-     * @throws UsersRepositoryException
-     *             if error
-     */
-    @Deprecated
-    String getForwardAddress(String userName) throws Exception;
-
-    /**
      * Return true if the UserRepository has VirtualHosting enabled
      * 
      * @return virtual

@@ -23,19 +23,19 @@ import static org.apache.james.imap.api.ImapConstants.SUPPORTS_XLIST;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.message.Capability;
 import org.apache.james.imap.api.message.response.ImapResponseMessage;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapSession;
 import org.apache.james.imap.api.process.MailboxType;
 import org.apache.james.imap.api.process.MailboxTyper;
-import org.apache.james.imap.message.request.ListRequest;
 import org.apache.james.imap.message.request.XListRequest;
 import org.apache.james.imap.message.response.XListResponse;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.model.MailboxMetaData;
+import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.metrics.api.MetricFactory;
 
 import com.google.common.collect.ImmutableList;
@@ -45,7 +45,7 @@ import com.google.common.collect.ImmutableList;
  */
 public class XListProcessor extends ListProcessor implements CapabilityImplementingProcessor {
 
-    private static final List<String> XLIST_CAPS = ImmutableList.of(SUPPORTS_XLIST);
+    private static final List<Capability> XLIST_CAPS = ImmutableList.of(SUPPORTS_XLIST);
     private final MailboxTyper mailboxTyper;
 
     // some interface
@@ -56,7 +56,7 @@ public class XListProcessor extends ListProcessor implements CapabilityImplement
     }
 
     @Override
-    public List<String> getImplementedCapabilities(ImapSession session) {
+    public List<Capability> getImplementedCapabilities(ImapSession session) {
         // if there's no mailboxTyper, do not annnoyce XLIST capability
         if (mailboxTyper == null) {
             return Collections.emptyList();
@@ -71,15 +71,12 @@ public class XListProcessor extends ListProcessor implements CapabilityImplement
     }
 
     @Override
-    protected void doProcess(ListRequest message, ImapSession session, String tag, ImapCommand command, Responder responder) {
-        final XListRequest request = (XListRequest) message;
-        final String baseReferenceName = request.getBaseReferenceName();
-        final String mailboxPatternString = request.getMailboxPattern();
-        doProcess(baseReferenceName, mailboxPatternString, session, tag, command, responder, mailboxTyper);
+    protected ImapResponseMessage createResponse(MailboxMetaData.Children children, MailboxMetaData.Selectability selectability, String name, char hierarchyDelimiter, MailboxType type) {
+        return new XListResponse(children, selectability, name, hierarchyDelimiter, type);
     }
 
     @Override
-    protected ImapResponseMessage createResponse(MailboxMetaData.Children children, MailboxMetaData.Selectability selectability, String name, char hierarchyDelimiter, MailboxType type) {
-        return new XListResponse(children, selectability, name, hierarchyDelimiter, type);
+    protected MailboxType getMailboxType(ImapSession session, MailboxPath path) {
+        return mailboxTyper.getMailboxType(session, path);
     }
 }

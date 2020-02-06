@@ -21,8 +21,6 @@ package org.apache.james.imap.processor;
 
 import java.io.Closeable;
 
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
@@ -48,10 +46,10 @@ public class CloseProcessor extends AbstractMailboxProcessor<CloseRequest> {
     }
 
     @Override
-    protected void doProcess(CloseRequest message, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void processRequest(CloseRequest request, ImapSession session, Responder responder) {
         try {
             MessageManager mailbox = getSelectedMailbox(session);
-            final MailboxSession mailboxSession = ImapSessionUtils.getMailboxSession(session);
+            final MailboxSession mailboxSession = session.getMailboxSession();
             if (mailbox.getMetaData(false, mailboxSession, FetchGroup.NO_COUNT).isWriteable()) {
                 mailbox.expunge(MessageRange.all(), mailboxSession);
                 session.deselect();
@@ -59,18 +57,18 @@ public class CloseProcessor extends AbstractMailboxProcessor<CloseRequest> {
                 // Don't send HIGHESTMODSEQ when close. Like correct in the ERRATA of RFC5162
                 //
                 // See http://www.rfc-editor.org/errata_search.php?rfc=5162
-                okComplete(command, tag, responder);
+                okComplete(request, responder);
                
             }
 
         } catch (MailboxException e) {
             LOGGER.error("Close failed for mailbox {}", session.getSelected().getMailboxId(), e);
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
         }
     }
 
     @Override
-    protected Closeable addContextToMDC(CloseRequest message) {
+    protected Closeable addContextToMDC(CloseRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "CLOSE")
             .build();

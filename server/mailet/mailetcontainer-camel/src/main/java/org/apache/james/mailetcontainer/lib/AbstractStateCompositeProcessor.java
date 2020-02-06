@@ -31,6 +31,7 @@ import javax.mail.MessagingException;
 
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.lifecycle.api.Configurable;
 import org.apache.james.lifecycle.api.LifecycleUtil;
 import org.apache.james.mailetcontainer.api.MailProcessor;
@@ -46,9 +47,9 @@ import org.slf4j.LoggerFactory;
 public abstract class AbstractStateCompositeProcessor implements MailProcessor, Configurable {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractStateCompositeProcessor.class);
 
-    private final List<CompositeProcessorListener> listeners = Collections.synchronizedList(new ArrayList<CompositeProcessorListener>());
+    private final List<CompositeProcessorListener> listeners = Collections.synchronizedList(new ArrayList<>());
     private final Map<String, MailProcessor> processors = new HashMap<>();
-    protected HierarchicalConfiguration config;
+    protected HierarchicalConfiguration<ImmutableNode> config;
 
     private JMXStateCompositeProcessorListener jmxListener;
     private boolean enableJmx = true;
@@ -58,16 +59,8 @@ public abstract class AbstractStateCompositeProcessor implements MailProcessor, 
         listeners.add(listener);
     }
 
-    public List<CompositeProcessorListener> getListeners() {
-        return listeners;
-    }
-
-    public void removeListener(CompositeProcessorListener listener) {
-        listeners.remove(listener);
-    }
-
     @Override
-    public void configure(HierarchicalConfiguration config) {
+    public void configure(HierarchicalConfiguration<ImmutableNode> config) {
         this.config = config;
         this.enableJmx = config.getBoolean("[@enableJmx]", true);
 
@@ -116,9 +109,6 @@ public abstract class AbstractStateCompositeProcessor implements MailProcessor, 
 
     /**
      * Return a {@link MailProcessor} for a given state
-     * 
-     * @param state
-     * @return processor
      */
     public MailProcessor getProcessor(String state) {
         return processors.get(state);
@@ -131,8 +121,6 @@ public abstract class AbstractStateCompositeProcessor implements MailProcessor, 
     /**
      * Check if all needed Processors are configured and if not throw a
      * {@link ConfigurationException}
-     * 
-     * @throws ConfigurationException
      */
     private void checkProcessors() throws ConfigurationException {
         boolean errorProcessorFound = false;
@@ -157,8 +145,8 @@ public abstract class AbstractStateCompositeProcessor implements MailProcessor, 
 
     @PostConstruct
     public void init() throws Exception {
-        List<HierarchicalConfiguration> processorConfs = config.configurationsAt("processor");
-        for (HierarchicalConfiguration processorConf : processorConfs) {
+        List<HierarchicalConfiguration<ImmutableNode>> processorConfs = config.configurationsAt("processor");
+        for (HierarchicalConfiguration<ImmutableNode> processorConf : processorConfs) {
             String processorName = processorConf.getString("[@state]");
 
             // if the "child" processor has no jmx config we just use the one of
@@ -196,13 +184,8 @@ public abstract class AbstractStateCompositeProcessor implements MailProcessor, 
 
     /**
      * Create a new {@link MailProcessor}
-     * 
-     * @param state
-     * @param config
-     * @return container
-     * @throws Exception
      */
-    protected abstract MailProcessor createMailProcessor(String state, HierarchicalConfiguration config) throws Exception;
+    protected abstract MailProcessor createMailProcessor(String state, HierarchicalConfiguration<ImmutableNode> config) throws Exception;
 
     /**
      * A Listener which will get called after
@@ -213,9 +196,6 @@ public abstract class AbstractStateCompositeProcessor implements MailProcessor, 
         /**
          * Get called after the processing via a {@link MailProcessor} was
          * complete
-         * 
-         * @param processor
-         * @param mailName
          * @param processTime
          *            in ms
          * @param e

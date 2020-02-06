@@ -19,6 +19,7 @@
 
 package org.apache.james.imap.processor;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -28,14 +29,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.core.Username;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapSessionState;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.message.response.ImapResponseMessage;
 import org.apache.james.imap.api.process.ImapProcessor;
 import org.apache.james.imap.api.process.ImapProcessor.Responder;
-import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.encode.FakeImapSession;
 import org.apache.james.imap.message.request.DeleteACLRequest;
 import org.apache.james.imap.message.response.UnpooledStatusResponseFactory;
 import org.apache.james.mailbox.MailboxManager;
@@ -49,7 +48,7 @@ import org.apache.james.mailbox.exception.MailboxNotFoundException;
 import org.apache.james.mailbox.model.MailboxACL;
 import org.apache.james.mailbox.model.MailboxACL.EntryKey;
 import org.apache.james.mailbox.model.MailboxPath;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -60,9 +59,9 @@ import org.mockito.ArgumentCaptor;
 public class DeleteACLProcessorTest {
 
     private static final String MAILBOX_NAME = ImapConstants.INBOX_NAME;
-    private static final String USER_1 = "user1";
+    private static final Username USER_1 = Username.of("user1");
 
-    private ImapSession imapSession;
+    private FakeImapSession imapSession;
     private MailboxManager mailboxManager;
     private MailboxSession mailboxSession;
     private MetaData metaData;
@@ -78,29 +77,26 @@ public class DeleteACLProcessorTest {
         path = MailboxPath.forUser(USER_1, MAILBOX_NAME);
         UnpooledStatusResponseFactory statusResponseFactory = new UnpooledStatusResponseFactory();
         mailboxManager = mock(MailboxManager.class);
-        subject = new DeleteACLProcessor(mock(ImapProcessor.class), mailboxManager, statusResponseFactory, new NoopMetricFactory());
-        imapSession = mock(ImapSession.class);
+        subject = new DeleteACLProcessor(mock(ImapProcessor.class), mailboxManager, statusResponseFactory, new RecordingMetricFactory());
+        imapSession = new FakeImapSession();
         mailboxSession = MailboxSessionUtil.create(USER_1);
 
         MessageManager messageManager = mock(MessageManager.class);
         metaData = mock(MetaData.class);
         responder = mock(Responder.class);
 
-        when(imapSession.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY))
-            .thenReturn(mailboxSession);
-        when(imapSession.getState())
-            .thenReturn(ImapSessionState.AUTHENTICATED);
+        imapSession.authenticated();
+        imapSession.setMailboxSession(mailboxSession);
         when(messageManager.getMetaData(anyBoolean(), any(MailboxSession.class), any(FetchGroup.class)))
             .thenReturn(metaData);
         when(mailboxManager.getMailbox(any(MailboxPath.class), any(MailboxSession.class)))
             .thenReturn(messageManager);
 
-        deleteACLRequest = new DeleteACLRequest("TAG",
-            ImapCommand.anyStateCommand("Name"),
+        deleteACLRequest = new DeleteACLRequest(TAG,
             MAILBOX_NAME,
-            USER_1);
+            USER_1.asString());
 
-        user1Key = EntryKey.deserialize(USER_1);
+        user1Key = EntryKey.deserialize(USER_1.asString());
 
         argumentCaptor = ArgumentCaptor.forClass(ImapResponseMessage.class);
     }

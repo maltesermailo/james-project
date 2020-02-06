@@ -35,6 +35,7 @@ import org.apache.james.quota.search.QuotaSearchTestSystem;
 import org.apache.james.quota.search.elasticsearch.ElasticSearchQuotaSearcher;
 import org.apache.james.quota.search.elasticsearch.QuotaRatioElasticSearchConstants;
 import org.apache.james.quota.search.elasticsearch.QuotaSearchIndexCreationUtil;
+import org.apache.james.quota.search.elasticsearch.UserRoutingKeyFactory;
 import org.apache.james.quota.search.elasticsearch.events.ElasticSearchQuotaMailboxListener;
 import org.apache.james.quota.search.elasticsearch.json.QuotaRatioToElasticSearchJson;
 import org.apache.james.user.memory.MemoryUsersRepository;
@@ -68,15 +69,15 @@ public class ElasticSearchQuotaSearchExtension implements ParameterResolver, Bef
 
             InMemoryIntegrationResources resources = InMemoryIntegrationResources.defaultResources();
 
-            MemoryUsersRepository usersRepository = MemoryUsersRepository.withVirtualHosting();
 
             DNSService dnsService = mock(DNSService.class);
             MemoryDomainList domainList = new MemoryDomainList(dnsService);
-            usersRepository.setDomainList(domainList);
+            MemoryUsersRepository usersRepository = MemoryUsersRepository.withVirtualHosting(domainList);
 
             ElasticSearchQuotaMailboxListener listener = new ElasticSearchQuotaMailboxListener(
                 new ElasticSearchIndexer(client, QuotaRatioElasticSearchConstants.DEFAULT_QUOTA_RATIO_WRITE_ALIAS),
-                new QuotaRatioToElasticSearchJson());
+                new QuotaRatioToElasticSearchJson(),
+                new UserRoutingKeyFactory());
 
             resources.getMailboxManager().getEventBus().register(listener);
 

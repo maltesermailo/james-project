@@ -30,8 +30,6 @@ import org.jboss.netty.util.HashedWheelTimer;
 
 /**
  * Abstract base class for {@link ChannelPipelineFactory} implementations
- * 
- *
  */
 public abstract class AbstractChannelPipelineFactory implements ChannelPipelineFactory {
     public static final int MAX_LINE_LENGTH = 8192;
@@ -43,12 +41,6 @@ public abstract class AbstractChannelPipelineFactory implements ChannelPipelineF
     private final int timeout;
     private final ExecutionHandler eHandler;
     private final ChannelHandlerFactory frameHandlerFactory;
-
-    public AbstractChannelPipelineFactory(int timeout, int maxConnections, int maxConnectsPerIp, ChannelGroup channels,
-                                          HashedWheelTimer hashedWheelTimer) {
-        this(timeout, maxConnections, maxConnectsPerIp, channels, null,
-            new LineDelimiterBasedChannelHandlerFactory(MAX_LINE_LENGTH), hashedWheelTimer);
-    }
     
     public AbstractChannelPipelineFactory(int timeout, int maxConnections, int maxConnectsPerIp, ChannelGroup channels,
                                           ExecutionHandler eHandler, ChannelHandlerFactory frameHandlerFactory,
@@ -94,8 +86,8 @@ public abstract class AbstractChannelPipelineFactory implements ChannelPipelineF
     
     /**
      * Create the core {@link ChannelUpstreamHandler} to use
-     * 
-     * @return coreHandeler
+     *
+     * @return coreHandler
      */
     protected abstract ChannelUpstreamHandler createHandler();
 

@@ -29,6 +29,7 @@ import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.update.UpdateRequest;
+import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.common.ValidationException;
 import org.elasticsearch.common.xcontent.XContentType;
@@ -63,50 +64,58 @@ public class ElasticSearchIndexer {
         this.aliasName = aliasName;
     }
 
-    public IndexResponse index(String id, String content) throws IOException {
+    public IndexResponse index(DocumentId id, String content, RoutingKey routingKey) throws IOException {
         checkArgument(content);
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Indexing {}: {}", id, StringUtils.left(content, DEBUG_MAX_LENGTH_CONTENT));
-        }
-        return client.index(
-            new IndexRequest(aliasName.getValue())
+        logContent(id, content);
+        return client.index(new IndexRequest(aliasName.getValue())
                 .type(NodeMappingFactory.DEFAULT_MAPPING_NAME)
-                .id(id)
-                .source(content, XContentType.JSON));
+                .id(id.asString())
+                .source(content, XContentType.JSON)
+                .routing(routingKey.asString()),
+            RequestOptions.DEFAULT);
     }
 
-    public Optional<BulkResponse> update(List<UpdatedRepresentation> updatedDocumentParts) throws IOException {
+    private void logContent(DocumentId id, String content) {
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Indexing {}: {}", id.asString(), StringUtils.left(content, DEBUG_MAX_LENGTH_CONTENT));
+        }
+    }
+
+    public Optional<BulkResponse> update(List<UpdatedRepresentation> updatedDocumentParts, RoutingKey routingKey) throws IOException {
         try {
             Preconditions.checkNotNull(updatedDocumentParts);
+            Preconditions.checkNotNull(routingKey);
             BulkRequest request = new BulkRequest();
             updatedDocumentParts.forEach(updatedDocumentPart -> request.add(
                 new UpdateRequest(aliasName.getValue(),
                     NodeMappingFactory.DEFAULT_MAPPING_NAME,
-                    updatedDocumentPart.getId())
-                .doc(updatedDocumentPart.getUpdatedDocumentPart(), XContentType.JSON)));
-            return Optional.of(client.bulk(request));
+                    updatedDocumentPart.getId().asString())
+                .doc(updatedDocumentPart.getUpdatedDocumentPart(), XContentType.JSON)
+                .routing(routingKey.asString())));
+            return Optional.of(client.bulk(request, RequestOptions.DEFAULT));
         } catch (ValidationException e) {
             LOGGER.warn("Error while updating index", e);
             return Optional.empty();
         }
     }
 
-    public Optional<BulkResponse> delete(List<String> ids) throws IOException {
+    public Optional<BulkResponse> delete(List<DocumentId> ids, RoutingKey routingKey) throws IOException {
         try {
             BulkRequest request = new BulkRequest();
             ids.forEach(id -> request.add(
                 new DeleteRequest(aliasName.getValue())
                     .type(NodeMappingFactory.DEFAULT_MAPPING_NAME)
-                    .id(id)));
-            return Optional.of(client.bulk(request));
+                    .id(id.asString())
+                    .routing(routingKey.asString())));
+            return Optional.of(client.bulk(request, RequestOptions.DEFAULT));
         } catch (ValidationException e) {
             LOGGER.warn("Error while deleting index", e);
             return Optional.empty();
         }
     }
 
-    public void deleteAllMatchingQuery(QueryBuilder queryBuilder) {
-        deleteByQueryPerformer.perform(queryBuilder).block();
+    public void deleteAllMatchingQuery(QueryBuilder queryBuilder, RoutingKey routingKey) {
+        deleteByQueryPerformer.perform(queryBuilder, routingKey).block();
     }
 
     private void checkArgument(String content) {

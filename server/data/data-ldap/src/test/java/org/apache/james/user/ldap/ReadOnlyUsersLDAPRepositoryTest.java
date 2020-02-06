@@ -30,23 +30,23 @@ import static org.mockito.Mockito.mock;
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConversionException;
 import org.apache.commons.configuration2.plist.PropertyListConfiguration;
-import org.apache.james.core.MailAddress;
+import org.apache.commons.configuration2.tree.ImmutableNode;
+import org.apache.james.core.Username;
 import org.apache.james.domainlist.api.DomainList;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ReadOnlyUsersLDAPRepositoryTest {
+class ReadOnlyUsersLDAPRepositoryTest {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ReadOnlyUsersLDAPRepositoryTest.class);
-    private static final String JAMES_USER_MAIL = JAMES_USER + "@" + DOMAIN;
-    private static final String UNKNOWN = "unknown";
-    private static final String BAD_PASSWORD = "badpassword";
+    static final Logger LOGGER = LoggerFactory.getLogger(ReadOnlyUsersLDAPRepositoryTest.class);
+    static final Username JAMES_USER_MAIL = Username.of(JAMES_USER.getLocalPart()+ "@" + DOMAIN);
+    static final Username UNKNOWN = Username.of("unknown");
+    static final String BAD_PASSWORD = "badpassword";
 
-    private DomainList domainList;
+    DomainList domainList;
 
     @BeforeEach
     void setUp() {
@@ -57,7 +57,7 @@ public class ReadOnlyUsersLDAPRepositoryTest {
     class SupportVirtualHosting {
 
         @Test
-        public void supportVirtualHostingShouldReturnFalseByDefault() throws Exception {
+        void supportVirtualHostingShouldReturnFalseByDefault() throws Exception {
             ReadOnlyUsersLDAPRepository usersLDAPRepository = new ReadOnlyUsersLDAPRepository(domainList);
             usersLDAPRepository.configure(ldapRepositoryConfiguration());
 
@@ -65,8 +65,8 @@ public class ReadOnlyUsersLDAPRepositoryTest {
         }
 
         @Test
-        public void supportVirtualHostingShouldReturnTrueWhenReportedInConfig() throws Exception {
-            HierarchicalConfiguration configuration = ldapRepositoryConfiguration();
+        void supportVirtualHostingShouldReturnTrueWhenReportedInConfig() throws Exception {
+            HierarchicalConfiguration<ImmutableNode> configuration = ldapRepositoryConfiguration();
             configuration.addProperty(ReadOnlyUsersLDAPRepository.SUPPORTS_VIRTUAL_HOSTING, "true");
 
             ReadOnlyUsersLDAPRepository usersLDAPRepository = new ReadOnlyUsersLDAPRepository(domainList);
@@ -76,8 +76,8 @@ public class ReadOnlyUsersLDAPRepositoryTest {
         }
 
         @Test
-        public void supportVirtualHostingShouldReturnFalseWhenReportedInConfig() throws Exception {
-            HierarchicalConfiguration configuration = ldapRepositoryConfiguration();
+        void supportVirtualHostingShouldReturnFalseWhenReportedInConfig() throws Exception {
+            HierarchicalConfiguration<ImmutableNode> configuration = ldapRepositoryConfiguration();
             configuration.addProperty(ReadOnlyUsersLDAPRepository.SUPPORTS_VIRTUAL_HOSTING, "false");
 
             ReadOnlyUsersLDAPRepository usersLDAPRepository = new ReadOnlyUsersLDAPRepository(domainList);
@@ -87,8 +87,8 @@ public class ReadOnlyUsersLDAPRepositoryTest {
         }
 
         @Test
-        public void configureShouldThrowOnNonBooleanValueForSupportsVirtualHosting() throws Exception {
-            HierarchicalConfiguration configuration = ldapRepositoryConfiguration();
+        void configureShouldThrowOnNonBooleanValueForSupportsVirtualHosting() {
+            HierarchicalConfiguration<ImmutableNode> configuration = ldapRepositoryConfiguration();
             configuration.addProperty(ReadOnlyUsersLDAPRepository.SUPPORTS_VIRTUAL_HOSTING, "bad");
 
             ReadOnlyUsersLDAPRepository usersLDAPRepository = new ReadOnlyUsersLDAPRepository(domainList);
@@ -102,38 +102,37 @@ public class ReadOnlyUsersLDAPRepositoryTest {
     class TestUser {
 
         @Test
-        public void knownUserShouldBeAbleToLogInWhenPasswordIsCorrect() throws Exception {
+        void knownUserShouldBeAbleToLogInWhenPasswordIsCorrect() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfiguration());
             assertThat(ldapRepository.test(JAMES_USER, PASSWORD)).isTrue();
         }
 
         @Test
-        public void knownUserShouldNotBeAbleToLogInWhenPasswordIsNotCorrect() throws Exception {
+        void knownUserShouldNotBeAbleToLogInWhenPasswordIsNotCorrect() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfiguration());
             assertThat(ldapRepository.test(JAMES_USER, BAD_PASSWORD)).isFalse();
         }
 
         @Test
-        public void unknownUserShouldNotBeAbleToLogIn() throws Exception {
+        void unknownUserShouldNotBeAbleToLogIn() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfiguration());
             assertThat(ldapRepository.test(UNKNOWN, BAD_PASSWORD)).isFalse();
         }
 
         @Test
-        public void unknownUserShouldNotBeAbleToLogInWhenPasswordIsCorrect() throws Exception {
+        void unknownUserShouldNotBeAbleToLogInWhenPasswordIsCorrect() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfiguration());
             assertThat(ldapRepository.test(UNKNOWN, PASSWORD)).isFalse();
         }
 
         @Test
-        public void knownUserShouldBeAbleToLogInWhenPasswordIsCorrectWithVirtualHosting() throws Exception {
+        void knownUserShouldBeAbleToLogInWhenPasswordIsCorrectWithVirtualHosting() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfigurationWithVirtualHosting());
             assertThat(ldapRepository.test(JAMES_USER_MAIL, PASSWORD)).isTrue();
         }
 
         @Test
-        @Disabled("JAMES-2270 : pause issue after the fix in JAMES-2666")
-        public void testShouldStillWorksAfterRestartingLDAP() throws Exception {
+        void testShouldStillWorkAfterRestartingLDAP() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfigurationWithVirtualHosting());
             ldapRepository.test(JAMES_USER_MAIL, PASSWORD);
 
@@ -149,44 +148,44 @@ public class ReadOnlyUsersLDAPRepositoryTest {
         }
 
         @Test
-        public void knownUserShouldNotBeAbleToLogInWhenPasswordIsNotCorrectWithVirtualHosting() throws Exception {
+        void knownUserShouldNotBeAbleToLogInWhenPasswordIsNotCorrectWithVirtualHosting() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfigurationWithVirtualHosting());
             assertThat(ldapRepository.test(JAMES_USER, BAD_PASSWORD)).isFalse();
         }
 
         @Test
-        public void unknownUserShouldNotBeAbleToLogInWithVirtualHosting() throws Exception {
+        void unknownUserShouldNotBeAbleToLogInWithVirtualHosting() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfigurationWithVirtualHosting());
             assertThat(ldapRepository.test(UNKNOWN, BAD_PASSWORD)).isFalse();
         }
 
         @Test
-        public void unknownUserShouldNotBeAbleToLogInWhenPasswordIsCorrectWithVirtualHosting() throws Exception {
+        void unknownUserShouldNotBeAbleToLogInWhenPasswordIsCorrectWithVirtualHosting() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfigurationWithVirtualHosting());
             assertThat(ldapRepository.test(UNKNOWN, PASSWORD)).isFalse();
         }
 
         @Test
-        public void specialCharacterInUserInputShouldBeSanitized() throws Exception {
-            String patternMatchingMultipleUsers = "j*";
+        void specialCharacterInUserInputShouldBeSanitized() throws Exception {
+            Username patternMatchingMultipleUsers = Username.of("j*");
 
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfigurationWithVirtualHosting());
             assertThat(ldapRepository.test(patternMatchingMultipleUsers, PASSWORD)).isFalse();
         }
 
         @Test
-        public void containsWithGetUserShouldBeTrue() throws Exception {
+        void containsWithGetUserShouldBeTrue() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfiguration());
-            assertThat(ldapRepository.contains(ldapRepository.getUser(new MailAddress(JAMES_USER_MAIL)))).isTrue();
+            assertThat(ldapRepository.contains(ldapRepository.getUser(JAMES_USER_MAIL.asMailAddress()))).isTrue();
         }
 
         @Test
-        public void containsWithGetUserShouldBeTrueWithVirtualHosting() throws Exception {
+        void containsWithGetUserShouldBeTrueWithVirtualHosting() throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = startUsersRepository(ldapRepositoryConfigurationWithVirtualHosting());
-            assertThat(ldapRepository.contains(ldapRepository.getUser(new MailAddress(JAMES_USER_MAIL)))).isTrue();
+            assertThat(ldapRepository.contains(ldapRepository.getUser(JAMES_USER_MAIL.asMailAddress()))).isTrue();
         }
 
-        private ReadOnlyUsersLDAPRepository startUsersRepository(HierarchicalConfiguration ldapRepositoryConfiguration) throws Exception {
+        private ReadOnlyUsersLDAPRepository startUsersRepository(HierarchicalConfiguration<ImmutableNode> ldapRepositoryConfiguration) throws Exception {
             ReadOnlyUsersLDAPRepository ldapRepository = new ReadOnlyUsersLDAPRepository(domainList);
             ldapRepository.configure(ldapRepositoryConfiguration);
             ldapRepository.init();
@@ -194,7 +193,7 @@ public class ReadOnlyUsersLDAPRepositoryTest {
         }
     }
 
-    private static HierarchicalConfiguration ldapRepositoryConfiguration() {
+    private static HierarchicalConfiguration<ImmutableNode> ldapRepositoryConfiguration() {
         PropertyListConfiguration configuration = new PropertyListConfiguration();
         configuration.addProperty("[@ldapHost]", DockerLdapSingleton.ldapContainer.getLdapHost());
         configuration.addProperty("[@principal]", "cn=admin,dc=james,dc=org");
@@ -202,14 +201,16 @@ public class ReadOnlyUsersLDAPRepositoryTest {
         configuration.addProperty("[@userBase]", "ou=People,dc=james,dc=org");
         configuration.addProperty("[@userIdAttribute]", "uid");
         configuration.addProperty("[@userObjectClass]", "inetOrgPerson");
-        configuration.addProperty("[@maxRetries]", "4");
+        configuration.addProperty("[@maxRetries]", "1");
         configuration.addProperty("[@retryStartInterval]", "0");
-        configuration.addProperty("[@retryMaxInterval]", "8");
-        configuration.addProperty("[@retryIntervalScale]", "1000");
+        configuration.addProperty("[@retryMaxInterval]", "2");
+        configuration.addProperty("[@retryIntervalScale]", "100");
+        configuration.addProperty("[@connectionTimeout]", "100");
+        configuration.addProperty("[@readTimeout]", "100");
         return configuration;
     }
 
-    private static HierarchicalConfiguration ldapRepositoryConfigurationWithVirtualHosting() {
+    private static HierarchicalConfiguration<ImmutableNode> ldapRepositoryConfigurationWithVirtualHosting() {
         PropertyListConfiguration configuration = new PropertyListConfiguration();
         configuration.addProperty("[@ldapHost]", DockerLdapSingleton.ldapContainer.getLdapHost());
         configuration.addProperty("[@principal]", "cn=admin,dc=james,dc=org");
@@ -217,11 +218,13 @@ public class ReadOnlyUsersLDAPRepositoryTest {
         configuration.addProperty("[@userBase]", "ou=People,dc=james,dc=org");
         configuration.addProperty("[@userIdAttribute]", "mail");
         configuration.addProperty("[@userObjectClass]", "inetOrgPerson");
-        configuration.addProperty("[@maxRetries]", "4");
+        configuration.addProperty("[@maxRetries]", "1");
         configuration.addProperty("[@retryStartInterval]", "0");
-        configuration.addProperty("[@retryMaxInterval]", "8");
-        configuration.addProperty("[@retryIntervalScale]", "1000");
+        configuration.addProperty("[@retryMaxInterval]", "2");
+        configuration.addProperty("[@retryIntervalScale]", "100");
         configuration.addProperty("supportsVirtualHosting", true);
+        configuration.addProperty("[@connectionTimeout]", "100");
+        configuration.addProperty("[@readTimeout]", "100");
         return configuration;
     }
 }

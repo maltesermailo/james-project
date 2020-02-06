@@ -21,9 +21,7 @@ package org.apache.james.imap.processor;
 
 import java.io.Closeable;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
-import org.apache.james.imap.api.ImapSessionUtils;
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapProcessor;
@@ -51,41 +49,41 @@ public class RenameProcessor extends AbstractMailboxProcessor<RenameRequest> {
     }
 
     @Override
-    protected void doProcess(RenameRequest request, ImapSession session, String tag, ImapCommand command, Responder responder) {
+    protected void processRequest(RenameRequest request, ImapSession session, Responder responder) {
         PathConverter pathConverter = PathConverter.forSession(session);
         MailboxPath existingPath = pathConverter.buildFullPath(request.getExistingName());
         MailboxPath newPath = pathConverter.buildFullPath(request.getNewName());
         try {
             final MailboxManager mailboxManager = getMailboxManager();
-            MailboxSession mailboxsession = ImapSessionUtils.getMailboxSession(session);
+            MailboxSession mailboxsession = session.getMailboxSession();
             mailboxManager.renameMailbox(existingPath, newPath, mailboxsession);
 
             if (existingPath.getName().equalsIgnoreCase(ImapConstants.INBOX_NAME) && !mailboxManager.mailboxExists(existingPath, mailboxsession)) {
                 mailboxManager.createMailbox(existingPath, mailboxsession);
             }
-            okComplete(command, tag, responder);
+            okComplete(request, responder);
             unsolicitedResponses(session, responder, false);
         } catch (MailboxExistsException e) {
             LOGGER.debug("Rename from {} to {} failed because the target mailbox exists", existingPath, newPath, e);
-            no(command, tag, responder, HumanReadableText.FAILURE_MAILBOX_EXISTS);
+            no(request, responder, HumanReadableText.FAILURE_MAILBOX_EXISTS);
         } catch (MailboxNotFoundException e) {
             LOGGER.debug("Rename from {} to {} failed because the source mailbox doesn't exist", existingPath, newPath, e);
-            no(command, tag, responder, HumanReadableText.MAILBOX_NOT_FOUND);
+            no(request, responder, HumanReadableText.MAILBOX_NOT_FOUND);
         } catch (TooLongMailboxNameException e) {
             LOGGER.debug("The mailbox name length is over limit: {}", newPath.getName(), e);
-            taggedBad(command, tag, responder, HumanReadableText.FAILURE_MAILBOX_NAME);
+            taggedBad(request, responder, HumanReadableText.FAILURE_MAILBOX_NAME);
         } catch (MailboxException e) {
             LOGGER.error("Rename from {} to {} failed", existingPath, newPath, e);
-            no(command, tag, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
+            no(request, responder, HumanReadableText.GENERIC_FAILURE_DURING_PROCESSING);
         }
     }
 
     @Override
-    protected Closeable addContextToMDC(RenameRequest message) {
+    protected Closeable addContextToMDC(RenameRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "RENAME")
-            .addContext("existingName", message.getExistingName())
-            .addContext("newName", message.getNewName())
+            .addContext("existingName", request.getExistingName())
+            .addContext("newName", request.getNewName())
             .build();
     }
 }

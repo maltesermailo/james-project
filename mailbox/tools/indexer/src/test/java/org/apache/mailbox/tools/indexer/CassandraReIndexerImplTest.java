@@ -30,6 +30,7 @@ import java.time.Duration;
 
 import org.apache.james.backends.cassandra.CassandraCluster;
 import org.apache.james.backends.cassandra.CassandraClusterExtension;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.cassandra.CassandraMailboxManager;
@@ -37,6 +38,7 @@ import org.apache.james.mailbox.cassandra.CassandraMailboxManagerProvider;
 import org.apache.james.mailbox.cassandra.mail.MailboxAggregateModule;
 import org.apache.james.mailbox.indexer.ReIndexer;
 import org.apache.james.mailbox.model.Mailbox;
+import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.store.MailboxSessionMapperFactory;
 import org.apache.james.mailbox.store.PreDeletionHooks;
@@ -50,8 +52,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import com.google.common.base.Strings;
 
 public class CassandraReIndexerImplTest {
-    private static final String USERNAME = "benwa@apache.org";
-    public static final MailboxPath INBOX = MailboxPath.forUser(USERNAME, "INBOX");
+    private static final Username USERNAME = Username.of("benwa@apache.org");
+    public static final MailboxPath INBOX = MailboxPath.inbox(USERNAME);
     private CassandraMailboxManager mailboxManager;
     private ListeningMessageSearchIndex messageSearchIndex;
 
@@ -94,7 +96,7 @@ public class CassandraReIndexerImplTest {
         reIndexer.reIndex(INBOX).run();
 
         // The indexer is called for each message
-        verify(messageSearchIndex).deleteAll(any(MailboxSession.class), any(Mailbox.class));
+        verify(messageSearchIndex).deleteAll(any(MailboxSession.class), any(MailboxId.class));
         verify(messageSearchIndex, times(threadCount * operationCount))
             .add(any(MailboxSession.class), any(Mailbox.class),any(MailboxMessage.class));
         verifyNoMoreInteractions(messageSearchIndex);

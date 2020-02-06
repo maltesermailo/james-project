@@ -39,7 +39,6 @@ import org.apache.james.core.MailAddress;
 import org.apache.james.filesystem.api.FileSystem;
 import org.apache.james.transport.mailets.WhiteListManager;
 import org.apache.james.user.api.UsersRepository;
-import org.apache.james.user.api.model.JamesUser;
 import org.apache.james.util.sql.JDBCUtil;
 import org.apache.james.util.sql.SqlResources;
 import org.apache.mailet.Experimental;
@@ -161,8 +160,6 @@ public abstract class AbstractSQLWhitelistMatcher extends GenericMatcher {
                 continue;
             }
 
-            recipientUser = getPrimaryName(recipientUser);
-
             if (matchedWhitelist(recipientMailAddress, mail)) {
                 // This address was already in the list
                 inWhiteList.add(recipientMailAddress);
@@ -175,23 +172,6 @@ public abstract class AbstractSQLWhitelistMatcher extends GenericMatcher {
     }
 
     protected abstract boolean matchedWhitelist(MailAddress recipient, Mail mail) throws MessagingException;
-
-    /**
-     * Gets the main name of a local customer, handling alias
-     */
-    protected String getPrimaryName(String originalUsername) {
-        String username;
-        try {
-            username = originalUsername;
-            JamesUser user = (JamesUser) localusers.getUserByName(username);
-            if (user.getAliasing()) {
-                username = user.getAlias();
-            }
-        } catch (Exception e) {
-            username = originalUsername;
-        }
-        return username;
-    }
 
     /**
      * Initializes the sql query environment from the SqlResources file.<br>

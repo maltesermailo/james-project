@@ -37,9 +37,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.annotations.VisibleForTesting;
+
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.MonoProcessor;
-import reactor.core.scheduler.Schedulers;
 
 public class InVmEventDelivery implements EventDelivery {
     private static final Logger LOGGER = LoggerFactory.getLogger(InVmEventDelivery.class);
@@ -53,31 +52,27 @@ public class InVmEventDelivery implements EventDelivery {
     }
 
     @Override
-    public ExecutionStages deliver(MailboxListener listener, Event event, DeliveryOption option) {
+    public Mono<Void> deliver(MailboxListener listener, Event event, DeliveryOption option) {
         Mono<Void> executionResult = deliverByOption(listener, event, option);
 
-        return toExecutionStages(listener.getExecutionMode(), executionResult);
+        return waitForResultIfNeeded(listener.getExecutionMode(), executionResult);
     }
 
-    private ExecutionStages toExecutionStages(MailboxListener.ExecutionMode executionMode, Mono<Void> executionResult) {
+    private Mono<Void> waitForResultIfNeeded(MailboxListener.ExecutionMode executionMode, Mono<Void> executionResult) {
         if (executionMode.equals(MailboxListener.ExecutionMode.SYNCHRONOUS)) {
-            return ExecutionStages.synchronous(executionResult);
+            return executionResult;
         }
-
-        return ExecutionStages.asynchronous(executionResult);
+        return executionResult.or(Mono.empty()).onErrorResume(throwable -> Mono.empty());
     }
 
     private Mono<Void> deliverByOption(MailboxListener listener, Event event, DeliveryOption deliveryOption) {
         Mono<Void> deliveryToListener = Mono.fromRunnable(() -> doDeliverToListener(listener, event))
             .doOnError(throwable -> structuredLogger(event, listener)
                 .log(logger -> logger.error("Error while processing listener", throwable)))
-            .subscribeOn(Schedulers.elastic())
             .then();
 
         return deliveryOption.getRetrier().doRetry(deliveryToListener, event)
             .onErrorResume(throwable -> deliveryOption.getPermanentFailureHandler().handle(event))
-            .subscribeWith(MonoProcessor.create())
-            .subscribeOn(Schedulers.elastic())
             .then();
     }
 
@@ -98,7 +93,7 @@ public class InVmEventDelivery implements EventDelivery {
         return MDCBuilder.create()
             .addContext(EventBus.StructuredLoggingFields.EVENT_ID, event.getEventId())
             .addContext(EventBus.StructuredLoggingFields.EVENT_CLASS, event.getClass())
-            .addContext(EventBus.StructuredLoggingFields.USER, event.getUser())
+            .addContext(EventBus.StructuredLoggingFields.USER, event.getUsername())
             .addContext(EventBus.StructuredLoggingFields.LISTENER_CLASS, mailboxListener.getClass())
             .build();
     }
@@ -107,7 +102,7 @@ public class InVmEventDelivery implements EventDelivery {
         return MDCStructuredLogger.forLogger(LOGGER)
             .addField(EventBus.StructuredLoggingFields.EVENT_ID, event.getEventId())
             .addField(EventBus.StructuredLoggingFields.EVENT_CLASS, event.getClass())
-            .addField(EventBus.StructuredLoggingFields.USER, event.getUser())
+            .addField(EventBus.StructuredLoggingFields.USER, event.getUsername())
             .addField(EventBus.StructuredLoggingFields.LISTENER_CLASS, mailboxListener.getClass());
     }
 }

@@ -18,15 +18,16 @@
  ****************************************************************/
 package org.apache.james.imap.message.request;
 
-import org.apache.james.imap.api.ImapCommand;
+import org.apache.james.imap.api.ImapConstants;
+import org.apache.james.imap.api.Tag;
 
 public class ListRequest extends AbstractImapRequest {
     private final String baseReferenceName;
 
     private final String mailboxPattern;
 
-    public ListRequest(ImapCommand command, String referenceName, String mailboxPattern, String tag) {
-        super(tag, command);
+    public ListRequest(String referenceName, String mailboxPattern, Tag tag) {
+        super(tag, ImapConstants.LIST_COMMAND);
         this.baseReferenceName = referenceName;
         this.mailboxPattern = mailboxPattern;
     }

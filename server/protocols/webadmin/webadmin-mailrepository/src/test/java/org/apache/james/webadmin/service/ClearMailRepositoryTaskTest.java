@@ -19,45 +19,54 @@
 
 package org.apache.james.webadmin.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import java.time.Instant;
+
+import org.apache.james.JsonSerializationVerifier;
 import org.apache.james.mailrepository.api.MailRepository;
 import org.apache.james.mailrepository.api.MailRepositoryPath;
+import org.apache.james.mailrepository.api.MailRepositoryStore;
 import org.apache.james.server.task.json.JsonTaskSerializer;
-
-import com.google.common.collect.ImmutableList;
-import net.javacrumbs.jsonunit.assertj.JsonAssertions;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
+import com.google.common.collect.ImmutableList;
 
 class ClearMailRepositoryTaskTest {
-    private static final String SERIALIZED = "{\"type\":\"clearMailRepository\",\"mailRepositoryPath\":\"a\"}";
+
+    private static final Instant TIMESTAMP = Instant.parse("2018-11-13T12:00:55Z");
+
+    private static final String SERIALIZED = "{\"type\":\"clear-mail-repository\",\"mailRepositoryPath\":\"a\"}";
+    private static final String SERIALIZED_TASK_ADDITIONAL_INFORMATION = "{\"type\":\"clear-mail-repository\", \"mailRepositoryPath\":\"a\", \"initialCount\": 0, \"remainingCount\": 10, \"timestamp\":\"2018-11-13T12:00:55Z\"}";
+    private static final ClearMailRepositoryTask.Factory FACTORY = new ClearMailRepositoryTask.Factory(mock(MailRepositoryStore.class));
     private static final ImmutableList<MailRepository> MAIL_REPOSITORIES = ImmutableList.of();
-    private static final ClearMailRepositoryTask TASK = new ClearMailRepositoryTask(MAIL_REPOSITORIES, MailRepositoryPath.from("a"));
+    private static final MailRepositoryPath MAIL_REPOSITORY_PATH = MailRepositoryPath.from("a");
+    private static final ClearMailRepositoryTask TASK = new ClearMailRepositoryTask(MAIL_REPOSITORIES, MAIL_REPOSITORY_PATH);
+    private static final long INITIAL_COUNT = 0L;
+    private static final long REMAINING_COUNT = 10L;
 
     @Test
-    void taskShouldBeSerializable() throws JsonProcessingException {
-        JsonTaskSerializer testee = new JsonTaskSerializer(ClearMailRepositoryTask.MODULE.apply(MAIL_REPOSITORIES));
-        JsonAssertions.assertThatJson(testee.serialize(TASK))
-            .isEqualTo(SERIALIZED);
-    }
-
-    @Test
-    void taskShouldBeDeserializable() throws IOException {
-        JsonTaskSerializer testee = new JsonTaskSerializer(ClearMailRepositoryTask.MODULE.apply(MAIL_REPOSITORIES));
-
-        assertThat(testee.deserialize(SERIALIZED))
-            .isEqualToComparingFieldByFieldRecursively(TASK);
+    void taskShouldBeSerializable() throws Exception {
+        JsonSerializationVerifier.dtoModule(ClearMailRepositoryTaskDTO.module(FACTORY))
+            .bean(TASK)
+            .json(SERIALIZED)
+            .verify();
     }
 
     @Test
     void taskShouldThrowOnDeserializationUrlDecodingError() {
-        JsonTaskSerializer testee = new JsonTaskSerializer(ClearMailRepositoryTask.MODULE.apply(MAIL_REPOSITORIES));
+        JsonTaskSerializer testee = JsonTaskSerializer.of(ClearMailRepositoryTaskDTO.module(FACTORY));
 
-        assertThatThrownBy(() -> testee.deserialize("{\"type\":\"clearMailRepository\",\"mailRepositoryPath\":\"%\"}"))
+        assertThatThrownBy(() -> testee.deserialize("{\"type\":\"clear-mail-repository\",\"mailRepositoryPath\":\"%\"}"))
             .isInstanceOf(ClearMailRepositoryTask.InvalidMailRepositoryPathDeserializationException.class);
+    }
+
+    @Test
+    void additionalInformationShouldBeSerializable() throws Exception {
+        JsonSerializationVerifier.dtoModule(ClearMailRepositoryTaskAdditionalInformationDTO.SERIALIZATION_MODULE)
+            .bean(new ClearMailRepositoryTask.AdditionalInformation(MAIL_REPOSITORY_PATH, INITIAL_COUNT, REMAINING_COUNT, TIMESTAMP))
+            .json(SERIALIZED_TASK_ADDITIONAL_INFORMATION)
+            .verify();
     }
 }

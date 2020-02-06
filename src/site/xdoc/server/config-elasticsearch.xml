@@ -38,6 +38,29 @@
           <dd>Is the IP (or host) of the ElasticSearch master</dd>
           <dt><strong>elasticsearch.port</strong></dt>
           <dd>Is the port of ElasticSearch master</dd>
+
+          <dt><strong>elasticsearch.hostScheme</strong></dt>
+          <dd>
+              Optional. Only http or https are accepted, default is http. In case of <strong>https</strong>,
+              and you want to override the default SSL Validation behavior of the client,
+              consult the section <strong>SSL Trusting Configuration</strong> for more details.
+          </dd>
+
+          <dt><strong>elasticsearch.user</strong></dt>
+          <dd>
+              Optional.
+              Basic auth username to access elasticsearch.
+              Ignore elasticsearch.user and elasticsearch.password to not be using authentication (default behaviour).
+              Otherwise, you need to specify both properties.
+          </dd>
+
+          <dt><strong>elasticsearch.password</strong></dt>
+          <dd>
+              Optional.
+              Basic auth password to access elasticsearch.
+              Ignore elasticsearch.user and elasticsearch.password to not be using authentication (default behaviour).
+              Otherwise, you need to specify both properties.
+          </dd>
       </dl>
 
       Or you can connect a cluster by :
@@ -56,6 +79,9 @@
           <dd>Number of shards for index provisionned by James</dd>
           <dt><strong>elasticsearch.nb.replica</strong></dt>
           <dd>Number of replica for index provisionned by James (default: 0)</dd>
+          <dt><strong>elasticsearch.index.waitForActiveShards (default: 1)</strong></dt>
+          <dd>Wait for a certain number of active shard copies before proceeding with the operation.</dd>
+          <dd>You may consult the <a href="https://www.elastic.co/guide/en/elasticsearch/reference/6.3/docs-index_.html#index-wait-for-active-shards">documentation</a> for more information.</dd>
           <dt><strong>elasticsearch.index.mailbox.name</strong></dt>
           <dd>Name of the mailbox index backed by the alias. It will be created if missing.</dd>
           <dt><strong>elasticsearch.index.name</strong></dt>
@@ -160,10 +186,88 @@
 
         Note: You can launch a tika server using this command line:
 
-        <code><pre>docker run --name tika logicalspark/docker-tikaserver:1.20</pre></code>
+        <code><pre>docker run --name tika linagora/docker-tikaserver:1.22</pre></code>
 
     </section>
 
+    <section name="SSL Trusting Configuration">
+
+        <p>
+            By default James will use the system TrustStore to validate https server certificates, if the certificate on
+            ES side is already in the system TrustStore, you can leave the sslValidationStrategy property empty or set it to default.
+        </p>
+
+        <dl>
+            <dt><strong>elasticsearch.hostScheme.https.sslValidationStrategy</strong></dt>
+            <dd>
+              Optional. Accept only <strong>default</strong>, <strong>ignore</strong>, <strong>override</strong>. Default is <strong>default</strong>
+            </dd>
+            <dd>
+                default: Use the default SSL TrustStore of the system.
+                ignore: Ignore SSL Validation check (not recommended).
+                override: Override the SSL Context to use a custom TrustStore containing ES server's certificate.
+            </dd>
+        </dl>
+
+        <p>
+            In some cases, you want to secure the connection from clients to ES by setting up a <strong>https</strong> protocol
+            with a self signed certificate. And you prefer to left the system ca-certificates un touch.
+            There are possible solutions to let the ES RestHighLevelClient to trust your self signed certificate.
+        </p>
+        <p>
+            First solution: ignoring SSL check.
+            In case you want to ignore the SSL check, simply, just don't specify below options. Otherwise, configuring the trust
+            requires some prerequisites and they are explained in below block.
+        </p>
+        <p>
+            Second solution: importing a TrustStore containing the certificate into SSL context.
+            A certificate normally contains two parts: a public part in .crt file, another private part in .key file.
+            To trust the server, the client needs to be acknowledged that the server's certificate is in the list of
+            client's TrustStore. Basically, you can create a local TrustStore file containing the public part of a remote server
+            by execute this command:
+        </p>
+
+        <code><pre>
+            keytool -import -v -trustcacerts -file certificatePublicFile.crt -keystore trustStoreFileName.jks -keypass fillThePassword -storepass fillThePassword
+        </pre></code>
+
+        <p>
+            When there is a TrustStore file and the password to read, fill two options <strong>trustStorePath</strong>
+            and <strong>trustStorePassword</strong> with the TrustStore location and the password. ES client will accept
+            the certificate of ES service.
+        </p>
+
+        <dl>
+            <dt><strong>elasticsearch.hostScheme.https.trustStorePath</strong></dt>
+            <dd>
+              Optional. Use it when https is configured in elasticsearch.hostScheme, and sslValidationStrategy is <strong>override</strong>
+              Configure Elasticsearch rest client to use this trustStore file to recognize nginx's ssl certificate.
+              Once you chose <strong>override</strong>, you need to specify both trustStorePath and trustStorePassword.
+            </dd>
+
+            <dt><strong>elasticsearch.hostScheme.https.trustStorePassword</strong></dt>
+            <dd>
+              Optional. Use it when https is configured in elasticsearch.hostScheme, and sslValidationStrategy is <strong>override</strong>
+              Configure Elasticsearch rest client to use this trustStore file with the specified password.
+              Once you chose <strong>override</strong>, you need to specify both trustStorePath and trustStorePassword.
+            </dd>
+        </dl>
+
+        <p>
+            During SSL handshaking, the client can determine whether accept or reject connecting to a remote server by its hostname.
+            You can configure to use which HostNameVerifier in the client.
+        </p>
+        <dl>
+            <dt><strong>elasticsearch.hostScheme.https.hostNameVerifier</strong></dt>
+            <dd>
+              Optional. Default is <strong>default</strong>.
+            </dd>
+            <dd>
+              default: using the default hostname verifier provided by apache http client.
+              accept_any_hostname: accept any host (not recommended).
+            </dd>
+        </dl>
+    </section>
 </body>
 
 </document>

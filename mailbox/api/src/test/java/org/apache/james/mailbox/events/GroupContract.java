@@ -26,6 +26,7 @@ import static org.apache.james.mailbox.events.EventBusTestFixture.EVENT_UNSUPPOR
 import static org.apache.james.mailbox.events.EventBusTestFixture.FIVE_HUNDRED_MS;
 import static org.apache.james.mailbox.events.EventBusTestFixture.GROUP_A;
 import static org.apache.james.mailbox.events.EventBusTestFixture.GROUP_B;
+import static org.apache.james.mailbox.events.EventBusTestFixture.GROUP_C;
 import static org.apache.james.mailbox.events.EventBusTestFixture.NO_KEYS;
 import static org.apache.james.mailbox.events.EventBusTestFixture.ONE_SECOND;
 import static org.apache.james.mailbox.events.EventBusTestFixture.WAIT_CONDITION;
@@ -42,11 +43,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import org.apache.james.core.User;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.TestId;
@@ -54,6 +57,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
+import reactor.core.scheduler.Schedulers;
 
 public interface GroupContract {
 
@@ -92,8 +96,61 @@ public interface GroupContract {
             IntStream.range(0, eventCount)
                 .forEach(i -> eventBus().dispatch(EVENT, NO_KEYS).block());
 
-            WAIT_CONDITION.atMost(org.awaitility.Duration.TEN_MINUTES).until(() -> finishedExecutions.get() == eventCount);
+            WAIT_CONDITION.atMost(org.awaitility.Duration.TEN_MINUTES).untilAsserted(() -> assertThat(finishedExecutions.get()).isEqualTo(eventCount));
             assertThat(rateExceeded).isFalse();
+        }
+
+        @Test
+        default void groupNotificationShouldDeliverASingleEventToAllListenersAtTheSameTime() {
+            CountDownLatch countDownLatch = new CountDownLatch(1);
+            try {
+                ConcurrentLinkedQueue<String> threads = new ConcurrentLinkedQueue<>();
+                eventBus().register(new MailboxListener.GroupMailboxListener() {
+                    @Override
+                    public Group getDefaultGroup() {
+                        return new GenericGroup("groupA");
+                    }
+
+                    @Override
+                    public void event(Event event) throws Exception {
+                        threads.add(Thread.currentThread().getName());
+                        countDownLatch.await();
+                    }
+                }, GROUP_A);
+                eventBus().register(new MailboxListener.GroupMailboxListener() {
+                    @Override
+                    public Group getDefaultGroup() {
+                        return new GenericGroup("groupB");
+                    }
+
+                    @Override
+                    public void event(Event event) throws Exception {
+                        threads.add(Thread.currentThread().getName());
+                        countDownLatch.await();
+                    }
+                }, GROUP_B);
+                eventBus().register(new MailboxListener.GroupMailboxListener() {
+                    @Override
+                    public Group getDefaultGroup() {
+                        return new GenericGroup("groupC");
+                    }
+
+                    @Override
+                    public void event(Event event) throws Exception {
+                        threads.add(Thread.currentThread().getName());
+                        countDownLatch.await();
+                    }
+                }, GROUP_C);
+
+                eventBus().dispatch(EVENT, NO_KEYS).subscribeOn(Schedulers.elastic()).subscribe();
+
+
+                WAIT_CONDITION.atMost(org.awaitility.Duration.TEN_SECONDS)
+                    .untilAsserted(() -> assertThat(threads).hasSize(3));
+                assertThat(threads).doesNotHaveDuplicates();
+            } finally {
+                countDownLatch.countDown();
+            }
         }
 
         @Test
@@ -141,7 +198,8 @@ public interface GroupContract {
 
             eventBus().register(listener, GROUP_A);
 
-            MailboxListener.Added noopEvent = new MailboxListener.Added(MailboxSession.SessionId.of(18), User.fromUsername("bob"), MailboxPath.forUser("bob", "mailbox"), TestId.of(58), ImmutableSortedMap.of(), Event.EventId.random());
+            Username bob = Username.of("bob");
+            MailboxListener.Added noopEvent = new MailboxListener.Added(MailboxSession.SessionId.of(18), bob, MailboxPath.forUser(bob, "mailbox"), TestId.of(58), ImmutableSortedMap.of(), Event.EventId.random());
             eventBus().dispatch(noopEvent, NO_KEYS).block();
 
             verify(listener, after(FIVE_HUNDRED_MS.toMillis()).never())
@@ -261,7 +319,7 @@ public interface GroupContract {
             eventBus().dispatch(EVENT_2, NO_KEYS).block();
 
             WAIT_CONDITION
-                .until(() -> listener.numberOfEventCalls() == 1);
+                .untilAsserted(() -> assertThat(listener.numberOfEventCalls()).isEqualTo(1));
         }
 
         @Test
@@ -351,7 +409,8 @@ public interface GroupContract {
 
             eventBus().register(listener, GROUP_A);
 
-            MailboxListener.Added noopEvent = new MailboxListener.Added(MailboxSession.SessionId.of(18), User.fromUsername("bob"), MailboxPath.forUser("bob", "mailbox"), TestId.of(58), ImmutableSortedMap.of(), Event.EventId.random());
+            Username bob = Username.of("bob");
+            MailboxListener.Added noopEvent = new MailboxListener.Added(MailboxSession.SessionId.of(18), bob, MailboxPath.forUser(bob, "mailbox"), TestId.of(58), ImmutableSortedMap.of(), Event.EventId.random());
             eventBus().reDeliver(GROUP_A, noopEvent).block();
 
             verify(listener, after(FIVE_HUNDRED_MS.toMillis()).never()).event(any());

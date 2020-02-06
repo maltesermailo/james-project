@@ -24,22 +24,22 @@ import java.util.Optional;
 
 import javax.inject.Inject;
 
-import org.apache.james.core.User;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxSession;
+import org.apache.james.mailbox.SessionProvider;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxConstants;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.QuotaRoot;
+import org.apache.james.mailbox.model.search.MailboxQuery;
 import org.apache.james.mailbox.quota.QuotaRootDeserializer;
 import org.apache.james.mailbox.quota.UserQuotaRootResolver;
 import org.apache.james.mailbox.store.MailboxSessionMapperFactory;
-import org.apache.james.mailbox.store.SessionProvider;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
-import com.google.common.collect.Lists;
 
 public class DefaultUserQuotaRootResolver implements UserQuotaRootResolver {
 
@@ -47,9 +47,9 @@ public class DefaultUserQuotaRootResolver implements UserQuotaRootResolver {
         @Override
         public QuotaRoot fromString(String serializedQuotaRoot) throws MailboxException {
             List<String> parts = toParts(serializedQuotaRoot);
-            User user = User.fromUsername(parts.get(1));
+            Username username = Username.of(parts.get(1));
 
-            return QuotaRoot.quotaRoot(serializedQuotaRoot, user.getDomainPart());
+            return QuotaRoot.quotaRoot(serializedQuotaRoot, username.getDomainPart());
         }
 
         private List<String> toParts(String serializedQuotaRoot) throws MailboxException {
@@ -74,18 +74,18 @@ public class DefaultUserQuotaRootResolver implements UserQuotaRootResolver {
     }
 
     @Override
-    public QuotaRoot forUser(User user) {
-        return QuotaRoot.quotaRoot(MailboxConstants.USER_NAMESPACE + SEPARATOR + user.asString(),
-            user.getDomainPart());
+    public QuotaRoot forUser(Username username) {
+        return QuotaRoot.quotaRoot(MailboxConstants.USER_NAMESPACE + SEPARATOR + username.asString(),
+            username.getDomainPart());
     }
 
     @Override
     public QuotaRoot getQuotaRoot(MailboxPath mailboxPath) {
-        Preconditions.checkArgument(!mailboxPath.getNamespace().contains(SEPARATOR), "Namespace should not contain " + SEPARATOR);
+        Preconditions.checkArgument(!mailboxPath.getNamespace().contains(SEPARATOR), "Namespace should not contain %s", SEPARATOR);
         return Optional.ofNullable(mailboxPath.getUser())
                 .map(user -> {
-                    Preconditions.checkArgument(!mailboxPath.getUser().contains(SEPARATOR), "Username should not contain " + SEPARATOR);
-                    return User.fromUsername(mailboxPath.getUser());
+                    Preconditions.checkArgument(!mailboxPath.getUser().asString().contains(SEPARATOR), "Username should not contain %s", SEPARATOR);
+                    return mailboxPath.getUser();
                 })
                 .map(user -> QuotaRoot.quotaRoot(mailboxPath.getNamespace() + SEPARATOR + user.asString(), user.getDomainPart()))
                 .orElseGet(() -> QuotaRoot.quotaRoot(mailboxPath.getNamespace(), Optional.empty()));
@@ -93,14 +93,13 @@ public class DefaultUserQuotaRootResolver implements UserQuotaRootResolver {
 
     @Override
     public QuotaRoot getQuotaRoot(MailboxId mailboxId) throws MailboxException {
-        MailboxSession session = sessionProvider.createSystemSession("DefaultUserQuotaRootResolver");
-        User user = User.fromUsername(
-            factory.getMailboxMapper(session)
-                .findMailboxById(mailboxId)
-                .generateAssociatedPath()
-                .getUser());
+        MailboxSession session = sessionProvider.createSystemSession(Username.of("DefaultUserQuotaRootResolver"));
+        Username username = factory.getMailboxMapper(session)
+            .findMailboxById(mailboxId)
+            .generateAssociatedPath()
+            .getUser();
 
-        return forUser(user);
+        return forUser(username);
     }
 
     @Override
@@ -109,12 +108,16 @@ public class DefaultUserQuotaRootResolver implements UserQuotaRootResolver {
     }
 
     @Override
-    public List<MailboxPath> retrieveAssociatedMailboxes(QuotaRoot quotaRoot, MailboxSession mailboxSession) throws MailboxException {
+    public List<Mailbox> retrieveAssociatedMailboxes(QuotaRoot quotaRoot, MailboxSession mailboxSession) throws MailboxException {
         List<String> parts = QUOTA_ROOT_DESERIALIZER.toParts(quotaRoot.getValue());
         String namespace = parts.get(0);
         String user = parts.get(1);
-        return Lists.transform(factory.getMailboxMapper(mailboxSession)
-            .findMailboxWithPathLike(new MailboxPath(namespace, user, "%")),
-            Mailbox::generateAssociatedPath);
+        return factory.getMailboxMapper(mailboxSession)
+            .findMailboxWithPathLike(MailboxQuery.builder()
+                .namespace(namespace)
+                .user(Username.of(user))
+                .matchesAllMailboxNames()
+                .build()
+                .asUserBound());
     }
 }

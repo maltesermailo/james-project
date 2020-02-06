@@ -27,14 +27,14 @@ import java.time.Duration;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 
+import org.apache.james.core.Username;
 import org.apache.james.core.builder.MimeMessageBuilder;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.inmemory.manager.InMemoryIntegrationResources;
-import org.apache.james.mailbox.model.FetchGroupImpl;
+import org.apache.james.mailbox.model.FetchGroup;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.MessageRange;
-import org.apache.james.mailbox.model.MessageResult;
 import org.apache.james.mailbox.model.MessageResultIterator;
 import org.apache.james.util.concurrency.ConcurrentTestRunner;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +43,7 @@ import org.junit.jupiter.api.Test;
 
 public class MailboxAppenderTest {
 
-    public static final String USER = "user";
+    public static final Username USER = Username.of("user");
     public static final String FOLDER = "folder";
     public static final String EMPTY_FOLDER = "";
 
@@ -71,7 +71,7 @@ public class MailboxAppenderTest {
         testee.append(mimeMessage, USER, FOLDER);
 
         MessageResultIterator messages = mailboxManager.getMailbox(MailboxPath.forUser(USER, FOLDER), session)
-            .getMessages(MessageRange.all(), new FetchGroupImpl(MessageResult.FetchGroup.FULL_CONTENT), session);
+            .getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session);
 
         assertThat(messages).toIterable()
             .hasSize(1);
@@ -85,7 +85,7 @@ public class MailboxAppenderTest {
         testee.append(mimeMessage, USER, FOLDER);
 
         MessageResultIterator messages = mailboxManager.getMailbox(mailboxPath, session)
-            .getMessages(MessageRange.all(), new FetchGroupImpl(MessageResult.FetchGroup.FULL_CONTENT), session);
+            .getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session);
 
         assertThat(messages).toIterable()
             .hasSize(1);
@@ -102,7 +102,7 @@ public class MailboxAppenderTest {
         testee.append(mimeMessage, USER, "." + FOLDER);
 
         MessageResultIterator messages = mailboxManager.getMailbox(MailboxPath.forUser(USER, FOLDER), session)
-            .getMessages(MessageRange.all(), new FetchGroupImpl(MessageResult.FetchGroup.FULL_CONTENT), session);
+            .getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session);
 
         assertThat(messages).toIterable()
             .hasSize(1);
@@ -113,7 +113,7 @@ public class MailboxAppenderTest {
         testee.append(mimeMessage, USER, FOLDER + "/any");
 
         MessageResultIterator messages = mailboxManager.getMailbox(MailboxPath.forUser(USER, FOLDER + ".any"), session)
-            .getMessages(MessageRange.all(), new FetchGroupImpl(MessageResult.FetchGroup.FULL_CONTENT), session);
+            .getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session);
 
         assertThat(messages).toIterable()
             .hasSize(1);

@@ -19,30 +19,30 @@
 
 package org.apache.james.imap.decode.parser;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.message.IdRange;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestStreamLineReader;
 import org.apache.james.imap.message.request.CopyRequest;
-import org.apache.james.protocols.imap.DecodingException;
 import org.junit.Test;
 
 public class CopyParserTest {
-
     @Test
     public void testQuotaParsing() throws DecodingException {
-        CopyCommandParser parser = new CopyCommandParser();
-        ImapCommand command = ImapCommand.anyStateCommand("Command");
+        CopyCommandParser parser = new CopyCommandParser(mock(StatusResponseFactory.class));
         String commandString = " 42:69 foo \n";
 
         InputStream inputStream = new ByteArrayInputStream(commandString.getBytes());
         ImapRequestStreamLineReader lineReader = new ImapRequestStreamLineReader(inputStream, null);
-        CopyRequest request = (CopyRequest) parser.decode(command, lineReader, "A003", null);
-        CopyRequest expected = new CopyRequest(command, new IdRange[] {new IdRange(42, 69)}, "foo", false, "A003");
+        CopyRequest request = (CopyRequest) parser.decode(lineReader, TAG, null);
+        CopyRequest expected = new CopyRequest(new IdRange[] {new IdRange(42, 69)}, "foo", false, TAG);
 
         assertThat(request).isEqualTo(expected);
     }

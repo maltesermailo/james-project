@@ -45,7 +45,7 @@ import com.google.common.base.Strings;
  *
  *  Example:
  *
- *  <mailet matcher="IsMarkedAsSpam" class="WithStorageDirective">
+ *  <mailet match="IsMarkedAsSpam" class="WithStorageDirective">
  *      <targetFolderName>Spam</targetFolderName>
  *  </mailet>
  */
@@ -69,7 +69,7 @@ public class WithStorageDirective extends GenericMailet {
 
     private String validateMailetConfiguration(String initParameterName) {
         String initParameterValue = getInitParameter(initParameterName);
-        Preconditions.checkState(!Strings.isNullOrEmpty(initParameterValue), "You need to specify " + initParameterName);
+        Preconditions.checkState(!Strings.isNullOrEmpty(initParameterValue), "You need to specify %s", initParameterName);
         return initParameterValue;
     }
 
@@ -81,7 +81,7 @@ public class WithStorageDirective extends GenericMailet {
 
     public ThrowingConsumer<MailAddress> addStorageDirective(Mail mail) {
         return recipient -> {
-            AttributeName attributeNameForUser = AttributeName.of(MailStore.DELIVERY_PATH_PREFIX + usersRepository.getUser(recipient));
+            AttributeName attributeNameForUser = AttributeName.of(MailStore.DELIVERY_PATH_PREFIX + usersRepository.getUser(recipient).asString());
             mail.setAttribute(new Attribute(attributeNameForUser, targetFolderName));
         };
 

@@ -21,6 +21,7 @@ package org.apache.james.protocols.netty;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.group.ChannelGroup;
 import org.jboss.netty.handler.execution.ExecutionHandler;
@@ -28,9 +29,7 @@ import org.jboss.netty.handler.ssl.SslHandler;
 import org.jboss.netty.util.HashedWheelTimer;
 
 /**
- * Abstract base class for {@link ChannelPipeline} implementations which use TLS 
- * 
- *
+ * Abstract base class for {@link ChannelPipeline} implementations which use TLS
  */
 public abstract class AbstractSSLAwareChannelPipelineFactory extends AbstractChannelPipelineFactory {
 
@@ -48,17 +47,11 @@ public abstract class AbstractSSLAwareChannelPipelineFactory extends AbstractCha
             ChannelHandlerFactory frameHandlerFactory, HashedWheelTimer hashedWheelTimer) {
         this(timeout, maxConnections, maxConnectsPerIp, group, eHandler, frameHandlerFactory, hashedWheelTimer);
         
-        // We need to copy the String array becuase of possible security issues.
+        // We need to copy the String array because of possible security issues.
         // See https://issues.apache.org/jira/browse/PROTOCOLS-18
-        if (enabledCipherSuites != null) {
-            this.enabledCipherSuites = new String[enabledCipherSuites.length];
-            for (int i = 0; i < enabledCipherSuites.length; i++) {
-                this.enabledCipherSuites[i] = new String(enabledCipherSuites[i]);
-            }
-        }
+        this.enabledCipherSuites = ArrayUtils.clone(enabledCipherSuites);
     }
 
-    
     @Override
     public ChannelPipeline getPipeline() throws Exception {
         ChannelPipeline pipeline =  super.getPipeline();
@@ -78,15 +71,11 @@ public abstract class AbstractSSLAwareChannelPipelineFactory extends AbstractCha
 
     /**
      * Return if the socket is using SSL/TLS
-     * 
-     * @return isSSL
      */
     protected abstract boolean isSSLSocket();
     
     /**
      * Return the SSL context
-     * 
-     * @return context
      */
     protected abstract SSLContext getSSLContext();
 }

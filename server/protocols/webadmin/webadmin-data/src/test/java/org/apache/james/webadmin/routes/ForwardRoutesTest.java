@@ -38,6 +38,7 @@ import java.util.Map;
 
 import org.apache.commons.configuration2.BaseHierarchicalConfiguration;
 import org.apache.james.core.Domain;
+import org.apache.james.core.Username;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.domainlist.lib.DomainListConfiguration;
@@ -114,14 +115,13 @@ class ForwardRoutesTest {
             memoryRecipientRewriteTable.setDomainList(domainList);
             MappingSourceModule mappingSourceModule = new MappingSourceModule();
 
-            usersRepository = MemoryUsersRepository.withVirtualHosting();
-            usersRepository.setDomainList(domainList);
+            usersRepository = MemoryUsersRepository.withVirtualHosting(domainList);
             usersRepository.configure(new BaseHierarchicalConfiguration());
 
-            usersRepository.addUser(BOB, BOB_PASSWORD);
-            usersRepository.addUser(ALICE, ALICE_PASSWORD);
-            usersRepository.addUser(ALICE_WITH_SLASH, ALICE_SLASH_PASSWORD);
-            usersRepository.addUser(CEDRIC, CEDRIC_PASSWORD);
+            usersRepository.addUser(Username.of(BOB), BOB_PASSWORD);
+            usersRepository.addUser(Username.of(ALICE), ALICE_PASSWORD);
+            usersRepository.addUser(Username.of(ALICE_WITH_SLASH), ALICE_SLASH_PASSWORD);
+            usersRepository.addUser(Username.of(CEDRIC), CEDRIC_PASSWORD);
 
             createServer(new ForwardRoutes(memoryRecipientRewriteTable, usersRepository, new JsonTransformer(mappingSourceModule)));
         }
@@ -475,7 +475,7 @@ class ForwardRoutesTest {
             assertThat(errors)
                 .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
                 .containsEntry("type", "InvalidArgument")
-                .containsEntry("message", "The forward is not an email address")
+                .containsEntry("message", "The base forward is not an email address")
                 .containsEntry("details", "Out of data at position 1 in 'not-an-address'");
         }
 
@@ -494,7 +494,7 @@ class ForwardRoutesTest {
             assertThat(errors)
                 .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
                 .containsEntry("type", "InvalidArgument")
-                .containsEntry("message", "The forward is not an email address")
+                .containsEntry("message", "The base forward is not an email address")
                 .containsEntry("details", "Out of data at position 1 in 'not-an-address'");
         }
 
@@ -550,7 +550,7 @@ class ForwardRoutesTest {
             assertThat(errors)
                 .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
                 .containsEntry("type", "InvalidArgument")
-                .containsEntry("message", "The forward is not an email address")
+                .containsEntry("message", "The target forward is not an email address")
                 .containsEntry("details", "Out of data at position 1 in 'not-an-address'");
         }
 
@@ -580,7 +580,7 @@ class ForwardRoutesTest {
             assertThat(errors)
                 .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
                 .containsEntry("type", "InvalidArgument")
-                .containsEntry("message", "The forward is not an email address")
+                .containsEntry("message", "The base forward is not an email address")
                 .containsEntry("details", "Out of data at position 1 in 'not-an-address'");
         }
 
@@ -599,7 +599,7 @@ class ForwardRoutesTest {
             assertThat(errors)
                 .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
                 .containsEntry("type", "InvalidArgument")
-                .containsEntry("message", "The forward is not an email address")
+                .containsEntry("message", "The target forward is not an email address")
                 .containsEntry("details", "Out of data at position 1 in 'not-an-address'");
         }
 

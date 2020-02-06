@@ -28,22 +28,22 @@ import javax.inject.Inject;
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.protocols.api.handler.ProtocolHandler;
 
 public class DNSRBLHandler extends org.apache.james.protocols.smtp.core.fastfail.DNSRBLHandler implements ProtocolHandler {
-
-    private DNSService dns;
+    private final DNSService dns;
 
     @Inject
-    public void setDNSService(DNSService dns) {
+    public DNSRBLHandler(DNSService dns) {
         this.dns = dns;
     }
 
     @Override
     public void init(Configuration config) throws ConfigurationException {
         boolean validConfig = false;
-        HierarchicalConfiguration handlerConfiguration = (HierarchicalConfiguration) config;
+        HierarchicalConfiguration<ImmutableNode> handlerConfiguration = (HierarchicalConfiguration<ImmutableNode>) config;
         ArrayList<String> rblserverCollection = new ArrayList<>();
 
         Collections.addAll(rblserverCollection, handlerConfiguration.getStringArray("rblservers.whitelist"));
@@ -65,11 +65,6 @@ public class DNSRBLHandler extends org.apache.james.protocols.smtp.core.fastfail
         }
 
         setGetDetail(handlerConfiguration.getBoolean("getDetail", false));
-    }
-
-    @Override
-    public void destroy() {
-        // Do nothing
     }
 
     @Override

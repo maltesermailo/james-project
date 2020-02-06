@@ -25,7 +25,6 @@ import javax.mail.internet.MimeMessage;
 import org.apache.james.jspf.core.Logger;
 import org.apache.james.jspf.executor.SPFResult;
 import org.apache.james.jspf.impl.DefaultSPF;
-import org.apache.james.transport.mailets.managesieve.ManageSieveMailet;
 import org.apache.mailet.Attribute;
 import org.apache.mailet.AttributeName;
 import org.apache.mailet.AttributeValue;
@@ -56,7 +55,7 @@ import org.slf4j.LoggerFactory;
  */
 @Experimental
 public class SPF extends GenericMailet {
-    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(ManageSieveMailet.class);
+    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(SPF.class);
 
     private boolean addHeader = false;
     private org.apache.james.jspf.impl.SPF spf;
@@ -65,8 +64,8 @@ public class SPF extends GenericMailet {
 
     @Override
     public void init() {
-        addHeader = Boolean.valueOf(getInitParameter("addHeader", "false"));
-        SPFLoggerAdapter logger = new SPFLoggerAdapter(Boolean.valueOf(getInitParameter("debug", "false")));
+        addHeader = Boolean.parseBoolean(getInitParameter("addHeader", "false"));
+        SPFLoggerAdapter logger = new SPFLoggerAdapter(Boolean.parseBoolean(getInitParameter("debug", "false")));
 
         spf = new DefaultSPF(logger);
     }
@@ -95,7 +94,7 @@ public class SPF extends GenericMailet {
         }
     }
 
-    private class SPFLoggerAdapter implements Logger {
+    private static class SPFLoggerAdapter implements Logger {
         private boolean debug = false;
         private String name = "SPFLogger";
 

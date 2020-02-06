@@ -22,8 +22,7 @@ package org.apache.james.protocols.pop3.core;
 import java.util.Collection;
 import java.util.Set;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.james.core.Username;
 import org.apache.james.protocols.api.Request;
 import org.apache.james.protocols.api.Response;
 import org.apache.james.protocols.api.handler.CommandHandler;
@@ -40,16 +39,6 @@ public class UserCmdHandler implements CommandHandler<POP3Session>, CapaCapabili
     private static final Collection<String> COMMANDS = ImmutableSet.of("USER");
     private static final Set<String> CAPS = ImmutableSet.of("USER");
 
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
-    }
-
     /**
      * Handler method called upon receipt of a USER command. Reads in the user
      * id.
@@ -58,7 +47,7 @@ public class UserCmdHandler implements CommandHandler<POP3Session>, CapaCapabili
     public Response onCommand(POP3Session session, Request request) {
         String parameters = request.getArgument();
         if (session.getHandlerState() == POP3Session.AUTHENTICATION_READY && parameters != null) {
-            session.setUser(parameters);
+            session.setUsername(Username.of(parameters));
             session.setHandlerState(POP3Session.AUTHENTICATION_USERSET);
             return POP3Response.OK;
         } else {

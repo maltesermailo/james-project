@@ -33,7 +33,6 @@ import org.apache.james.backends.cassandra.init.configuration.ClusterConfigurati
 import org.apache.james.backends.cassandra.versions.CassandraSchemaVersionDAO;
 import org.apache.james.backends.cassandra.versions.CassandraSchemaVersionManager;
 import org.apache.james.backends.cassandra.versions.CassandraSchemaVersionModule;
-import org.apache.james.util.Host;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -121,23 +120,20 @@ class SessionWithInitializedTablesFactoryTest {
     }
 
     private static Supplier<Session> createSession(DockerCassandraExtension.DockerCassandra cassandraServer) {
-        Host host = cassandraServer.getHost();
-        Cluster cluster = ClusterBuilder.builder()
-                .host(host.getHostName())
-                .port(host.getPort())
-                .build();
+        ClusterConfiguration clusterConfiguration = ClusterConfiguration.builder()
+            .host(cassandraServer.getHost())
+            .keyspace(KEYSPACE)
+            .createKeyspace()
+            .replicationFactor(1)
+            .disableDurableWrites()
+            .build();
+        Cluster cluster = ClusterFactory.create(clusterConfiguration);
+        KeyspaceFactory.createKeyspace(clusterConfiguration, cluster);
         return () -> new SessionWithInitializedTablesFactory(
-                ClusterConfiguration.builder()
-                        .host(host)
-                        .keyspace(KEYSPACE)
-                        .replicationFactor(1)
-                        .build(),
-                ClusterWithKeyspaceCreatedFactory
-                        .config(cluster, KEYSPACE)
-                        .replicationFactor(1)
-                        .disableDurableWrites()
-                        .clusterWithInitializedKeyspace(),
-                MODULE).get();
+                clusterConfiguration,
+                cluster,
+                MODULE)
+            .get();
     }
 
     private static void cleanCassandra(Session session) {

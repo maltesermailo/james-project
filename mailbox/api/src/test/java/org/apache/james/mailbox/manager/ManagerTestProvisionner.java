@@ -26,8 +26,9 @@ import java.util.Calendar;
 
 import javax.mail.Flags;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.mailbox.FlagsBuilder;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MessageManager;
@@ -41,14 +42,14 @@ import org.apache.james.mailbox.quota.MaxQuotaManager;
  * Provide an initialized Mailbox environment where we can run managers tests
  */
 public class ManagerTestProvisionner {
-    public static final String USER = "user@domain.org";
+    public static final Username USER = Username.of("user@domain.org");
     public static final String USER_PASS = "pass";
-    public static final String OTHER_USER = "otherUser@domain.org";
+    public static final Username OTHER_USER = Username.of("otherUser@domain.org");
     public static final String OTHER_USER_PASS = "otherPass";
+    public static final MailboxPath INBOX = MailboxPath.inbox(USER);
 
     private IntegrationResources<?> integrationResources;
 
-    private MailboxPath inbox;
     private MessageManager messageManager;
     private MailboxPath subFolder;
     private MailboxSession session;
@@ -58,18 +59,17 @@ public class ManagerTestProvisionner {
         this.integrationResources = integrationResources;
 
         session = integrationResources.getMailboxManager().login(USER, USER_PASS);
-        inbox = MailboxPath.inbox(session);
-        subFolder = new MailboxPath(inbox, "INBOX.SUB");
+        subFolder = new MailboxPath(INBOX, "INBOX.SUB");
 
         MaxQuotaManager maxQuotaManager = integrationResources.getMaxQuotaManager();
-        maxQuotaManager.setGlobalMaxMessage(QuotaCount.count(1000));
-        maxQuotaManager.setGlobalMaxStorage(QuotaSize.size(1000000));
+        maxQuotaManager.setGlobalMaxMessage(QuotaCountLimit.count(1000));
+        maxQuotaManager.setGlobalMaxStorage(QuotaSizeLimit.size(1000000));
     }
 
     public void createMailboxes() throws MailboxException {
-        integrationResources.getMailboxManager().createMailbox(inbox, session);
+        integrationResources.getMailboxManager().createMailbox(INBOX, session);
         integrationResources.getMailboxManager().createMailbox(subFolder, session);
-        messageManager = integrationResources.getMailboxManager().getMailbox(inbox, session);
+        messageManager = integrationResources.getMailboxManager().getMailbox(INBOX, session);
     }
 
     public MessageManager getMessageManager() {
@@ -79,11 +79,6 @@ public class ManagerTestProvisionner {
     public MailboxPath getSubFolder() {
         return subFolder;
     }
-
-    public MailboxPath getInbox() {
-        return inbox;
-    }
-
 
     public MailboxSession getSession() {
         return session;

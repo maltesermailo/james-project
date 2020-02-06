@@ -18,29 +18,28 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.decode.base.AbstractImapCommandParser;
 import org.apache.james.imap.message.request.UnsubscribeRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * Parse UNSUBSCRIBE commands
  */
 public class UnsubscribeCommandParser extends AbstractImapCommandParser {
-
-    public UnsubscribeCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.UNSUBSCRIBE_COMMAND_NAME));
+    public UnsubscribeCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.UNSUBSCRIBE_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, ImapSession session) throws DecodingException {
         final String mailboxName = request.mailbox();
         request.eol();
-        return new UnsubscribeRequest(command, mailboxName, tag);
+        return new UnsubscribeRequest(mailboxName, tag);
     }
-
 }

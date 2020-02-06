@@ -18,33 +18,34 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.message.IdRange;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestLineReader;
 import org.apache.james.imap.message.request.ExpungeRequest;
-import org.apache.james.protocols.imap.DecodingException;
 
 /**
  * Parse EXPUNGE commands
  */
 public class ExpungeCommandParser extends AbstractUidCommandParser {
 
-    public ExpungeCommandParser() {
-        super(ImapCommand.selectedStateCommand(ImapConstants.EXPUNGE_COMMAND_NAME));
+    public ExpungeCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.EXPUNGE_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage decode(ImapCommand command, ImapRequestLineReader request, String tag, boolean useUids, ImapSession session) throws DecodingException {
+    protected ImapMessage decode(ImapRequestLineReader request, Tag tag, boolean useUids, ImapSession session) throws DecodingException {
         IdRange[] uidSet = null;
         if (useUids) {
             uidSet = request.parseIdRange(session);
         }
         request.eol();
 
-        return new ExpungeRequest(command, tag, uidSet);
+        return new ExpungeRequest(tag, uidSet);
     }
 
 }

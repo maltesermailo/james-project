@@ -36,18 +36,18 @@ import java.util.stream.Stream;
 
 import javax.mail.Flags;
 
-import org.apache.james.imap.api.ImapSessionUtils;
-import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.core.Username;
+import org.apache.james.imap.encode.FakeImapSession;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
 import org.apache.james.mailbox.MessageManager;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.events.EventBus;
 import org.apache.james.mailbox.events.MailboxIdRegistrationKey;
 import org.apache.james.mailbox.events.MailboxListener;
 import org.apache.james.mailbox.model.Mailbox;
-import org.apache.james.mailbox.model.MailboxConstants;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.MessageMetaData;
 import org.apache.james.mailbox.model.SearchQuery;
@@ -67,14 +67,14 @@ public class SelectedMailboxImplTest {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SelectedMailboxImplTest.class);
     private static final MessageUid EMITTED_EVENT_UID = MessageUid.of(5);
-    private static final int MOD_SEQ = 12;
+    private static final ModSeq MOD_SEQ = ModSeq.of(12);
     private static final int SIZE = 38;
 
     private ExecutorService executorService;
     private MailboxManager mailboxManager;
     private MessageManager messageManager;
     private MailboxPath mailboxPath;
-    private ImapSession imapSession;
+    private FakeImapSession imapSession;
     private Mailbox mailbox;
     private TestId mailboxId;
     private EventBus eventBus;
@@ -84,10 +84,10 @@ public class SelectedMailboxImplTest {
     public void setUp() throws Exception {
         ThreadFactory threadFactory = NamedThreadFactory.withClassName(getClass());
         executorService = Executors.newFixedThreadPool(1, threadFactory);
-        mailboxPath = MailboxPath.forUser("tellier@linagora.com", MailboxConstants.INBOX);
+        mailboxPath = MailboxPath.inbox(Username.of("tellier@linagora.com"));
         mailboxManager = mock(MailboxManager.class);
         messageManager = mock(MessageManager.class);
-        imapSession = mock(ImapSession.class);
+        imapSession = new FakeImapSession();
         mailbox = mock(Mailbox.class);
         mailboxId = TestId.of(42);
         mailboxIdRegistrationKey = new MailboxIdRegistrationKey(mailboxId);
@@ -101,7 +101,7 @@ public class SelectedMailboxImplTest {
             .then(delayedSearchAnswer());
         when(messageManager.getId()).thenReturn(mailboxId);
 
-        when(imapSession.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY)).thenReturn(mock(MailboxSession.class));
+        imapSession.setMailboxSession(mock(MailboxSession.class));
 
         when(mailbox.generateAssociatedPath()).thenReturn(mailboxPath);
         when(mailbox.getMailboxId()).thenReturn(mailboxId);
@@ -171,7 +171,7 @@ public class SelectedMailboxImplTest {
     private void emitEvent(MailboxListener mailboxListener) throws Exception {
         mailboxListener.event(EventFactory.added()
             .randomEventId()
-            .mailboxSession(MailboxSessionUtil.create("user"))
+            .mailboxSession(MailboxSessionUtil.create(Username.of("user")))
             .mailbox(mailbox)
             .addMetaData(new MessageMetaData(EMITTED_EVENT_UID, MOD_SEQ, new Flags(), SIZE, new Date(), new DefaultMessageId()))
             .build());

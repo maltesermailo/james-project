@@ -27,6 +27,7 @@ import javax.annotation.PreDestroy;
 import javax.inject.Inject;
 
 import org.apache.commons.configuration2.HierarchicalConfiguration;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.lifecycle.api.Configurable;
 import org.apache.james.lifecycle.api.Disposable;
 import org.apache.james.lifecycle.api.LifecycleUtil;
@@ -41,8 +42,6 @@ import org.apache.james.util.concurrent.NamedThreadFactory;
 import org.apache.mailet.Mail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.github.fge.lambdas.Throwing;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -72,30 +71,26 @@ public class JamesMailSpooler implements Disposable, Configurable, MailSpoolerMB
     /**
      * The mail processor
      */
-    private MailProcessor mailProcessor;
+    private final MailProcessor mailProcessor;
 
-    private MailQueueFactory<?> queueFactory;
+    private final MailQueueFactory<?> queueFactory;
     private reactor.core.Disposable disposable;
     private Scheduler spooler;
+    private int parallelismLevel;
 
     @Inject
-    public JamesMailSpooler(MetricFactory metricFactory) {
+    public JamesMailSpooler(MetricFactory metricFactory, MailProcessor mailProcessor, MailQueueFactory<?> queueFactory) {
         this.metricFactory = metricFactory;
-    }
-
-    @Inject
-    public void setMailQueueFactory(MailQueueFactory<?> queueFactory) {
+        this.mailProcessor = mailProcessor;
         this.queueFactory = queueFactory;
     }
 
-    @Inject
-    public void setMailProcessor(MailProcessor mailProcessor) {
-        this.mailProcessor = mailProcessor;
-    }
-
     @Override
-    public void configure(HierarchicalConfiguration config) {
+    public void configure(HierarchicalConfiguration<ImmutableNode> config) {
         numThreads = config.getInt("threads", 100);
+        //Reactor helps us run things in parallel but we have to ensure there are always threads available
+        //in the threadpool to avoid starvation.
+        parallelismLevel = Math.max(1, numThreads - 2);
     }
 
     /**
@@ -112,54 +107,54 @@ public class JamesMailSpooler implements Disposable, Configurable, MailSpoolerMB
 
     private void run() {
         LOGGER.info("Queue={}", queue);
-
         disposable = Flux.from(queue.deQueue())
-            .publishOn(spooler)
-            .flatMap(this::handleOnQueueItem)
+            .flatMap(item -> handleOnQueueItem(item).subscribeOn(spooler), parallelismLevel)
             .onErrorContinue((throwable, item) -> LOGGER.error("Exception processing mail while spooling {}", item, throwable))
-            .subscribeOn(Schedulers.elastic())
+            .subscribeOn(spooler)
             .subscribe();
     }
 
     private Mono<Void> handleOnQueueItem(MailQueueItem queueItem) {
         TimeMetric timeMetric = metricFactory.timer(SPOOL_PROCESSING);
         try {
-            processingActive.incrementAndGet();
-            return processMail(queueItem);
+            return Mono.fromCallable(processingActive::incrementAndGet)
+                .flatMap(ignore -> processMail(queueItem).subscribeOn(spooler))
+                .doOnSuccess(any -> timeMetric.stopAndPublish())
+                .doOnSuccess(any -> processingActive.decrementAndGet());
         } catch (Throwable e) {
             return Mono.error(e);
-        } finally {
-            processingActive.decrementAndGet();
-            timeMetric.stopAndPublish();
         }
     }
 
     private Mono<Void> processMail(MailQueueItem queueItem) {
-        Mail mail = queueItem.getMail();
-        return Mono.fromRunnable(() -> LOGGER.debug("==== Begin processing mail {} ====", mail.getName()))
-            .subscribeOn(Schedulers.elastic())
-            .then(Mono.fromCallable(() -> performProcessMail(mail)))
-            .flatMap(any -> acknowledgeItem(queueItem, true))
-            .onErrorResume(any -> acknowledgeItem(queueItem, false))
-            .then(Mono.fromRunnable(() -> LOGGER.debug("==== End processing mail {} ====", mail.getName())))
-            .then(Mono.fromRunnable(() -> LifecycleUtil.dispose(mail)));
+        return Mono
+            .using(
+                queueItem::getMail,
+                resource -> Mono.just(resource)
+                    .doOnNext(mail -> LOGGER.debug("==== Begin processing mail {} ====", mail.getName()))
+                    .map(mail -> performProcessMail(queueItem, mail))
+                    .doOnNext(mail -> LOGGER.debug("==== End processing mail {} ====", mail.getName())),
+                LifecycleUtil::dispose)
+            .then();
     }
 
-    private Mono<Void> acknowledgeItem(MailQueueItem queueItem, boolean success) {
-        return Mono.fromRunnable(Throwing.runnable(() -> queueItem.done(success)).sneakyThrow());
-    }
 
-    private boolean performProcessMail(Mail mail) {
+    private Mail performProcessMail(MailQueueItem queueItem, Mail mail) {
         try {
             mailProcessor.service(mail);
 
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException("Thread has been interrupted");
             }
-            return true;
+            queueItem.done(true);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            try {
+                queueItem.done(false);
+            } catch (MailQueue.MailQueueException ex) {
+                throw new RuntimeException(e);
+            }
         }
+        return mail;
     }
 
     /**

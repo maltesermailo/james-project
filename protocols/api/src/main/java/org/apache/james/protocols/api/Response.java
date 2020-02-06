@@ -24,8 +24,6 @@ import java.util.List;
 
 /**
  * Protocol response to send to the client
- * 
- *
  */
 public interface Response {
     
@@ -40,9 +38,8 @@ public interface Response {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
         public List<CharSequence> getLines() {
-            return Collections.EMPTY_LIST;
+            return Collections.emptyList();
         }
 
         @Override

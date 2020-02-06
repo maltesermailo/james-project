@@ -24,6 +24,7 @@ import javax.inject.Inject;
 
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.dnsservice.library.netmatcher.NetMatcher;
 import org.apache.james.protocols.api.ProtocolSession;
@@ -126,7 +127,7 @@ public class SMTPServer extends AbstractProtocolAsyncServer implements SMTPServe
     }
 
     @Override
-    public void doConfigure(HierarchicalConfiguration configuration) throws ConfigurationException {
+    public void doConfigure(HierarchicalConfiguration<ImmutableNode> configuration) throws ConfigurationException {
         super.doConfigure(configuration);
         if (isEnabled()) {
             String authRequiredString = configuration.getString("authRequired", "false").trim().toLowerCase(Locale.US);
@@ -194,8 +195,6 @@ public class SMTPServer extends AbstractProtocolAsyncServer implements SMTPServe
     /**
      * Return the default port which will get used for this server if non is
      * specify in the configuration
-     * 
-     * @return port
      */
     @Override
     protected int getDefaultPort() {
@@ -260,8 +259,6 @@ public class SMTPServer extends AbstractProtocolAsyncServer implements SMTPServe
         /**
          * Return true if the username and mail from must match for a authorized
          * user
-         * 
-         * @return verify
          */
         public boolean verifyIdentity() {
             return SMTPServer.this.verifyIdentity;

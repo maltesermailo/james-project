@@ -21,39 +21,39 @@ package org.apache.james.mailbox.jpa;
 import javax.persistence.EntityManagerFactory;
 
 import org.apache.james.backends.jpa.JpaTestCluster;
-import org.apache.james.mailbox.AbstractSubscriptionManagerTest;
 import org.apache.james.mailbox.SubscriptionManager;
-import org.apache.james.mailbox.exception.SubscriptionException;
+import org.apache.james.mailbox.SubscriptionManagerContract;
 import org.apache.james.mailbox.jpa.mail.JPAModSeqProvider;
 import org.apache.james.mailbox.jpa.mail.JPAUidProvider;
-import org.apache.james.mailbox.store.JVMMailboxPathLocker;
-import org.junit.After;
-import org.junit.Before;
+import org.apache.james.mailbox.store.StoreSubscriptionManager;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
-public class JPASubscriptionManagerTest extends AbstractSubscriptionManagerTest {
+class JPASubscriptionManagerTest implements SubscriptionManagerContract {
 
-    private static final JpaTestCluster JPA_TEST_CLUSTER = JpaTestCluster.create(JPAMailboxFixture.MAILBOX_PERSISTANCE_CLASSES);
-    
-    @Before
-    public void setUp() throws Exception {
-        super.setup();
-    }
-    
+    static final JpaTestCluster JPA_TEST_CLUSTER = JpaTestCluster.create(JPAMailboxFixture.MAILBOX_PERSISTANCE_CLASSES);
+
+    SubscriptionManager subscriptionManager;
+
     @Override
-    public SubscriptionManager createSubscriptionManager() {
-        JVMMailboxPathLocker locker = new JVMMailboxPathLocker();
+    public SubscriptionManager getSubscriptionManager() {
+        return subscriptionManager;
+    }
 
+    @BeforeEach
+    void setUp() {
         EntityManagerFactory entityManagerFactory = JPA_TEST_CLUSTER.getEntityManagerFactory();
-        JPAMailboxSessionMapperFactory mf = new JPAMailboxSessionMapperFactory(entityManagerFactory,
-            new JPAUidProvider(locker, entityManagerFactory),
-            new JPAModSeqProvider(locker, entityManagerFactory));
 
-        return new JPASubscriptionManager(mf);
+        JPAMailboxSessionMapperFactory mapperFactory = new JPAMailboxSessionMapperFactory(entityManagerFactory,
+            new JPAUidProvider(entityManagerFactory),
+            new JPAModSeqProvider(entityManagerFactory));
+
+        subscriptionManager = new StoreSubscriptionManager(mapperFactory);
     }
 
-    @Override
-    @After
-    public void teardown() throws SubscriptionException {
+    @AfterEach
+    void close() {
         JPA_TEST_CLUSTER.clear(JPAMailboxFixture.MAILBOX_TABLE_NAMES);
     }
+
 }

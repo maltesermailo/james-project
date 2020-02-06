@@ -19,44 +19,40 @@
 
 package org.apache.james.imap.decode.parser;
 
+import static org.apache.james.imap.ImapFixture.TAG;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
-import org.apache.james.imap.api.ImapCommand;
-import org.apache.james.imap.api.ImapSessionUtils;
-import org.apache.james.imap.api.process.ImapSession;
+import org.apache.james.core.Username;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
+import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.decode.ImapRequestStreamLineReader;
+import org.apache.james.imap.encode.FakeImapSession;
 import org.apache.james.imap.message.request.CreateRequest;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
-import org.apache.james.protocols.imap.DecodingException;
 import org.junit.Before;
 import org.junit.Test;
 
 public class CreateCommandParserTest {
     private static final OutputStream outputStream = null;
-    private static final ImapCommand command = ImapCommand.anyStateCommand("Command");
-    private static final String TAG = "A1";
 
-    private ImapSession mockImapSession;
-    private MailboxSession mailboxSession;
+    private FakeImapSession imapSession;
     private CreateCommandParser parser;
 
     @Before
     public void setUp() throws Exception {
-        mockImapSession = mock(ImapSession.class);
-        mailboxSession = MailboxSessionUtil.create("userName");
+        MailboxSession mailboxSession = MailboxSessionUtil.create(Username.of("userName"));
+        imapSession = new FakeImapSession();
+        imapSession.setMailboxSession(mailboxSession);
 
-        when(mockImapSession.getAttribute(ImapSessionUtils.MAILBOX_SESSION_ATTRIBUTE_SESSION_KEY)).thenReturn(mailboxSession);
-
-        parser = new CreateCommandParser();
+        parser = new CreateCommandParser(mock(StatusResponseFactory.class));
     }
 
     @Test
@@ -64,7 +60,7 @@ public class CreateCommandParserTest {
         InputStream inputStream = new ByteArrayInputStream(" \n".getBytes(StandardCharsets.US_ASCII));
         ImapRequestStreamLineReader lineReader = new ImapRequestStreamLineReader(inputStream, outputStream);
 
-        assertThatThrownBy(() -> parser.decode(command, lineReader, TAG, mockImapSession))
+        assertThatThrownBy(() -> parser.decode(lineReader, TAG, imapSession))
             .isInstanceOf(DecodingException.class);
     }
 
@@ -73,7 +69,7 @@ public class CreateCommandParserTest {
         InputStream inputStream = new ByteArrayInputStream("..\n".getBytes(StandardCharsets.US_ASCII));
         ImapRequestStreamLineReader lineReader = new ImapRequestStreamLineReader(inputStream, outputStream);
 
-        assertThatThrownBy(() -> parser.decode(command, lineReader, TAG, mockImapSession))
+        assertThatThrownBy(() -> parser.decode(lineReader, TAG, imapSession))
             .isInstanceOf(DecodingException.class);
     }
 
@@ -82,7 +78,7 @@ public class CreateCommandParserTest {
         InputStream inputStream = new ByteArrayInputStream(".AnyMailbox.\n".getBytes(StandardCharsets.US_ASCII));
         ImapRequestStreamLineReader lineReader = new ImapRequestStreamLineReader(inputStream, outputStream);
 
-        CreateRequest imapMessage = (CreateRequest)parser.decode(command, lineReader, TAG, mockImapSession);
+        CreateRequest imapMessage = (CreateRequest)parser.decode(lineReader, TAG, imapSession);
         assertThat(imapMessage.getMailboxName()).isEqualTo(".AnyMailbox");
     }
 

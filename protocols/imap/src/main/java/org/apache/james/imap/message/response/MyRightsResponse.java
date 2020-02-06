@@ -19,6 +19,8 @@
 
 package org.apache.james.imap.message.response;
 
+import java.util.Objects;
+
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.message.response.ImapResponseMessage;
 import org.apache.james.mailbox.model.MailboxACL;
@@ -31,20 +33,8 @@ public final class MyRightsResponse implements ImapResponseMessage {
     private final MailboxACL.Rfc4314Rights myRights;
 
     public MyRightsResponse(String mailboxName, MailboxACL.Rfc4314Rights myRights) {
-        super();
         this.mailboxName = mailboxName;
         this.myRights = myRights;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o instanceof MyRightsResponse) {
-            MyRightsResponse other = (MyRightsResponse) o;
-            return (this.myRights == other.myRights || (this.myRights != null && this.myRights.equals(other.myRights)))
-                    && (this.mailboxName == other.mailboxName || (this.mailboxName != null && this.mailboxName.equals(other.mailboxName)))
-                    ;
-        }
-        return false;
     }
 
     public String getMailboxName() {
@@ -56,9 +46,19 @@ public final class MyRightsResponse implements ImapResponseMessage {
     }
 
     @Override
-    public int hashCode() {
-        final int PRIME = 31;
-        return PRIME * myRights.hashCode() + mailboxName.hashCode();
+    public final boolean equals(Object o) {
+        if (o instanceof MyRightsResponse) {
+            MyRightsResponse other = (MyRightsResponse) o;
+
+            return Objects.equals(this.myRights, other.myRights) &&
+                Objects.equals(this.mailboxName, other.mailboxName);
+        }
+        return false;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(myRights, mailboxName);
     }
 
     @Override

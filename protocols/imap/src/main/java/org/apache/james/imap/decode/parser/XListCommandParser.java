@@ -18,22 +18,22 @@
  ****************************************************************/
 package org.apache.james.imap.decode.parser;
 
-import org.apache.james.imap.api.ImapCommand;
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;
+import org.apache.james.imap.api.Tag;
+import org.apache.james.imap.api.message.response.StatusResponseFactory;
 import org.apache.james.imap.message.request.XListRequest;
 
 /**
  * Parse XLIST commands
  */
 public class XListCommandParser extends ListCommandParser {
-
-    public XListCommandParser() {
-        super(ImapCommand.authenticatedStateCommand(ImapConstants.XLIST_COMMAND_NAME));
+    public XListCommandParser(StatusResponseFactory statusResponseFactory) {
+        super(ImapConstants.XLIST_COMMAND, statusResponseFactory);
     }
 
     @Override
-    protected ImapMessage createMessage(ImapCommand command, String referenceName, String mailboxPattern, String tag) {
-        return new XListRequest(command, referenceName, mailboxPattern, tag);
+    protected ImapMessage createMessage(String referenceName, String mailboxPattern, Tag tag) {
+        return new XListRequest(referenceName, mailboxPattern, tag);
     }
 }

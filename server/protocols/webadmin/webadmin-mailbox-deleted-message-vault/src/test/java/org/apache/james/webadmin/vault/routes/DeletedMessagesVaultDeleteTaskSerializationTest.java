@@ -18,55 +18,49 @@
  ****************************************************************/
 package org.apache.james.webadmin.vault.routes;
 
-import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import java.io.IOException;
+import java.time.Instant;
 
-import org.apache.james.core.User;
+import org.apache.james.JsonSerializationVerifier;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.mailbox.model.TestMessageId;
-import org.apache.james.server.task.json.JsonTaskSerializer;
 import org.apache.james.vault.DeletedMessageVault;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-
 class DeletedMessagesVaultDeleteTaskSerializationTest {
+    private static final Instant TIMESTAMP = Instant.parse("2018-11-13T12:00:55Z");
 
-    private DeletedMessageVault deletedMessageVault;
-    private JsonTaskSerializer taskSerializer;
-    private final String username = "james";
-    private final User user = User.fromUsername(username);
-
+    private final Username username = Username.of("james");
     private final TestMessageId.Factory messageIdFactory = new TestMessageId.Factory();
     private final MessageId messageId = messageIdFactory.generate();
+    private final String serializedDeleteMessagesVaultDeleteTask = "{\"type\": \"deleted-messages-delete\", \"userName\":\"james\", \"messageId\": \"" + messageId.serialize() + "\"}";
+    private final String serializedAdditionalInformation = "{\"type\": \"deleted-messages-delete\", \"userName\":\"james\", \"messageId\": \"" + messageId.serialize() + "\", \"timestamp\":\"2018-11-13T12:00:55Z\"}";
 
-    private final String serializedDeleteMessagesVaultDeleteTask = "{\"type\": \"deletedMessages/delete\", \"userName\":\"james\", \"messageId\": \"" + messageId.serialize() + "\"}";
+    private DeletedMessagesVaultDeleteTask.Factory factory;
+    private DeletedMessageVault deletedMessageVault;
 
     @BeforeEach
     void setUp() {
         deletedMessageVault = mock(DeletedMessageVault.class);
-        DeletedMessagesVaultDeleteTask.Factory factory = new DeletedMessagesVaultDeleteTask.Factory(deletedMessageVault, messageIdFactory);
-        taskSerializer = new JsonTaskSerializer(DeletedMessagesVaultDeleteTask.MODULE.apply(factory));
+        factory = new DeletedMessagesVaultDeleteTask.Factory(deletedMessageVault, messageIdFactory);
     }
 
     @Test
-    void deleteMessagesVaultDeleteTaskShouldBeSerializable() throws JsonProcessingException {
-        DeletedMessagesVaultDeleteTask task = new DeletedMessagesVaultDeleteTask(deletedMessageVault, user, messageId);
-
-        assertThatJson(taskSerializer.serialize(task))
-            .isEqualTo(serializedDeleteMessagesVaultDeleteTask);
+    void deleteMessagesVaultDeleteTaskShouldBeSerializable() throws Exception {
+        JsonSerializationVerifier.dtoModule(DeletedMessagesVaultDeleteTaskDTO.module(factory))
+            .bean(new DeletedMessagesVaultDeleteTask(deletedMessageVault, username, messageId))
+            .json(serializedDeleteMessagesVaultDeleteTask)
+            .verify();
     }
 
     @Test
-    void deleteMessagesVaultDeleteTaskShouldBeDeserializable() throws IOException {
-        DeletedMessagesVaultDeleteTask task = new DeletedMessagesVaultDeleteTask(deletedMessageVault, user, messageId);
-
-        assertThat(taskSerializer.deserialize(serializedDeleteMessagesVaultDeleteTask))
-            .isEqualToComparingOnlyGivenFields(task, "user", "messageId");
+    void additionalInformationShouldBeSerializable() throws Exception {
+        JsonSerializationVerifier.dtoModule(DeletedMessagesVaultDeleteTaskAdditionalInformationDTO.serializationModule(messageIdFactory))
+            .bean(new DeletedMessagesVaultDeleteTask.AdditionalInformation(username, messageId, TIMESTAMP))
+            .json(serializedAdditionalInformation)
+            .verify();
     }
-
 }

@@ -25,6 +25,7 @@ import static io.restassured.RestAssured.with;
 import static org.apache.james.webadmin.Constants.SEPARATOR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,13 +34,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.net.InetAddress;
-import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.james.core.Domain;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.domainlist.api.DomainListException;
+import org.apache.james.domainlist.lib.DomainListConfiguration;
 import org.apache.james.domainlist.memory.MemoryDomainList;
 import org.apache.james.rrt.memory.MemoryRecipientRewriteTable;
 import org.apache.james.webadmin.WebAdminServer;
@@ -52,9 +54,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import com.google.common.collect.ImmutableList;
+
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
-
 
 class DomainsRoutesTest {
     private static final String DOMAIN = "domain";
@@ -95,22 +98,16 @@ class DomainsRoutesTest {
 
         @Test
         void getDomainsShouldBeEmptyByDefault() {
-            List<String> domains =
-                given()
-                    .get()
-                .then()
-                    .statusCode(HttpStatus.OK_200)
-                    .contentType(ContentType.JSON)
-                    .extract()
-                    .body()
-                    .jsonPath()
-                    .getList(".");
-
-            assertThat(domains).isEmpty();
+            given()
+                .get()
+            .then()
+                .statusCode(HttpStatus.OK_200)
+                .contentType(ContentType.JSON)
+                .body(".", hasSize(0));
         }
 
         @Test
-        void putShouldReturnErrorWhenUsedWithEmptyDomain() {
+        void putShouldReturnNotFoundWhenUsedWithEmptyDomain() {
             given()
                 .put(SEPARATOR)
             .then()
@@ -118,7 +115,7 @@ class DomainsRoutesTest {
         }
 
         @Test
-        void deleteShouldReturnErrorWhenUsedWithEmptyDomain() {
+        void deleteShouldReturnNotFoundWhenUsedWithEmptyDomain() {
             given()
                 .delete(SEPARATOR)
             .then()
@@ -138,24 +135,30 @@ class DomainsRoutesTest {
             with()
                 .put(DOMAIN);
 
-            List<String> domains =
-                when()
-                    .get()
-                .then()
-                    .contentType(ContentType.JSON)
-                    .statusCode(HttpStatus.OK_200)
-                    .extract()
-                    .body()
-                    .jsonPath()
-                    .getList(".");
-
-            assertThat(domains).containsExactly(DOMAIN);
+            when()
+                .get()
+            .then()
+                .contentType(ContentType.JSON)
+                .statusCode(HttpStatus.OK_200)
+                .body(".", contains(DOMAIN));
         }
 
         @Test
-        void putShouldReturnUserErrorWhenNameContainsAT() {
-            Map<String, Object> errors = when()
+        void putShouldReturnBadRequestWhenDomainNameContainsAT() {
+            when()
                 .put(DOMAIN + "@" + DOMAIN)
+            .then()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .contentType(ContentType.JSON)
+                .body("statusCode", is(HttpStatus.BAD_REQUEST_400))
+                .body("type", is("InvalidArgument"))
+                .body("message", is("Invalid request for domain creation domain@domain"));
+        }
+
+        @Test
+        void putShouldReturnUserErrorWhenNameContainsUrlEncodedUrlOperator() {
+            Map<String, Object> errors = when()
+                .put(DOMAIN + "%2F" + DOMAIN)
             .then()
                 .statusCode(HttpStatus.BAD_REQUEST_400)
                 .contentType(ContentType.JSON)
@@ -167,7 +170,25 @@ class DomainsRoutesTest {
             assertThat(errors)
                 .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
                 .containsEntry("type", "InvalidArgument")
-                .containsEntry("message", "Invalid request for domain creation domain@domain");
+                .containsEntry("message", "Invalid request for domain creation domain/domain");
+        }
+
+        @Test
+        void putShouldReturnUserErrorWhenNameContainsInvalidUrlEncodedCharacters() {
+            Map<String, Object> errors = when()
+                .put(DOMAIN + "%GG" + DOMAIN)
+            .then()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .contentType(ContentType.JSON)
+                .extract()
+                .body()
+                .jsonPath()
+                .getMap(".");
+
+            assertThat(errors)
+                .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
+                .containsEntry("type", "InvalidArgument")
+                .containsEntry("message", "Invalid request for domain creation domain%GGdomain unable to url decode some characters");
         }
 
         @Test
@@ -179,25 +200,26 @@ class DomainsRoutesTest {
         }
 
         @Test
-        void putShouldReturnUserErrorWhenNameIsTooLong() {
-            String longDomainName = DOMAIN + "0123456789.0123456789.0123456789.0123456789.0123456789.0123456789.0123456789.0123456789.0123456789.0123456789." +
-                "0123456789.0123456789.0123456789.0123456789.0123456789.0123456789.0123456789.0123456789.0123456789.0123456789." +
-                "0123456789.0123456789.0123456789.";
-            Map<String, Object> errors = when()
+        void putShouldReturnOkWhenWithA255LongDomainName() {
+            when()
+                .put(StringUtils.repeat('a', 255))
+            .then()
+                .statusCode(HttpStatus.NO_CONTENT_204);
+        }
+
+        @Test
+        void putShouldReturnBadRequestWhenDomainNameIsTooLong() {
+            String longDomainName = StringUtils.repeat('a', 256);
+
+            when()
                 .put(longDomainName)
             .then()
                 .statusCode(HttpStatus.BAD_REQUEST_400)
                 .contentType(ContentType.JSON)
-                .extract()
-                .body()
-                .jsonPath()
-                .getMap(".");
-
-            assertThat(errors)
-                .containsEntry("statusCode", HttpStatus.BAD_REQUEST_400)
-                .containsEntry("type", "InvalidArgument")
-                .containsEntry("message", "Invalid request for domain creation " + longDomainName)
-                .containsEntry("details", "Domain name length should not exceed 255 characters");
+                .body("statusCode", is(HttpStatus.BAD_REQUEST_400))
+                .body("type", is("InvalidArgument"))
+                .body("message", is("Invalid request for domain creation " + longDomainName))
+                .body("details", is("Domain name length should not exceed 255 characters"));
         }
 
         @Test
@@ -221,18 +243,12 @@ class DomainsRoutesTest {
             .then()
                 .statusCode(HttpStatus.NO_CONTENT_204);
 
-            List<String> domains =
-                when()
-                    .get()
-                .then()
-                    .contentType(ContentType.JSON)
-                    .statusCode(HttpStatus.OK_200)
-                    .extract()
-                    .body()
-                    .jsonPath()
-                    .getList(".");
-
-           assertThat(domains).isEmpty();
+            when()
+                .get()
+            .then()
+                .contentType(ContentType.JSON)
+                .statusCode(HttpStatus.OK_200)
+                .body(".", hasSize(0));
         }
 
         @Test
@@ -547,7 +563,7 @@ class DomainsRoutesTest {
 
                 when()
                     .get(DOMAIN + "/aliases")
-                    .then()
+                .then()
                     .contentType(ContentType.JSON)
                     .statusCode(HttpStatus.OK_200)
                     .body("source", containsInAnyOrder(ALIAS_DOMAIN));
@@ -564,7 +580,7 @@ class DomainsRoutesTest {
 
                 when()
                     .get(DOMAIN + "/aliases")
-                    .then()
+                .then()
                     .contentType(ContentType.JSON)
                     .statusCode(HttpStatus.OK_200)
                     .body("source", containsInAnyOrder(ALIAS_DOMAIN));
@@ -666,6 +682,60 @@ class DomainsRoutesTest {
                 .statusCode(HttpStatus.INTERNAL_SERVER_ERROR_500);
         }
 
+    }
+
+    @Nested
+    class DetectedDomainHandling {
+        @BeforeEach
+        void setUp() throws Exception {
+            DNSService dnsService = mock(DNSService.class);
+            when(dnsService.getAllByName(any())).thenReturn(ImmutableList.of(InetAddress.getByName("172.45.62.13")));
+            when(dnsService.getHostName(any())).thenReturn("james.local");
+
+            MemoryDomainList domainList = new MemoryDomainList(dnsService);
+            domainList.configure(DomainListConfiguration.builder()
+                .autoDetect(true)
+                .autoDetectIp(true)
+                .defaultDomain(Domain.of("default.tld"))
+                .build());
+            createServer(domainList);
+        }
+
+        @Test
+        void deleteShouldFailWhenAutoDetectedDomain() {
+            when()
+                .delete("james.local")
+            .then()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .body("statusCode", is(HttpStatus.BAD_REQUEST_400))
+                .body("type", is("InvalidArgument"))
+                .body("message", is("Can not remove domain"))
+                .body("details", is("james.local is autodetected and cannot be removed"));
+        }
+
+        @Test
+        void deleteShouldFailWhenAutoDetectedIp() {
+            when()
+                .delete("172.45.62.13")
+            .then()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .body("statusCode", is(HttpStatus.BAD_REQUEST_400))
+                .body("type", is("InvalidArgument"))
+                .body("message", is("Can not remove domain"))
+                .body("details", is("172.45.62.13 is autodetected and cannot be removed"));
+        }
+
+        @Test
+        void deleteShouldFailWhenDefaultDomain() {
+            when()
+                .delete("default.tld")
+            .then()
+                .statusCode(HttpStatus.BAD_REQUEST_400)
+                .body("statusCode", is(HttpStatus.BAD_REQUEST_400))
+                .body("type", is("InvalidArgument"))
+                .body("message", is("Can not remove domain"))
+                .body("details", is("default.tld is autodetected and cannot be removed"));
+        }
     }
 
 }

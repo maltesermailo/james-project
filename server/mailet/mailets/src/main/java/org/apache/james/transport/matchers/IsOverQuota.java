@@ -27,8 +27,7 @@ import javax.inject.Inject;
 import javax.mail.MessagingException;
 
 import org.apache.james.core.MailAddress;
-import org.apache.james.mailbox.MailboxManager;
-import org.apache.james.mailbox.MailboxSession;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.QuotaRoot;
@@ -59,14 +58,12 @@ public class IsOverQuota extends GenericMatcher {
 
     private final QuotaRootResolver quotaRootResolver;
     private final QuotaManager quotaManager;
-    private final MailboxManager mailboxManager;
     private final UsersRepository usersRepository;
 
     @Inject
-    public IsOverQuota(QuotaRootResolver quotaRootResolver, QuotaManager quotaManager, MailboxManager mailboxManager, UsersRepository usersRepository) {
+    public IsOverQuota(QuotaRootResolver quotaRootResolver, QuotaManager quotaManager, UsersRepository usersRepository) {
         this.quotaRootResolver = quotaRootResolver;
         this.quotaManager = quotaManager;
-        this.mailboxManager = mailboxManager;
         this.usersRepository = usersRepository;
     }
 
@@ -75,9 +72,8 @@ public class IsOverQuota extends GenericMatcher {
         try {
             List<MailAddress> result = new ArrayList<>();
             for (MailAddress mailAddress : mail.getRecipients()) {
-                String userName = usersRepository.getUser(mailAddress);
-                MailboxSession mailboxSession = mailboxManager.createSystemSession(userName);
-                MailboxPath mailboxPath = MailboxPath.inbox(mailboxSession);
+                Username userName = usersRepository.getUser(mailAddress);
+                MailboxPath mailboxPath = MailboxPath.inbox(userName);
                 QuotaRoot quotaRoot = quotaRootResolver.getQuotaRoot(mailboxPath);
 
                 if (quotaManager.getMessageQuota(quotaRoot).isOverQuotaWithAdditionalValue(SINGLE_EMAIL) ||

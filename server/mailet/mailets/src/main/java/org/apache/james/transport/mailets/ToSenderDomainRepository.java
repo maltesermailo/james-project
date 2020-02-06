@@ -56,7 +56,7 @@ import com.github.fge.lambdas.consumers.ThrowingConsumer;
  *
  *  Example:
  *
- * &lt;mailet matcher="All" class="ToSenderDomainRepository"&gt;
+ * &lt;mailet match="All" class="ToSenderDomainRepository"&gt;
  *     &lt;urlPrefix&gt;cassandra://var/mail/sendersRepositories/&lt;/urlPrefix&gt;
  *     &lt;passThrough&gt;false&lt;/passThrough&gt;
  *     &lt;allowRepositoryCreation&gt;true&lt;/allowRepositoryCreation&gt;
@@ -77,7 +77,7 @@ public class ToSenderDomainRepository extends GenericMailet {
     private boolean allowRepositoryCreation;
 
     @Inject
-    public ToSenderDomainRepository(MailRepositoryStore mailRepositoryStore) {
+    ToSenderDomainRepository(MailRepositoryStore mailRepositoryStore) {
         this.mailRepositoryStore = mailRepositoryStore;
     }
 

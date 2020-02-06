@@ -21,19 +21,19 @@ package org.apache.james.mailbox.model;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.Optional;
+
 import javax.mail.Flags;
 
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 /**
  * Represent a Flag update for a message
- * 
- *
  */
 public class UpdatedFlags {
 
@@ -45,7 +45,7 @@ public class UpdatedFlags {
         private MessageUid uid;
         private Flags oldFlags;
         private Flags newFlags;
-        private Optional<Long> modSeq = Optional.empty();
+        private Optional<ModSeq> modSeq = Optional.empty();
 
         private Builder() {
         }
@@ -65,7 +65,7 @@ public class UpdatedFlags {
             return this;
         }
 
-        public Builder modSeq(long modSeq) {
+        public Builder modSeq(ModSeq modSeq) {
             this.modSeq = Optional.of(modSeq);
             return this;
         }
@@ -83,9 +83,9 @@ public class UpdatedFlags {
     private final Flags oldFlags;
     private final Flags newFlags;
     private final Flags modifiedFlags;
-    private final long modSeq;
+    private final ModSeq modSeq;
 
-    private UpdatedFlags(MessageUid uid, long modSeq, Flags oldFlags, Flags newFlags) {
+    private UpdatedFlags(MessageUid uid, ModSeq modSeq, Flags oldFlags, Flags newFlags) {
        this.uid = uid;
        this.modSeq = modSeq;
        this.oldFlags = oldFlags;
@@ -142,8 +142,6 @@ public class UpdatedFlags {
     
     /**
      * Return the old {@link Flags} for the message
-     * 
-     * @return oldFlags
      */
     public Flags getOldFlags() {
         return oldFlags;
@@ -163,8 +161,6 @@ public class UpdatedFlags {
 
     /**
      * Return the new {@link Flags} for the message
-     * 
-     * @return newFlags
      */
     public Flags getNewFlags() {
         return newFlags;
@@ -172,8 +168,6 @@ public class UpdatedFlags {
     
     /**
      * Return the uid for the message whichs {@link Flags} was updated
-     * 
-     * @return uid
      */
     public MessageUid getUid() {
         return uid;
@@ -203,10 +197,8 @@ public class UpdatedFlags {
     
     /**
      * Return the new mod-sequence for the message
-     * 
-     * @return mod-seq
      */
-    public long getModSeq() {
+    public ModSeq getModSeq() {
         return modSeq;
     }
     
@@ -230,7 +222,7 @@ public class UpdatedFlags {
     }
 
     @Override
-    public boolean equals(Object other) {
+    public final boolean equals(Object other) {
         if (this == other) {
             return true;
         }
@@ -240,22 +232,15 @@ public class UpdatedFlags {
 
         UpdatedFlags that = (UpdatedFlags) other;
 
-        if (!uid.equals(that.uid)) {
-            return false;
-        }
-        if (modSeq != that.modSeq) {
-            return false;
-        }
-        if (oldFlags != null ? !oldFlags.equals(that.oldFlags) : that.oldFlags != null) {
-            return false;
-        }
-        return !(newFlags != null ? !newFlags.equals(that.newFlags) : that.newFlags != null);
-
+        return Objects.equals(uid, that.uid) &&
+                Objects.equals(oldFlags, that.oldFlags) &&
+                Objects.equals(newFlags, that.newFlags) &&
+                Objects.equals(modSeq, that.modSeq);
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hashCode(uid, oldFlags, newFlags, modSeq);
+    public final int hashCode() {
+        return Objects.hash(uid, oldFlags, newFlags, modSeq);
     }
     
     @Override

@@ -34,14 +34,15 @@ import java.util.TimerTask;
 import java.util.stream.Collectors;
 
 import org.apache.commons.net.imap.IMAPClient;
-import org.apache.james.jmap.api.access.AccessToken;
+import org.apache.james.core.Username;
+import org.apache.james.jmap.AccessToken;
+import org.apache.james.jmap.draft.JmapGuiceProbe;
 import org.apache.james.mailbox.extractor.TextExtractor;
 import org.apache.james.mailbox.store.search.PDFTextExtractor;
 import org.apache.james.modules.TestDockerESMetricReporterModule;
 import org.apache.james.modules.TestJMAPServerModule;
 import org.apache.james.modules.protocols.ImapGuiceProbe;
 import org.apache.james.utils.DataProbeImpl;
-import org.apache.james.utils.JmapGuiceProbe;
 import org.awaitility.Duration;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.client.RestHighLevelClient;
@@ -60,8 +61,6 @@ import io.restassured.http.ContentType;
 
 class ESReporterTest {
     private static final Logger LOGGER = LoggerFactory.getLogger(ESReporterTest.class);
-    private static final int LIMIT_TO_10_MESSAGES = 10;
-
     static final DockerElasticSearchExtension elasticSearchExtension = new DockerElasticSearchExtension();
 
     @RegisterExtension
@@ -71,7 +70,7 @@ class ESReporterTest {
         .server(configuration -> GuiceJamesServer.forConfiguration(configuration)
             .combineWith(ALL_BUT_JMX_CASSANDRA_MODULE)
             .overrideWith(binder -> binder.bind(TextExtractor.class).to(PDFTextExtractor.class))
-            .overrideWith(new TestJMAPServerModule(LIMIT_TO_10_MESSAGES))
+            .overrideWith(TestJMAPServerModule.limitToTenMessages())
             .overrideWith(new TestDockerESMetricReporterModule(elasticSearchExtension.getDockerES().getHttpHost())))
         .build();
 
@@ -96,9 +95,9 @@ class ESReporterTest {
                 .setContentType(ContentType.JSON)
                 .setAccept(ContentType.JSON)
                 .setConfig(newConfig().encoderConfig(encoderConfig().defaultContentCharset(StandardCharsets.UTF_8)))
-                .setPort(server.getProbe(JmapGuiceProbe.class).getJmapPort())
+                .setPort(server.getProbe(JmapGuiceProbe.class).getJmapPort().getValue())
                 .build();
-        accessToken = authenticateJamesUser(baseUri(server), USERNAME, PASSWORD);
+        accessToken = authenticateJamesUser(baseUri(server), Username.of(USERNAME), PASSWORD);
 
         timer = new Timer();
     }
@@ -137,7 +136,7 @@ class ESReporterTest {
             public void run() {
                 try {
                     given()
-                        .header("Authorization", accessToken.serialize())
+                        .header("Authorization", accessToken.asString())
                         .body("[[\"getMailboxes\", {}, \"#0\"]]")
                     .with()
                         .post("/jmap");

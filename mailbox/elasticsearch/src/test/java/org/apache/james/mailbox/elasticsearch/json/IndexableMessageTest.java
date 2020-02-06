@@ -31,8 +31,8 @@ import java.util.Optional;
 
 import javax.mail.Flags;
 
-import org.apache.james.core.User;
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.elasticsearch.IndexAttachments;
 import org.apache.james.mailbox.extractor.ParsedContent;
 import org.apache.james.mailbox.extractor.TextExtractor;
@@ -41,32 +41,32 @@ import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.mailbox.model.TestId;
 import org.apache.james.mailbox.store.extractor.DefaultTextExtractor;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
+import org.apache.james.mailbox.store.mail.model.Property;
 import org.apache.james.mailbox.store.mail.model.impl.PropertyBuilder;
-import org.apache.james.mailbox.store.mail.model.impl.SimpleProperty;
 import org.apache.james.mailbox.tika.TikaConfiguration;
-import org.apache.james.mailbox.tika.TikaContainerSingletonRule;
+import org.apache.james.mailbox.tika.TikaExtension;
 import org.apache.james.mailbox.tika.TikaHttpClientImpl;
 import org.apache.james.mailbox.tika.TikaTextExtractor;
-import org.apache.james.metrics.api.NoopMetricFactory;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.assertj.core.api.iterable.Extractor;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-public class IndexableMessageTest {
-    private static final MessageUid MESSAGE_UID = MessageUid.of(154);
+class IndexableMessageTest {
+    static final MessageUid MESSAGE_UID = MessageUid.of(154);
 
-    @ClassRule
-    public static TikaContainerSingletonRule tika = TikaContainerSingletonRule.rule;
+    @RegisterExtension
+    static TikaExtension tika = new TikaExtension();
 
-    private TikaTextExtractor textExtractor;
+    TikaTextExtractor textExtractor;
 
-    @Before
-    public void setUp() throws Exception {
-        textExtractor = new TikaTextExtractor(new NoopMetricFactory(), new TikaHttpClientImpl(TikaConfiguration.builder()
+    @BeforeEach
+    void setUp() throws Exception {
+        textExtractor = new TikaTextExtractor(new RecordingMetricFactory(), new TikaHttpClientImpl(TikaConfiguration.builder()
                 .host(tika.getIp())
                 .port(tika.getPort())
                 .timeoutInMillis(tika.getTimeoutInMillis())
@@ -74,13 +74,15 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void textShouldBeEmptyWhenNoMatchingHeaders() throws Exception {
+    void textShouldBeEmptyWhenNoMatchingHeaders() throws Exception {
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getFullContent())
             .thenReturn(new ByteArrayInputStream("".getBytes()));
         when(mailboxMessage.createFlags())
@@ -90,7 +92,6 @@ public class IndexableMessageTest {
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
@@ -100,11 +101,13 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void textShouldContainsFromWhenFrom() throws Exception {
+    void textShouldContainsFromWhenFrom() throws Exception {
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -116,21 +119,24 @@ public class IndexableMessageTest {
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
                 .build();
 
-        assertThat(indexableMessage.getText()).isEqualTo("Second user user2@james.org First user user@james.org");
+        assertThat(indexableMessage.getText())
+            .contains("Second user user2@james.org")
+            .contains("First user user@james.org");
     }
 
     @Test
-    public void textShouldContainsToWhenTo() throws Exception {
+    void textShouldContainsToWhenTo() throws Exception {
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -142,17 +148,18 @@ public class IndexableMessageTest {
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
                 .build();
 
-        assertThat(indexableMessage.getText()).isEqualTo("First to user@james.org Second to user2@james.org");
+        assertThat(indexableMessage.getText())
+            .contains("First to user@james.org")
+            .contains("Second to user2@james.org");
     }
 
     @Test
-    public void textShouldContainsCcWhenCc() throws Exception {
+    void textShouldContainsCcWhenCc() throws Exception {
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
@@ -165,20 +172,23 @@ public class IndexableMessageTest {
             .thenReturn(new Flags());
         when(mailboxMessage.getUid())
             .thenReturn(MESSAGE_UID);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
                 .build();
 
-        assertThat(indexableMessage.getText()).isEqualTo("First cc user@james.org Second cc user2@james.org");
+        assertThat(indexableMessage.getText())
+            .contains("Second cc user2@james.org")
+            .contains("First cc user@james.org");
     }
 
     @Test
-    public void textShouldContainsBccWhenBcc() throws Exception {
+    void textShouldContainsBccWhenBcc() throws Exception {
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
@@ -191,24 +201,29 @@ public class IndexableMessageTest {
             .thenReturn(new ByteArrayInputStream("Bcc: First bcc <user@james.org>\nBcc: Second bcc <user2@james.org>".getBytes()));
         when(mailboxMessage.createFlags())
             .thenReturn(new Flags());
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
                 .build();
 
-        assertThat(indexableMessage.getText()).isEqualTo("Second bcc user2@james.org First bcc user@james.org");
+        assertThat(indexableMessage.getText())
+            .contains("Second bcc user2@james.org")
+            .contains("First bcc user@james.org");
     }
 
     @Test
-    public void textShouldContainsSubjectsWhenSubjects() throws Exception {
+    void textShouldContainsSubjectsWhenSubjects() throws Exception {
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -220,7 +235,6 @@ public class IndexableMessageTest {
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
@@ -230,11 +244,13 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void textShouldContainsBodyWhenBody() throws Exception {
+    void textShouldContainsBodyWhenBody() throws Exception {
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -246,7 +262,6 @@ public class IndexableMessageTest {
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
@@ -256,13 +271,15 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void textShouldContainsAllFieldsWhenAllSet() throws Exception {
+    void textShouldContainsAllFieldsWhenAllSet() throws Exception {
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getFullContent())
             .thenReturn(ClassLoader.getSystemResourceAsStream("eml/mailWithHeaders.eml"));
         when(mailboxMessage.createFlags())
@@ -272,7 +289,6 @@ public class IndexableMessageTest {
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
@@ -290,12 +306,14 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void hasAttachmentsShouldReturnTrueWhenPropertyIsPresentAndTrue() throws IOException {
+    void hasAttachmentsShouldReturnTrueWhenPropertyIsPresentAndTrue() throws IOException {
         //Given
         MailboxMessage  mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -309,7 +327,6 @@ public class IndexableMessageTest {
         // When
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.YES)
@@ -320,7 +337,7 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void hasAttachmentsShouldReturnFalseWhenPropertyIsPresentButFalse() throws IOException {
+    void hasAttachmentsShouldReturnFalseWhenPropertyIsPresentButFalse() throws IOException {
         //Given
         MailboxMessage  mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
@@ -334,13 +351,14 @@ public class IndexableMessageTest {
             .thenReturn(new Flags());
         when(mailboxMessage.getUid())
             .thenReturn(MESSAGE_UID);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getProperties())
-            .thenReturn(ImmutableList.of(new SimpleProperty(PropertyBuilder.JAMES_INTERNALS, PropertyBuilder.HAS_ATTACHMENT, "false")));
+            .thenReturn(ImmutableList.of(new Property(PropertyBuilder.JAMES_INTERNALS, PropertyBuilder.HAS_ATTACHMENT, "false")));
 
         // When
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
@@ -351,12 +369,14 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void hasAttachmentsShouldReturnFalseWhenPropertyIsAbsent() throws IOException {
+    void hasAttachmentsShouldReturnFalseWhenPropertyIsAbsent() throws IOException {
         //Given
         MailboxMessage  mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -371,7 +391,6 @@ public class IndexableMessageTest {
         // When
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
@@ -382,12 +401,14 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void attachmentsShouldNotBeenIndexedWhenAsked() throws Exception {
+    void attachmentsShouldNotBeenIndexedWhenAsked() throws Exception {
         //Given
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -400,7 +421,6 @@ public class IndexableMessageTest {
         // When
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.NO)
@@ -411,12 +431,14 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void attachmentsShouldBeenIndexedWhenAsked() throws Exception {
+    void attachmentsShouldBeenIndexedWhenAsked() throws Exception {
         //Given
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -429,7 +451,6 @@ public class IndexableMessageTest {
         // When
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(new DefaultTextExtractor())
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.YES)
@@ -440,12 +461,14 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void otherAttachmentsShouldBeenIndexedWhenOneOfThemCannotBeParsed() throws Exception {
+    void otherAttachmentsShouldBeenIndexedWhenOneOfThemCannotBeParsed() throws Exception {
         //Given
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -464,7 +487,6 @@ public class IndexableMessageTest {
         // When
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(textExtractor)
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.YES)
@@ -476,9 +498,9 @@ public class IndexableMessageTest {
             .contains("first attachment content", TextualBodyExtractor.NO_TEXTUAL_BODY, "third attachment content");
     }
 
-    private static class TextualBodyExtractor implements Extractor<MimePart, String> {
+    static class TextualBodyExtractor implements Extractor<MimePart, String> {
 
-        public static final String NO_TEXTUAL_BODY = "The textual body is not present";
+        static final String NO_TEXTUAL_BODY = "The textual body is not present";
 
         @Override
         public String extract(MimePart input) {
@@ -487,12 +509,14 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void messageShouldBeIndexedEvenIfTikaParserThrowsAnError() throws Exception {
+    void messageShouldBeIndexedEvenIfTikaParserThrowsAnError() throws Exception {
         //Given
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(InMemoryMessageId.of(42));
         when(mailboxMessage.getFullContent())
@@ -505,7 +529,6 @@ public class IndexableMessageTest {
         // When
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(textExtractor)
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.YES)
@@ -516,7 +539,7 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void shouldHandleCorrectlyMessageIdHavingSerializeMethodThatReturnNull() throws Exception {
+    void shouldHandleCorrectlyMessageIdHavingSerializeMethodThatReturnNull() throws Exception {
        MessageId invalidMessageIdThatReturnNull = mock(MessageId.class);
        when(invalidMessageIdThatReturnNull.serialize())
            .thenReturn(null);
@@ -526,6 +549,8 @@ public class IndexableMessageTest {
         TestId mailboxId = TestId.of(1);
         when(mailboxMessage.getMailboxId())
             .thenReturn(mailboxId);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getMessageId())
             .thenReturn(invalidMessageIdThatReturnNull);
         when(mailboxMessage.getFullContent())
@@ -537,7 +562,6 @@ public class IndexableMessageTest {
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(textExtractor)
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.YES)
@@ -548,7 +572,7 @@ public class IndexableMessageTest {
     }
 
     @Test
-    public void shouldHandleCorrectlyNullMessageId() throws Exception {
+    void shouldHandleCorrectlyNullMessageId() throws Exception {
        
         // When
         MailboxMessage mailboxMessage = mock(MailboxMessage.class);
@@ -557,6 +581,8 @@ public class IndexableMessageTest {
             .thenReturn(mailboxId);
         when(mailboxMessage.getMessageId())
             .thenReturn(null);
+        when(mailboxMessage.getModSeq())
+            .thenReturn(ModSeq.first());
         when(mailboxMessage.getFullContent())
             .thenReturn(ClassLoader.getSystemResourceAsStream("eml/bodyMakeTikaToFail.eml"));
         when(mailboxMessage.createFlags())
@@ -566,7 +592,6 @@ public class IndexableMessageTest {
 
         IndexableMessage indexableMessage = IndexableMessage.builder()
                 .message(mailboxMessage)
-                .users(ImmutableList.of(User.fromUsername("username")))
                 .extractor(textExtractor)
                 .zoneId(ZoneId.of("Europe/Paris"))
                 .indexAttachments(IndexAttachments.YES)

@@ -20,8 +20,7 @@ package org.apache.james.smtpserver;
 
 import javax.inject.Inject;
 
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.james.core.Username;
 import org.apache.james.protocols.smtp.SMTPSession;
 import org.apache.james.protocols.smtp.hook.AuthHook;
 import org.apache.james.protocols.smtp.hook.HookResult;
@@ -37,33 +36,18 @@ import org.slf4j.LoggerFactory;
 public class UsersRepositoryAuthHook implements AuthHook {
     private static final Logger LOGGER = LoggerFactory.getLogger(UsersRepositoryAuthHook.class);
 
-    private UsersRepository users;
+    private final UsersRepository users;
 
-    /**
-     * Gets the users repository.
-     * 
-     * @return the users
-     */
-    public final UsersRepository getUsers() {
-        return users;
-    }
-
-    /**
-     * Sets the users repository.
-     * 
-     * @param users
-     *            the users to set
-     */
     @Inject
-    public final void setUsersRepository(UsersRepository users) {
+    public UsersRepositoryAuthHook(UsersRepository users) {
         this.users = users;
     }
 
     @Override
-    public HookResult doAuth(SMTPSession session, String username, String password) {
+    public HookResult doAuth(SMTPSession session, Username username, String password) {
         try {
             if (users.test(username, password)) {
-                session.setUser(username);
+                session.setUsername(username);
                 session.setRelayingAllowed(true);
                 return HookResult.builder()
                     .hookReturnCode(HookReturnCode.ok())
@@ -74,15 +58,5 @@ public class UsersRepositoryAuthHook implements AuthHook {
             LOGGER.info("Unable to access UsersRepository", e);
         }
         return HookResult.DECLINED;
-    }
-
-    @Override
-    public void init(Configuration config) throws ConfigurationException {
-
-    }
-
-    @Override
-    public void destroy() {
-
     }
 }

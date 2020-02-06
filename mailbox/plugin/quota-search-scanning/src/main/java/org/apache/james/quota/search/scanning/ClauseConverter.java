@@ -25,9 +25,11 @@ import java.util.function.Predicate;
 
 import javax.inject.Inject;
 
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaCountUsage;
+import org.apache.james.core.quota.QuotaSizeLimit;
+import org.apache.james.core.quota.QuotaSizeUsage;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.Quota;
 import org.apache.james.mailbox.model.QuotaRatio;
@@ -42,7 +44,7 @@ public class ClauseConverter {
 
     private final UserQuotaRootResolver quotaRootResolver;
     private final QuotaManager quotaManager;
-    private final Map<Class<? extends QuotaClause>, Function<QuotaClause, Predicate<User>>> toPredicates;
+    private final Map<Class<? extends QuotaClause>, Function<QuotaClause, Predicate<Username>>> toPredicates;
 
     @Inject
     public ClauseConverter(UserQuotaRootResolver quotaRootResolver, QuotaManager quotaManager) {
@@ -55,7 +57,7 @@ public class ClauseConverter {
             QuotaClause.HasDomain.class, this::hasDomainToPredicate);
     }
 
-    public Predicate<User> andToPredicate(QuotaClause.And and) {
+    public Predicate<Username> andToPredicate(QuotaClause.And and) {
         return and.getClauses()
             .stream()
             .map(this::toPredicate)
@@ -63,38 +65,38 @@ public class ClauseConverter {
             .orElse(user -> true);
     }
 
-    private Predicate<User> toPredicate(QuotaClause clause) {
+    private Predicate<Username> toPredicate(QuotaClause clause) {
         return toPredicates.get(clause.getClass())
             .apply(clause);
     }
 
-    private Predicate<User> moreThanToPredicate(QuotaClause clause) {
+    private Predicate<Username> moreThanToPredicate(QuotaClause clause) {
         QuotaClause.MoreThan moreThan = (QuotaClause.MoreThan) clause;
         return user -> retrieveUserRatio(user) >= moreThan.getQuotaBoundary().getRatio();
     }
 
-    private Predicate<User> lessThanToPredicate(QuotaClause clause) {
+    private Predicate<Username> lessThanToPredicate(QuotaClause clause) {
         QuotaClause.LessThan lessThan = (QuotaClause.LessThan) clause;
         return user -> retrieveUserRatio(user) <= lessThan.getQuotaBoundary().getRatio();
     }
 
-    private Predicate<User> hasDomainToPredicate(QuotaClause clause) {
+    private Predicate<Username> hasDomainToPredicate(QuotaClause clause) {
         QuotaClause.HasDomain hasDomain = (QuotaClause.HasDomain) clause;
         return user -> user.getDomainPart()
             .map(hasDomain.getDomain()::equals)
             .orElse(false);
     }
 
-    private Predicate<User> andToPredicate(QuotaClause clause) {
+    private Predicate<Username> andToPredicate(QuotaClause clause) {
         QuotaClause.And and = (QuotaClause.And) clause;
         return andToPredicate(and);
     }
 
-    private double retrieveUserRatio(User user) {
+    private double retrieveUserRatio(Username username) {
         try {
-            QuotaRoot quotaRoot = quotaRootResolver.forUser(user);
-            Quota<QuotaSize> storageQuota = quotaManager.getStorageQuota(quotaRoot);
-            Quota<QuotaCount> messageQuota = quotaManager.getMessageQuota(quotaRoot);
+            QuotaRoot quotaRoot = quotaRootResolver.forUser(username);
+            Quota<QuotaSizeLimit, QuotaSizeUsage> storageQuota = quotaManager.getStorageQuota(quotaRoot);
+            Quota<QuotaCountLimit, QuotaCountUsage> messageQuota = quotaManager.getMessageQuota(quotaRoot);
 
             return QuotaRatio.from(storageQuota, messageQuota).max();
         } catch (MailboxException e) {

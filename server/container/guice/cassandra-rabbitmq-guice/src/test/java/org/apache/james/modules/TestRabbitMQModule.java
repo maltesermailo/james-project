@@ -19,7 +19,7 @@
 
 package org.apache.james.modules;
 
-import static org.apache.james.backend.rabbitmq.RabbitMQFixture.DEFAULT_MANAGEMENT_CREDENTIAL;
+import static org.apache.james.backends.rabbitmq.RabbitMQFixture.DEFAULT_MANAGEMENT_CREDENTIAL;
 
 import java.net.URISyntaxException;
 import java.time.Duration;
@@ -28,9 +28,10 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import org.apache.james.CleanupTasksPerformer;
-import org.apache.james.backend.rabbitmq.DockerRabbitMQ;
-import org.apache.james.backend.rabbitmq.RabbitMQConfiguration;
+import org.apache.james.backends.rabbitmq.DockerRabbitMQ;
+import org.apache.james.backends.rabbitmq.RabbitMQConfiguration;
 import org.apache.james.queue.rabbitmq.RabbitMQMailQueueManagement;
+import org.apache.james.queue.rabbitmq.view.RabbitMQMailQueueConfiguration;
 import org.apache.james.queue.rabbitmq.view.cassandra.configuration.CassandraMailQueueViewConfiguration;
 
 import com.google.inject.AbstractModule;
@@ -67,6 +68,12 @@ public class TestRabbitMQModule extends AbstractModule {
             .managementUri(rabbitMQ.managementUri())
             .managementCredentials(DEFAULT_MANAGEMENT_CREDENTIAL)
             .build();
+    }
+
+    @Provides
+    @Singleton
+    private RabbitMQMailQueueConfiguration getMailQueueSizeConfiguration() {
+        return RabbitMQMailQueueConfiguration.sizeMetricsEnabled();
     }
 
     public static class QueueCleanUp implements CleanupTasksPerformer.CleanupTask {

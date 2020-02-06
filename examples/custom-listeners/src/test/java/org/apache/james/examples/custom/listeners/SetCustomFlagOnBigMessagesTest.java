@@ -28,7 +28,7 @@ import java.util.stream.Stream;
 
 import javax.mail.Flags;
 
-import org.apache.james.mailbox.DefaultMailboxes;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
 import org.apache.james.mailbox.MessageManager;
@@ -37,7 +37,7 @@ import org.apache.james.mailbox.events.Event;
 import org.apache.james.mailbox.inmemory.InMemoryMailboxManager;
 import org.apache.james.mailbox.inmemory.manager.InMemoryIntegrationResources;
 import org.apache.james.mailbox.model.ComposedMessageId;
-import org.apache.james.mailbox.model.FetchGroupImpl;
+import org.apache.james.mailbox.model.FetchGroup;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.MessageMetaData;
@@ -53,9 +53,9 @@ import com.google.common.collect.Streams;
 
 class SetCustomFlagOnBigMessagesTest {
 
-    private static final String USER = "user";
+    private static final Username USER = Username.of("user");
     private static final Event.EventId RANDOM_EVENT_ID = Event.EventId.random();
-    private static final MailboxPath INBOX_PATH = MailboxPath.forUser(USER, DefaultMailboxes.INBOX);
+    private static final MailboxPath INBOX_PATH = MailboxPath.inbox(USER);
 
     private SetCustomFlagOnBigMessages testee;
     private MessageManager inboxMessageManager;
@@ -125,7 +125,7 @@ class SetCustomFlagOnBigMessagesTest {
             mailboxSession);
 
         MessageResult addedMessage = inboxMessageManager
-            .getMessages(MessageRange.one(composedIdOfSmallMessage.getUid()), FetchGroupImpl.MINIMAL, mailboxSession)
+            .getMessages(MessageRange.one(composedIdOfSmallMessage.getUid()), FetchGroup.MINIMAL, mailboxSession)
             .next();
         MessageMetaData oneMBMetaData = new MessageMetaData(addedMessage.getUid(), addedMessage.getModSeq(),
             addedMessage.getFlags(), ONE_MB, addedMessage.getInternalDate(), addedMessage.getMessageId());
@@ -181,7 +181,7 @@ class SetCustomFlagOnBigMessagesTest {
 
     private Stream<Flags> getMessageFlags(MessageUid messageUid) throws Exception {
         return Streams.stream(inboxMessageManager
-            .getMessages(MessageRange.one(messageUid), FetchGroupImpl.MINIMAL, mailboxSession))
+            .getMessages(MessageRange.one(messageUid), FetchGroup.MINIMAL, mailboxSession))
             .map(MessageResult::getFlags);
     }
 

@@ -26,21 +26,21 @@ import org.apache.commons.configuration2.ex.ConfigurationException;
  * Just the base interface for all kind of "protocol" handlers.
  * 
  * Every of them should implement this interface
- * 
  */
 public interface ProtocolHandler {
 
     /**
      * Init with the given {@link Configuration}
-     *
-     * @param config
-     * @throws ConfigurationException
      */
-    void init(Configuration config) throws ConfigurationException;
+    default void init(Configuration config) throws ConfigurationException {
+
+    }
 
     /**
      * Destroy object
      */
-    void destroy();
+    default void destroy() {
+
+    }
   
 }

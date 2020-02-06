@@ -51,17 +51,17 @@ public class CopyProcessor extends AbstractMessageRangeProcessor<CopyRequest> {
     protected List<MessageRange> process(MailboxPath targetMailbox,
                                          SelectedMailbox currentMailbox,
                                          MailboxSession mailboxSession,
-                                         MailboxManager mailboxManager, MessageRange messageSet) throws MailboxException {
-        return mailboxManager.copyMessages(messageSet, currentMailbox.getPath(), targetMailbox, mailboxSession);
+                                         MessageRange messageSet) throws MailboxException {
+        return getMailboxManager().copyMessages(messageSet, currentMailbox.getPath(), targetMailbox, mailboxSession);
     }
 
     @Override
-    protected Closeable addContextToMDC(CopyRequest message) {
+    protected Closeable addContextToMDC(CopyRequest request) {
         return MDCBuilder.create()
             .addContext(MDCBuilder.ACTION, "COPY")
-            .addContext("targetMailbox", message.getMailboxName())
-            .addContext("uidEnabled", message.isUseUids())
-            .addContext("idSet", IdRange.toString(message.getIdSet()))
+            .addContext("targetMailbox", request.getMailboxName())
+            .addContext("uidEnabled", request.isUseUids())
+            .addContext("idSet", IdRange.toString(request.getIdSet()))
             .build();
     }
 }

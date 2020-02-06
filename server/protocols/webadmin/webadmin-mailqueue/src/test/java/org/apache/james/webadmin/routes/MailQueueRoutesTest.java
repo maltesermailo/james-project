@@ -43,9 +43,9 @@ import org.apache.james.queue.api.ManageableMailQueue;
 import org.apache.james.queue.api.RawMailQueueItemDecoratorFactory;
 import org.apache.james.queue.memory.MemoryMailQueueFactory;
 import org.apache.james.queue.memory.MemoryMailQueueFactory.MemoryMailQueue;
+import org.apache.james.task.Hostname;
 import org.apache.james.task.MemoryTaskManager;
 import org.apache.james.task.TaskManager;
-import org.apache.james.task.eventsourcing.Hostname;
 import org.apache.james.webadmin.WebAdminServer;
 import org.apache.james.webadmin.WebAdminUtils;
 import org.apache.james.webadmin.service.ClearMailQueueTask;
@@ -681,7 +681,7 @@ class MailQueueRoutesTest {
                 .then()
                     .body("status", is("completed"))
                     .body("taskId", is(notNullValue()))
-                    .body("type", is(DeleteMailsFromMailQueueTask.TYPE))
+                    .body("type", is(DeleteMailsFromMailQueueTask.TYPE.asString()))
                     .body("additionalInformation.mailQueueName", is(FIRST_QUEUE))
                     .body("additionalInformation.initialCount", is(2))
                     .body("additionalInformation.remainingCount", is(1))
@@ -716,7 +716,7 @@ class MailQueueRoutesTest {
                 .then()
                     .body("status", is("completed"))
                     .body("taskId", is(notNullValue()))
-                    .body("type", is(DeleteMailsFromMailQueueTask.TYPE))
+                    .body("type", is(DeleteMailsFromMailQueueTask.TYPE.asString()))
                     .body("additionalInformation.mailQueueName", is(FIRST_QUEUE))
                     .body("additionalInformation.initialCount", is(2))
                     .body("additionalInformation.remainingCount", is(1))
@@ -758,7 +758,7 @@ class MailQueueRoutesTest {
                 .then()
                     .body("status", is("completed"))
                     .body("taskId", is(notNullValue()))
-                    .body("type", is(DeleteMailsFromMailQueueTask.TYPE))
+                    .body("type", is(DeleteMailsFromMailQueueTask.TYPE.asString()))
                     .body("additionalInformation.mailQueueName", is(FIRST_QUEUE))
                     .body("additionalInformation.initialCount", is(3))
                     .body("additionalInformation.remainingCount", is(1))
@@ -971,7 +971,7 @@ class MailQueueRoutesTest {
             .then()
                 .body("status", is("completed"))
                 .body("taskId", is(notNullValue()))
-                .body("type", is(ClearMailQueueTask.TYPE))
+                .body("type", is(ClearMailQueueTask.TYPE.asString()))
                 .body("additionalInformation.mailQueueName", is(FIRST_QUEUE))
                 .body("additionalInformation.initialCount", is(3))
                 .body("additionalInformation.remainingCount", is(0))

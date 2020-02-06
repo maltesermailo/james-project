@@ -36,8 +36,8 @@ import org.apache.james.rrt.cassandra.CassandraRecipientRewriteTableDAO;
 import org.apache.james.rrt.cassandra.migration.MappingsSourcesMigration;
 import org.apache.james.rrt.lib.Mapping;
 import org.apache.james.rrt.lib.MappingSource;
+import org.apache.james.task.Hostname;
 import org.apache.james.task.MemoryTaskManager;
-import org.apache.james.task.eventsourcing.Hostname;
 import org.apache.james.webadmin.WebAdminServer;
 import org.apache.james.webadmin.WebAdminUtils;
 import org.apache.james.webadmin.service.CassandraMappingsService;
@@ -123,7 +123,7 @@ class CassandraMappingsRoutesTest {
             .body("taskId", is(taskId))
             .body("additionalInformation.successfulMappingsCount", is(0))
             .body("additionalInformation.errorMappingsCount", is(0))
-            .body("type", is(CassandraMappingsSolveInconsistenciesTask.TYPE))
+            .body("type", is(CassandraMappingsSolveInconsistenciesTask.TYPE.asString()))
             .body("startedDate", is(notNullValue()))
             .body("submitDate", is(notNullValue()))
             .body("completedDate", is(notNullValue()));
@@ -140,7 +140,7 @@ class CassandraMappingsRoutesTest {
             .body("statusCode", is(400))
             .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
             .body("message", is("Invalid arguments supplied in the user request"))
-            .body("details", is("'invalid-action' is not a valid action query parameter"));
+            .body("details", is("Invalid value supplied for query parameter 'action': invalid-action. Supported values are [SolveInconsistencies]"));
     }
 
     @Test
@@ -152,7 +152,7 @@ class CassandraMappingsRoutesTest {
             .body("statusCode", is(400))
             .body("type", is(ErrorResponder.ErrorType.INVALID_ARGUMENT.getType()))
             .body("message", is("Invalid arguments supplied in the user request"))
-            .body("details", is("'action' url parameter is mandatory"));
+            .body("details", is("'action' query parameter is compulsory. Supported values are [SolveInconsistencies]"));
     }
 
     @Test

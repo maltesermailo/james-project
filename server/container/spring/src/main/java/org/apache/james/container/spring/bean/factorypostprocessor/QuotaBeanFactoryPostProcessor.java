@@ -21,6 +21,7 @@ package org.apache.james.container.spring.bean.factorypostprocessor;
 
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 import org.apache.james.container.spring.lifecycle.ConfigurationProvider;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.FatalBeanException;
@@ -31,7 +32,6 @@ import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 public class QuotaBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
 
     private static final String IN_MEMORY_IMPLEMENTATION = "inmemory";
-    private static final String CASSANDRA_IMPLEMENTATION = "cassandra";
     private static final String FAKE_IMPLEMENTATION = "fake";
     private static final String MAX_QUOTA_MANAGER = "maxQuotaManager";
     private static final String JPA_IMPLEMENTATION = "jpa";
@@ -50,7 +50,7 @@ public class QuotaBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
     public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
         ConfigurationProvider confProvider = beanFactory.getBean(ConfigurationProvider.class);
         try {
-            HierarchicalConfiguration config = confProvider.getConfiguration("quota");
+            HierarchicalConfiguration<ImmutableNode> config = confProvider.getConfiguration("quota");
 
             String quotaRootResolver = config.configurationAt(QUOTA_ROOT_RESOLVER_BEAN).getString(PROVIDER, DEFAULT_IMPLEMENTATION);
             String currentQuotaManager = config.configurationAt(CURRENT_QUOTA_MANAGER_BEAN).getString(PROVIDER, "none");
@@ -95,8 +95,6 @@ public class QuotaBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
             registry.registerAlias("noMaxQuotaManager", MAX_QUOTA_MANAGER);
         } else if (maxQuotaManager.equalsIgnoreCase(IN_MEMORY_IMPLEMENTATION)) {
             registry.registerAlias("inMemoryMaxQuotaManager", MAX_QUOTA_MANAGER);
-        } else if (maxQuotaManager.equalsIgnoreCase(CASSANDRA_IMPLEMENTATION)) {
-            registry.registerAlias("cassandraMaxQuotaManager", MAX_QUOTA_MANAGER);
         } else if (maxQuotaManager.equalsIgnoreCase(JPA_IMPLEMENTATION)) {
             registry.registerAlias("jpaMaxQuotaManager", MAX_QUOTA_MANAGER);
         } else {
@@ -107,9 +105,7 @@ public class QuotaBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
     private void registerAliasForCurrentQuotaManager(String currentQuotaManager, BeanDefinitionRegistry registry) {
         if (currentQuotaManager.equalsIgnoreCase(IN_MEMORY_IMPLEMENTATION)) {
             registry.registerAlias("inMemoryCurrentQuotaManager", CURRENT_QUOTA_MANAGER_BEAN);
-        } else if (currentQuotaManager.equalsIgnoreCase(CASSANDRA_IMPLEMENTATION)) {
-            registry.registerAlias("cassandraCurrentQuotaManager", CURRENT_QUOTA_MANAGER_BEAN);
-        }  else if (currentQuotaManager.equalsIgnoreCase(JPA_IMPLEMENTATION)) {
+        } else if (currentQuotaManager.equalsIgnoreCase(JPA_IMPLEMENTATION)) {
             registry.registerAlias("jpaCurrentQuotaManager", CURRENT_QUOTA_MANAGER_BEAN);
         } else if (! currentQuotaManager.equalsIgnoreCase("none")) {
             throw new FatalBeanException("Unreadable value for Current Quota Manager : " + currentQuotaManager);

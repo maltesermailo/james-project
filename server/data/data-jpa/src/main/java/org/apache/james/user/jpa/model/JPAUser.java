@@ -32,6 +32,7 @@ import javax.persistence.NamedQuery;
 import javax.persistence.Table;
 import javax.persistence.Version;
 
+import org.apache.james.core.Username;
 import org.apache.james.user.api.model.User;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -41,7 +42,7 @@ import com.google.common.hash.Hashing;
 @Entity(name = "JamesUser")
 @Table(name = "JAMES_USER")
 @NamedQueries({ 
-    @NamedQuery(name = "findUserByName", query = "SELECT user FROM JamesUser user WHERE user.name=:name"), 
+    @NamedQuery(name = "findUserByName", query = "SELECT user FROM JamesUser user WHERE user.name=:name"),
     @NamedQuery(name = "deleteUserByName", query = "DELETE FROM JamesUser user WHERE user.name=:name"),
     @NamedQuery(name = "containsUser", query = "SELECT COUNT(user) FROM JamesUser user WHERE user.name=:name"), 
     @NamedQuery(name = "countUsers", query = "SELECT COUNT(user) FROM JamesUser user"), 
@@ -115,8 +116,8 @@ public class JPAUser implements User {
     }
 
     @Override
-    public String getUserName() {
-        return name;
+    public Username getUserName() {
+        return Username.of(name);
     }
 
     @Override

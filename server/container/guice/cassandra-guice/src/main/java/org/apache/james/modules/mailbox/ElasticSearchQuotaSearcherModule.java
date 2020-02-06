@@ -36,9 +36,11 @@ import org.apache.james.quota.search.QuotaSearcher;
 import org.apache.james.quota.search.elasticsearch.ElasticSearchQuotaConfiguration;
 import org.apache.james.quota.search.elasticsearch.ElasticSearchQuotaSearcher;
 import org.apache.james.quota.search.elasticsearch.QuotaSearchIndexCreationUtil;
+import org.apache.james.quota.search.elasticsearch.UserRoutingKeyFactory;
 import org.apache.james.quota.search.elasticsearch.events.ElasticSearchQuotaMailboxListener;
 import org.apache.james.quota.search.elasticsearch.json.QuotaRatioToElasticSearchJson;
-import org.apache.james.utils.InitialisationOperation;
+import org.apache.james.utils.InitializationOperation;
+import org.apache.james.utils.InitilizationOperationBuilder;
 import org.apache.james.utils.PropertiesProvider;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.slf4j.Logger;
@@ -48,6 +50,7 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
 import com.google.inject.multibindings.Multibinder;
+import com.google.inject.multibindings.ProvidesIntoSet;
 
 public class ElasticSearchQuotaSearcherModule extends AbstractModule {
 
@@ -74,25 +77,6 @@ public class ElasticSearchQuotaSearcherModule extends AbstractModule {
         }
     }
 
-    static class ElasticSearchQuotaIndexCreationPerformer implements InitialisationOperation {
-        private final ElasticSearchQuotaIndexCreator indexCreator;
-
-        @Inject
-        ElasticSearchQuotaIndexCreationPerformer(ElasticSearchQuotaIndexCreator indexCreator) {
-            this.indexCreator = indexCreator;
-        }
-
-        @Override
-        public void initModule() throws Exception {
-            indexCreator.createIndex();
-        }
-
-        @Override
-        public Class<? extends Startable> forClass() {
-            return ElasticSearchQuotaIndexCreator.class;
-        }
-    }
-
     private static final Logger LOGGER = LoggerFactory.getLogger(ElasticSearchQuotaSearcherModule.class);
 
     @Override
@@ -100,10 +84,6 @@ public class ElasticSearchQuotaSearcherModule extends AbstractModule {
         Multibinder.newSetBinder(binder(), MailboxListener.GroupMailboxListener.class)
             .addBinding()
             .to(ElasticSearchQuotaMailboxListener.class);
-
-        Multibinder.newSetBinder(binder(), InitialisationOperation.class)
-            .addBinding()
-            .to(ElasticSearchQuotaIndexCreationPerformer.class);
     }
 
     @Provides
@@ -132,6 +112,14 @@ public class ElasticSearchQuotaSearcherModule extends AbstractModule {
         return new ElasticSearchQuotaMailboxListener(
             new ElasticSearchIndexer(client,
                 configuration.getWriteAliasQuotaRatioName()),
-                new QuotaRatioToElasticSearchJson());
+                new QuotaRatioToElasticSearchJson(),
+            new UserRoutingKeyFactory());
+    }
+
+    @ProvidesIntoSet
+    InitializationOperation createIndex(ElasticSearchQuotaIndexCreator instance) {
+        return InitilizationOperationBuilder
+            .forClass(ElasticSearchQuotaIndexCreator.class)
+            .init(instance::createIndex);
     }
 }

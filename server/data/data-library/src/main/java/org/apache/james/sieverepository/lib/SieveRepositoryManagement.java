@@ -30,8 +30,8 @@ import javax.management.NotCompliantMBeanException;
 import javax.management.StandardMBean;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.james.core.User;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.sieverepository.api.ScriptContent;
 import org.apache.james.sieverepository.api.ScriptName;
 import org.apache.james.sieverepository.api.SieveRepository;
@@ -61,7 +61,7 @@ public class SieveRepositoryManagement extends StandardMBean implements SieveRep
 
     @Override
     public void setQuota(long quota) throws SieveRepositoryException {
-        sieveRepository.setDefaultQuota(QuotaSize.size(quota));
+        sieveRepository.setDefaultQuota(QuotaSizeLimit.size(quota));
     }
 
     @Override
@@ -71,24 +71,24 @@ public class SieveRepositoryManagement extends StandardMBean implements SieveRep
 
     @Override
     public long getQuota(String user) throws SieveRepositoryException {
-        return sieveRepository.getQuota(User.fromUsername(user)).asLong();
+        return sieveRepository.getQuota(Username.of(user)).asLong();
     }
 
     @Override
     public void setQuota(String user, long quota) throws SieveRepositoryException {
-        sieveRepository.setQuota(User.fromUsername(user), QuotaSize.size(quota));
+        sieveRepository.setQuota(Username.of(user), QuotaSizeLimit.size(quota));
     }
 
     @Override
     public void removeQuota(String user) throws SieveRepositoryException {
-        sieveRepository.removeQuota(User.fromUsername(user));
+        sieveRepository.removeQuota(Username.of(user));
     }
 
     @Override
     public void addActiveSieveScript(String userName, String scriptName, String script) throws SieveRepositoryException {
-        User user = User.fromUsername(userName);
-        sieveRepository.putScript(user, new ScriptName(scriptName), new ScriptContent(script));
-        sieveRepository.setActive(user, new ScriptName(scriptName));
+        Username username = Username.of(userName);
+        sieveRepository.putScript(username, new ScriptName(scriptName), new ScriptContent(script));
+        sieveRepository.setActive(username, new ScriptName(scriptName));
     }
 
     @Override

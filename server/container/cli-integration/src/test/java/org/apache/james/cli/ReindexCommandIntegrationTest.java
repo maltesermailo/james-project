@@ -26,11 +26,13 @@ import static org.mockito.Mockito.when;
 
 import org.apache.james.GuiceJamesServer;
 import org.apache.james.MemoryJmapTestRule;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.indexer.ReIndexer;
 import org.apache.james.mailbox.model.MailboxConstants;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.store.search.ListeningMessageSearchIndex;
 import org.apache.james.modules.server.JMXServerModule;
+import org.apache.james.task.MemoryReferenceTask;
 import org.apache.james.task.Task;
 import org.junit.After;
 import org.junit.Before;
@@ -50,8 +52,8 @@ public class ReindexCommandIntegrationTest {
     @Before
     public void setUp() throws Exception {
         reIndexer = mock(ReIndexer.class);
-        when(reIndexer.reIndex()).thenReturn(() -> Task.Result.COMPLETED);
-        when(reIndexer.reIndex(any(MailboxPath.class))).thenReturn(() -> Task.Result.COMPLETED);
+        when(reIndexer.reIndex()).thenReturn(new MemoryReferenceTask(() -> Task.Result.COMPLETED));
+        when(reIndexer.reIndex(any(MailboxPath.class))).thenReturn(new MemoryReferenceTask(() -> Task.Result.COMPLETED));
         guiceJamesServer = memoryJmap.jmapServer(new JMXServerModule(),
             binder -> binder.bind(ListeningMessageSearchIndex.class).toInstance(mock(ListeningMessageSearchIndex.class)))
             .overrideWith(binder -> binder.bind(ReIndexer.class)
@@ -76,7 +78,7 @@ public class ReindexCommandIntegrationTest {
         String mailbox = "mailbox";
         ServerCmd.doMain(new String[] {"-h", "127.0.0.1", "-p", "9999", "reindexmailbox", MailboxConstants.USER_NAMESPACE, USER, mailbox});
 
-        verify(reIndexer).reIndex(MailboxPath.forUser(USER, mailbox));
+        verify(reIndexer).reIndex(MailboxPath.forUser(Username.of(USER), mailbox));
     }
 
 }

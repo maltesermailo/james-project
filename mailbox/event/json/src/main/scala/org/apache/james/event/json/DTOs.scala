@@ -24,13 +24,14 @@ import java.util.Date
 
 import javax.mail.Flags.Flag
 import javax.mail.{Flags => JavaMailFlags}
-import org.apache.james.core.quota.QuotaValue
+import org.apache.james.core.Username
+import org.apache.james.core.quota.{QuotaLimitValue, QuotaUsageValue}
 import org.apache.james.event.json.DTOs.SystemFlag.SystemFlag
 import org.apache.james.mailbox.acl.{ACLDiff => JavaACLDiff}
 import org.apache.james.mailbox.model.{MailboxACL, MessageId, MailboxPath => JavaMailboxPath, MessageMetaData => JavaMessageMetaData, Quota => JavaQuota, UpdatedFlags => JavaUpdatedFlags}
-import org.apache.james.mailbox.{FlagsBuilder, MessageUid}
+import org.apache.james.mailbox.{FlagsBuilder, MessageUid, ModSeq}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object DTOs {
 
@@ -48,7 +49,7 @@ object DTOs {
   }
 
   object Quota {
-    def toScala[T <: QuotaValue[T]](java: JavaQuota[T]): Quota[T] = Quota(
+    def toScala[T <: QuotaLimitValue[T], U <: QuotaUsageValue[U, T]](java: JavaQuota[T, U]): Quota[T, U] = Quota(
       used = java.getUsed,
       limit = java.getLimit,
       limits = java.getLimitByScope.asScala.toMap)
@@ -59,13 +60,13 @@ object DTOs {
     def toJava: JavaACLDiff = new JavaACLDiff(new MailboxACL(oldACL.asJava), new MailboxACL(newACL.asJava))
   }
 
-  case class MailboxPath(namespace: Option[String], user: Option[String], name: String) {
+  case class MailboxPath(namespace: Option[String], user: Option[Username], name: String) {
     def toJava: JavaMailboxPath = new JavaMailboxPath(namespace.orNull, user.orNull, name)
   }
 
-  case class Quota[T <: QuotaValue[T]](used: T, limit: T, limits: Map[JavaQuota.Scope, T]) {
-    def toJava: JavaQuota[T] =
-      JavaQuota.builder[T]
+  case class Quota[T <: QuotaLimitValue[T], U <: QuotaUsageValue[U, T]](used: U, limit: T, limits: Map[JavaQuota.Scope, T]) {
+    def toJava: JavaQuota[T, U] =
+      JavaQuota.builder[T, U]
         .used(used)
         .computedLimit(limit)
         .limitsByScope(limits.asJava)
@@ -82,7 +83,7 @@ object DTOs {
       javaMessageMetaData.getMessageId)
   }
 
-  case class MessageMetaData(uid: MessageUid, modSeq: Long, flags: Flags, size: Long, internalDate: Instant, messageId: MessageId) {
+  case class MessageMetaData(uid: MessageUid, modSeq: ModSeq, flags: Flags, size: Long, internalDate: Instant, messageId: MessageId) {
     def toJava: JavaMessageMetaData = new JavaMessageMetaData(uid, modSeq, Flags.toJavaFlags(flags), size, Date.from(internalDate), messageId)
   }
 
@@ -137,7 +138,7 @@ object DTOs {
       Flags.fromJavaFlags(javaUpdatedFlags.getNewFlags))
   }
 
-  case class UpdatedFlags(uid: MessageUid, modSeq: Long, oldFlags: Flags, newFlags: Flags) {
+  case class UpdatedFlags(uid: MessageUid, modSeq: ModSeq, oldFlags: Flags, newFlags: Flags) {
     def toJava: JavaUpdatedFlags = JavaUpdatedFlags.builder()
       .uid(uid)
       .modSeq(modSeq)

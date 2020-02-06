@@ -24,11 +24,15 @@ In case of any error, the system will return an error message which is json form
 Also be aware that, in case things go wrong, all endpoints might return a 500 internal error (with a JSON body formatted
 as exposed above). To avoid information duplication, this is ommited on endpoint specific documentation.
 
+Finally, please note that in case of a malformed URL the 400 bad request response will contain an HTML body.
+
 ## Navigation menu
 
  - [HealthCheck](#HealthCheck)
  - [Administrating domains](#Administrating_domains)
  - [Administrating users](#Administrating_users)
+ - [Administrating mailboxes](#Administrating_mailboxes)
+ - [Administrating messages](#Administrating_messages)
  - [Administrating user mailboxes](#Administrating_user_mailboxes)
  - [Administrating quotas by users](#Administrating_quotas_by_users)
  - [Administrating quotas by domains](#Administrating_quotas_by_domains)
@@ -46,7 +50,6 @@ as exposed above). To avoid information duplication, this is ommited on endpoint
  - [Administrating mail queues](#Administrating_mail_queues)
  - [Administrating DLP Configuration](#Administrating_DLP_Configuration)
  - [Administrating Sieve quotas](#Administrating_Sieve_quotas)
- - [ReIndexing](#ReIndexing)
  - [Event Dead Letter](#Event_Dead_Letter)
  - [Deleted Messages Vault](#Deleted_Messages_Vault)
  - [Task management](#Task_management)
@@ -97,8 +100,8 @@ Supported health checks include:
 
 Response codes:
 
- - 200: All checks have answered with a Healthy status
- - 500: At least one check have answered with a Unhealthy or Degraded status
+ - 200: All checks have answered with a Healthy or Degraded status. James services can still be used.
+ - 503: At least one check have answered with a Unhealthy status
 
 ### Check single component
 
@@ -121,9 +124,9 @@ Will return the component's name, the component's escaped name, the health statu
 
 Response codes:
 
- - 200: The check has answered with a Healthy status.
+ - 200: The check has answered with a Healthy or Degraded status.
  - 404: A component with the given name was not found.
- - 500: The check has anwered with a Unhealthy or Degraded status.
+ - 503: The check has anwered with a Unhealthy status.
  
 ### List all health checks
  
@@ -182,6 +185,9 @@ Response codes:
 curl -XDELETE http://ip:port/domains/domainToBeDeleted
 ```
 
+Note: Deletion of an auto-detected domain, default domain or of an auto-detected ip is not supported. We encourage you instead to review 
+your [domain list configuration](https://james.apache.org/server/config-domainlist.html).
+
 Response codes:
 
  - 204: The domain was successfully removed
@@ -206,7 +212,7 @@ curl -XGET http://ip:port/domains
 Possible response:
 
 ```
-{"domains":["domain1", "domain2"]}
+["domain1", "domain2"]
 ```
 
 Response codes:
@@ -271,7 +277,7 @@ the domain part will be rewritten into destination.domain.tld (so into benwa@des
 
 Response codes:
 
- - 204: The redirection now exists
+ - 204: The redirection now no longer exists
  - 400: source.domain.tld or destination.domain.tld have an invalid syntax
  - 400: source domain and destination domain are the same
  - 404: source.domain.tld are not part of handled domains.
@@ -289,19 +295,15 @@ Response codes:
 curl -XPUT http://ip:port/users/usernameToBeUsed -d '{"password":"passwordToBeUsed"}'
 ```
 
-Resource name usernameToBeUsed:
-
- - can not be null or empty
- - can not be more than 255 characters
- - can not contain '/'
+Resource name usernameToBeUsed representing valid users, 
+hence it should match the criteria at [User Repositories documentation](/server/config-users.html) 
 
 Response codes:
 
  - 204: The user was successfully created
  - 400: The user name or the payload is invalid
- - 409: Conflict: A concurrent modification make that query to fail
 
-Note: if the user is already, its password will be updated.
+Note: if the user exists already, its password will be updated.
 
 ### Updating a user password
 
@@ -335,6 +337,220 @@ Response codes:
 
  - 200: The user name list was successfully retrieved
 
+## Administrating mailboxes
+
+### All mailboxes
+
+Several actions can be performed on the server mailboxes.
+
+Request pattern is:
+
+```
+curl -XPOST /mailboxes?action=XXX,...
+```
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
+
+Response codes:
+
+ - 201: Success. Corresponding task id is returned.
+ - 400: Error in the request. Details can be found in the reported error.
+
+The kind of task scheduled depends on the action parameter. See below for details.
+
+### Recomputing JMAP fast message view projection
+
+This action is only available for backends supporting JMAP protocol.
+
+Message fast view projection stores message properties expected to be fast to fetch but are actually expensive to compute,
+in order for GetMessages operation to be fast to execute for these properties.
+
+These projection items are asynchronously computed via a dedicated listener.
+
+You can force the full projection recomputation by calling the following endpoint:
+
+```
+curl -XPOST /mailboxes?task=recomputeFastViewProjectionItems
+```
+
+Will schedule a task for recomputing the fast message view projection for all mailboxes.
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
+
+
+The scheduled task will have the following type `RecomputeAllPreviewsTask` and the following `additionalInformation`:
+
+```
+{
+  "type":"RecomputeAllPreviewsTask",
+  "processedUserCount": 3,
+  "processedMessageCount": 3,
+  "failedUserCount": 2,
+  "failedMessageCount": 1
+}
+```
+
+Response codes:
+
+ - 201: Success. Corresponding task id is returned.
+ - 400: Error in the request. Details can be found in the reported error.
+
+#### ReIndexing action
+
+Be also aware of the limits of this API:
+
+Warning: During the re-indexing, the result of search operations might be altered.
+
+Warning: Canceling this task should be considered unsafe as it will leave the currently reIndexed mailbox as partially indexed.
+
+Warning: While we have been trying to reduce the inconsistency window to a maximum (by keeping track of ongoing events),
+concurrent changes done during the reIndexing might be ignored.
+
+The following actions can be performed:
+ - [ReIndexing all mails](#ReIndexing_all_mails)
+ - [Fixing previously failed ReIndexing](#Fixing_previously_failed_ReIndexing)
+
+##### ReIndexing all mails
+
+```
+curl -XPOST http://ip:port/mailboxes?task=reIndex
+```
+
+Will schedule a task for reIndexing all the mails stored on this James server.
+
+The scheduled task will have the following type `full-reindexing` and the following `additionalInformation`:
+
+```
+{
+  "successfullyReprocessedMailCount":18,
+  "failedReprocessedMailCount": 3,
+  "failures": {
+    "mbx1": [{"uid": 35}, {"uid": 45}],
+    "mbx2": [{"uid": 38}]
+  }
+}
+```
+
+##### Fixing previously failed ReIndexing
+
+Given `bbdb69c9-082a-44b0-a85a-6e33e74287a5` being a taskId generated for a reIndexing tasks
+
+```
+curl -XPOST http://ip:port/mailboxes?task=reIndex&reIndexFailedMessagesOf=bbdb69c9-082a-44b0-a85a-6e33e74287a5
+```
+
+The scheduled task will have the following type `error-recovery-indexation` and the following `additionalInformation`:
+
+```
+{
+  "successfullyReprocessedMailCount":18,
+  "failedReprocessedMailCount": 3,
+  "failures": {
+    "mbx1": [{"uid": 35}, {"uid": 45}],
+    "mbx2": [{"uid": 38}]
+  }
+}
+```
+
+### Single mailbox
+
+#### ReIndexing a mailbox mails
+
+```
+curl -XPOST http://ip:port/mailboxes/{mailboxId}?task=reIndex
+```
+
+Will schedule a task for reIndexing all the mails in one mailbox.
+
+Note that 'mailboxId' path parameter needs to be a (implementation dependent) valid mailboxId.
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
+
+Response codes:
+
+ - 201: Success. Corresponding task id is returned.
+ - 400: Error in the request. Details can be found in the reported error.
+
+The scheduled task will have the following type `mailbox-reindexing` and the following `additionalInformation`:
+
+```
+{
+  "mailboxId":"{mailboxId}",
+  "successfullyReprocessedMailCount":18,
+  "failedReprocessedMailCount": 3,
+  "failures": {
+    "mbx1": [{"uid": 35}, {"uid": 45}],
+    "mbx2": [{"uid": 38}]
+  }
+}
+```
+
+Warning: During the re-indexing, the result of search operations might be altered.
+
+Warning: Canceling this task should be considered unsafe as it will leave the currently reIndexed mailbox as partially indexed.
+
+Warning: While we have been trying to reduce the inconsistency window to a maximum (by keeping track of ongoing events),
+concurrent changes done during the reIndexing might be ignored.
+
+#### ReIndexing a single mail
+
+```
+curl -XPOST http://ip:port/mailboxes/{mailboxId}/uid/36?task=reIndex
+```
+
+Will schedule a task for reIndexing a single email.
+
+Note that 'mailboxId' path parameter needs to be a (implementation dependent) valid mailboxId.
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
+
+Response codes:
+
+ - 201: Success. Corresponding task id is returned.
+ - 400: Error in the request. Details can be found in the reported error.
+
+The scheduled task will have the following type `message-reindexing` and the following `additionalInformation`:
+
+```
+{
+  "mailboxId":"{mailboxId}",
+  "uid":18
+}
+```
+
+Warning: During the re-indexing, the result of search operations might be altered.
+
+Warning: Canceling this task should be considered unsafe as it will leave the currently reIndexed mailbox as partially indexed.
+
+## Administrating Messages
+
+### ReIndexing a single mail by messageId
+
+```
+curl -XPOST http://ip:port/messages/{messageId}?task=reIndex
+```
+
+Will schedule a task for reIndexing a single email in all the mailboxes containing it.
+
+Note that 'messageId' path parameter needs to be a (implementation dependent) valid messageId.
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
+
+Response codes:
+
+ - 201: Success. Corresponding task id is returned.
+ - 400: Error in the request. Details can be found in the reported error.
+
+The scheduled task will have the following type `messageId-reindexing` and the following `additionalInformation`:
+
+```
+{
+  "messageId":"18"
+}
+```
+
+Warning: During the re-indexing, the result of search operations might be altered.
+
 ## Administrating user mailboxes
 
  - [Creating a mailbox](#Creating_a_mailbox)
@@ -342,6 +558,7 @@ Response codes:
  - [Testing existence of a mailbox](#Testing_existence_of_a_mailbox)
  - [Listing user mailboxes](#Listing_user_mailboxes)
  - [Deleting_user_mailboxes](#Deleting_user_mailboxes)
+ - [ReIndexing a user mails](#ReIndexing_a_user_mails)
 
 ### Creating a mailbox
 
@@ -357,7 +574,6 @@ Response codes:
  - 204: The mailbox now exists on the server
  - 400: Invalid mailbox name
  - 404: The user name does not exist
- - 500: Internal error
 
  To create nested mailboxes, for instance a work mailbox inside the INBOX mailbox, people should use the . separator. The sample query is:
 
@@ -368,11 +584,11 @@ curl -XDELETE http://ip:port/users/usernameToBeUsed/mailboxes/INBOX.work
 ### Deleting a mailbox and its children
 
 ```
-curl -XDELETE http://ip:port/users/usernameToBeUsed/mailboxes/mailboxNameToBeCreated
+curl -XDELETE http://ip:port/users/usernameToBeUsed/mailboxes/mailboxNameToBeDeleted
 ```
 
 Resource name usernameToBeUsed should be an existing user
-Resource name mailboxNameToBeCreated should not be empty
+Resource name mailboxNameToBeDeleted should not be empty
 
 Response codes:
 
@@ -427,6 +643,42 @@ Response codes:
  - 204: The user do not have mailboxes anymore
  - 404: The user name does not exist
 
+### ReIndexing a user mails
+ 
+```
+curl -XPOST http://ip:port/users/usernameToBeUsed/mailboxes?task=reIndex
+```
+
+Will schedule a task for reIndexing all the mails in "bob@domain.com" mailboxes (encoded above).
+ 
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
+ 
+Response codes:
+ 
+ - 201: Success. Corresponding task id is returned.
+ - 400: Error in the request. Details can be found in the reported error.
+
+The scheduled task will have the following type `user-reindexing` and the following `additionalInformation`:
+
+```
+{
+  "user":"bob@domain.com",
+  "successfullyReprocessedMailCount":18,
+  "failedReprocessedMailCount": 3,
+  "failures": {
+    "mbx1": [{"uid": 35}, {"uid": 45}],
+    "mbx2": [{"uid": 38}]
+  }
+}
+```
+
+Warning: During the re-indexing, the result of search operations might be altered.
+
+Warning: Canceling this task should be considered unsafe as it will leave the currently reIndexed mailbox as partially indexed.
+
+Warning: While we have been trying to reduce the inconsistency window to a maximum (by keeping track of ongoing events),
+concurrent changes done during the reIndexing might be ignored.
+
 ## Administrating quotas by users
 
  - [Getting the quota for a user](#Getting_the_quota_for_a_user)
@@ -468,12 +720,12 @@ The answer is the details of the quota of that user.
     "size":42
   },
   "occupation": {
-    "size":1000,
-    "count":10000,
+    "size":13,
+    "count":21,
     "ratio": {
-      "size":0.8,
-      "count":0.6,
-      "max":0.8
+      "size":0.25,
+      "count":0.5,
+      "max":0.5
     }
   }
 }
@@ -523,7 +775,6 @@ Response codes:
  - 204: The quota has been updated
  - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The user does not exist
- - 409: The requested restriction can’t be enforced right now.
 
 ### Getting the quota count for a user
 
@@ -542,6 +793,7 @@ The answer looks like:
 Response codes:
 
  - 200: The user's quota was successfully retrieved
+ - 204: No quota count limit is defined at the user level for this user
  - 404: The user does not exist
 
 ### Updating the quota count for a user
@@ -563,7 +815,6 @@ Response codes:
  - 204: The quota has been updated
  - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The user does not exist
- - 409: The requested restriction can’t be enforced right now.
 
 ### Deleting the quota count for a user
 
@@ -576,9 +827,7 @@ Resource name usernameToBeUsed should be an existing user
 Response codes:
 
  - 204: The quota has been updated to unlimited value.
- - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The user does not exist
- - 409: The requested restriction can’t be enforced right now.
 
 ### Getting the quota size for a user
 
@@ -597,6 +846,7 @@ The answer looks like:
 Response codes:
 
  - 200: The user's quota was successfully retrieved
+ - 204: No quota size limit is defined at the user level for this user
  - 404: The user does not exist
 
 ### Updating the quota size for a user
@@ -618,7 +868,6 @@ Response codes:
  - 204: The quota has been updated
  - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The user does not exist
- - 409: The requested restriction can’t be enforced right now.
 
 ### Deleting the quota size for a user
 
@@ -631,9 +880,7 @@ Resource name usernameToBeUsed should be an existing user
 Response codes:
 
  - 204: The quota has been updated to unlimited value.
- - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The user does not exist
- - 409: The requested restriction can’t be enforced right now.
 
 ### Searching user by quota ratio
 
@@ -665,12 +912,12 @@ Will return:
         "size":42
       },
       "occupation": {
-        "size":1000,
-        "count":10000,
+        "size":48,
+        "count":21,
         "ratio": {
-          "size":0.8,
-          "count":0.6,
-          "max":0.8
+          "size":0.9230,
+          "count":0.5,
+          "max":0.9230
         }
       }
     }
@@ -782,7 +1029,6 @@ Response codes:
  - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The domain does not exist
  - 405: Domain Quota configuration not supported when virtual hosting is desactivated.
- - 409: The requested restriction can’t be enforced right now.
 
 ### Getting the quota count for a domain
 
@@ -801,9 +1047,9 @@ The answer looks like:
 Response codes:
 
  - 200: The domain's quota was successfully retrieved
+ - 204: No quota count limit is defined at the domain level for this domain
  - 404: The domain does not exist
  - 405: Domain Quota configuration not supported when virtual hosting is desactivated.
- - 500: Internal error while accessing the domain's quota
 
 ### Updating the quota count for a domain
 
@@ -825,7 +1071,6 @@ Response codes:
  - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The domain does not exist
  - 405: Domain Quota configuration not supported when virtual hosting is desactivated.
- - 409: The requested restriction can’t be enforced right now.
 
 ### Deleting the quota count for a domain
 
@@ -838,11 +1083,8 @@ Resource name domainToBeUsed should be an existing domain.
 Response codes:
 
  - 204: The quota has been updated to unlimited value.
- - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The domain does not exist
  - 405: Domain Quota configuration not supported when virtual hosting is desactivated.
- - 409: The requested restriction can’t be enforced right now.
- - 500: Internal server error - Something went bad on the server side.
 
 ### Getting the quota size for a domain
 
@@ -861,6 +1103,7 @@ The answer looks like:
 Response codes:
 
  - 200: The domain's quota was successfully retrieved
+ - 204: No quota size limit is defined at the domain level for this domain
  - 404: The domain does not exist
  - 405: Domain Quota configuration not supported when virtual hosting is desactivated.
 
@@ -884,8 +1127,6 @@ Response codes:
  - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The domain does not exist
  - 405: Domain Quota configuration not supported when virtual hosting is desactivated.
- - 409: The requested restriction can’t be enforced right now.
- - 500: Internal server error - Something went bad on the server side.
 
 ### Deleting the quota size for a domain
 
@@ -898,10 +1139,7 @@ Resource name domainToBeUsed should be an existing domain.
 Response codes:
 
  - 204: The quota has been updated to unlimited value.
- - 400: The body is not a positive integer neither an unlimited value (-1).
  - 404: The domain does not exist
- - 409: The requested restriction can’t be enforced right now.
- - 500: Internal server error - Something went bad on the server side.
 
 ## Administrating global quotas
 
@@ -983,6 +1221,7 @@ The answer looks like:
 Response codes:
 
  - 200: The quota was successfully retrieved
+ - 204: No quota count limit is defined at the global level
 
 ### Updating the global quota count
 
@@ -1011,9 +1250,6 @@ curl -XDELETE http://ip:port/quota/count
 Response codes:
 
  - 204: The quota has been updated to unlimited value.
- - 400: The body is not a positive integer neither an unlimited value (-1).
- - 404: The user does not exist
- - 409: The requested restriction can’t be enforced right now.
 
 ### Getting the global quota size
 
@@ -1031,6 +1267,7 @@ The answer looks like:
 Response codes:
 
  - 200: The quota was successfully retrieved
+ - 204: No quota size limit is defined at the global level
 
 ### Updating the global quota size
 
@@ -1048,7 +1285,6 @@ Response codes:
 
  - 204: The quota has been updated
  - 400: The body is not a positive integer neither an unlimited value (-1).
- - 409: The requested restriction can’t be enforced right now.
 
 ### Deleting the global quota size
 
@@ -1059,8 +1295,6 @@ curl -XDELETE http://ip:port/quota/size
 Response codes:
 
  - 204: The quota has been updated to unlimited value.
- - 400: The body is not a positive integer neither an unlimited value (-1).
- - 409: The requested restriction can’t be enforced right now.
 
 ## Cassandra Schema upgrades
 
@@ -1092,7 +1326,7 @@ curl -XGET http://ip:port/cassandra/version
 Will return:
 
 ```
-2
+{"version": 2}
 ```
 
 Where the number corresponds to the current schema version of the database you are using.
@@ -1104,13 +1338,13 @@ Response codes:
 ### Retrieving latest available Cassandra schema version
 
 ```
-curl -XGET http://ip:port/cassandra/version
+curl -XGET http://ip:port/cassandra/version/latest
 ```
 
 Will return:
 
 ```
-3
+{"version": 3}
 ```
 
 Where the number corresponds to the latest available schema version of the database you are using. This means you can be
@@ -1126,12 +1360,9 @@ Response codes:
 curl -XPOST http://ip:port/cassandra/version/upgrade -d '3'
 ```
 
+Will schedule the run of the migrations you need to reach schema version 3.
 
-Will schedule the run of the migrations you need to reach schema version 3. The `taskId` will allow you to monitor and manage this process.
-
-```
-{"taskId":"3294a976-ce63-491e-bd52-1b6f465ed7a2"}
-```
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
@@ -1144,7 +1375,7 @@ Note that several calls to this endpoint will be run in a sequential pattern.
 If the server restarts during the migration, the migration is silently aborted.
 
 
-The scheduled task will have the following type `CassandraMigration` and the following `additionalInformation`:
+The scheduled task will have the following type `cassandra-migration` and the following `additionalInformation`:
 
 ```
 {"toVersion":3}
@@ -1156,19 +1387,9 @@ The scheduled task will have the following type `CassandraMigration` and the fol
 curl -XPOST http://ip:port/cassandra/version/upgrade/latest
 ```
 
-Will schedule the run of the migrations you need to reach the latest schema version. The `taskId` will allow you to monitor and manage this process.
+Will schedule the run of the migrations you need to reach the latest schema version.
 
-```
-{"taskId":"3294a976-ce63-491e-bd52-1b6f465ed7a2"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
@@ -1179,7 +1400,7 @@ Note that several calls to this endpoint will be run in a sequential pattern.
 
 If the server restarts during the migration, the migration is silently aborted.
 
-The scheduled task will have the following type `CassandraMigration` and the following `additionalInformation`:
+The scheduled task will have the following type `cassandra-migration` and the following `additionalInformation`:
 
 ```
 {"toVersion":2}
@@ -1201,26 +1422,14 @@ Will scedule a task for :
  - Move it's messages into `id2` mailbox
  - Union the rights of both mailboxes
 
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
- - 201: Success. Corresponding task id is returned.
+ - 201: Task generation succeeded. Corresponding task id is returned.
  - 400: Unable to parse the body.
 
-The scheduled task will have the following type `mailboxMerging` and the following `additionalInformation`:
+The scheduled task will have the following type `mailbox-merging` and the following `additionalInformation`:
 
 ```
 {
@@ -1361,8 +1570,8 @@ Will return the destination addresses of this forward as a list of JSON Strings 
 
 ```
 [
-  {"mailAddres":"destination1@domain.com"},
-  {"mailAddres":"destination2@domain.com"}
+  {"mailAddress":"destination1@domain.com"},
+  {"mailAddress":"destination2@domain.com"}
 ]
 ```
 
@@ -1536,7 +1745,6 @@ Response codes:
 
  - 200: OK
  - 400: The `fromDomain` resource name is invalid
- - 400: The `fromDomain` is not managed by the DomainList
  - 404: The `fromDomain` resource name is not found
 
 ### Adding a domain mapping
@@ -1656,6 +1864,7 @@ Here are the following actions available on address mappings:
 
  - [List all address mappings](#List_all_address_mappinig)
  - [Add an address mapping](#Add_an_address_mapping)
+ - [Remove an address mapping](#Remove_an_address_mapping)
 
 ### List all address mappings
 
@@ -1704,6 +1913,7 @@ Response body:
 ```
 
 Response code:
+
  - 200: OK
 
 ### Add an address mapping
@@ -1716,9 +1926,27 @@ Mapping source is the value of {mappingSource}
 Mapping destination is the value of {destinationAddress}
 Type of mapping destination is Address
 
-Respond code:
-- 204: NO CONTENT
-- 400: INVALID PARAMETERS
+Response codes:
+
+- 204: Action successfully performed
+- 400: Invalid parameters
+
+### Remove an address mapping
+
+```
+curl -XDELETE http://ip:port/mappings/address/{mappingSource}/targets/{destinationAddress}
+```
+
+Remove an address mapping from the [Recipients rewrite table](/server/config-recipientrewritetable.html)
+Mapping source is the value of {mappingSource}
+Mapping destination is the value of {destinationAddress}
+Type of mapping destination is Address
+
+Response codes:
+
+- 204: Action successfully performed
+- 400: Invalid parameters
+
 
 ## User Mappings
 
@@ -1825,13 +2053,13 @@ Response codes:
 ### Getting additional information for a mail repository
 
 ```
-curl -XGET http://ip:port/mailRepositories/encodedPathOfTheRepository/
+curl -XGET http://ip:port/mailRepositories/encodedPathOfTheRepository
 ```
 
 Resource name `encodedPathOfTheRepository` should be the resource path of an existing mail repository. Example:
 
 ```
-curl -XGET http://ip:port/mailRepositories/var%2Fmail%2Ferror%2F/
+curl -XGET http://ip:port/mailRepositories/var%2Fmail%2Ferror%2F
 ```
 
 The answer looks like:
@@ -1917,7 +2145,9 @@ If the Accept header in the request is "application/json", then the response loo
 ```
 If the Accept header in the request is "message/rfc822", then the response will be the _eml_ file itself.
 
-Additional query parameter `additionalFields` add the existing informations to the response for the supported values:
+Additional query parameter `additionalFields` add the existing information 
+to the response for the supported values (only work with "application/json" Accept header):
+
  - attributes
  - headers
  - textBody
@@ -2008,26 +2238,14 @@ Resource name `encodedPathOfTheRepository` should be the resource path of an exi
 curl -XDELETE http://ip:port/mailRepositories/var%2Fmail%2Ferror%2F/mails
 ```
 
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
- - 201: Success. Corresponding task id is returned.
+ - 201: Task generation succeeded. Corresponding task id is returned.
  - 404: Could not find that mail repository
 
-The scheduled task will have the following type `clearMailRepository` and the following `additionalInformation`:
+The scheduled task will have the following type `clear-mail-repository` and the following `additionalInformation`:
 
 ```
 {
@@ -2055,7 +2273,7 @@ For instance:
 curl -XPATCH http://ip:port/mailRepositories/var%2Fmail%2Ferror%2F/mails?action=reprocess
 ```
 
-Additional query paramaters are supported:
+Additional query parameters are supported:
  - `queue` allow you to target the mail queue you want to enqueue the mails in.
  - `processor` allow you to overwrite the state of the reprocessing mails, and thus select the processors they will start their processing in.
 
@@ -2068,27 +2286,14 @@ curl -XPATCH http://ip:port/mailRepositories/var%2Fmail%2Ferror%2F/mails?action=
 
 Note that the `action` query parameter is compulsary and can only take value `reprocess`.
 
-
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
- - 201: Success. Corresponding task id is returned.
+ - 201: Task generation succeeded. Corresponding task id is returned.
  - 404: Could not find that mail repository
 
-The scheduled task will have the following type `reprocessingAllTask` and the following `additionalInformation`:
+The scheduled task will have the following type `reprocessing-all` and the following `additionalInformation`:
 
 ```
 {
@@ -2116,10 +2321,12 @@ For instance:
 curl -XPATCH http://ip:port/mailRepositories/var%2Fmail%2Ferror%2F/mails/name1?action=reprocess
 ```
 
-Additional query paramaters are supported:
+Additional query parameters are supported:
  - `queue` allow you to target the mail queue you want to enqueue the mails in.
  - `processor` allow you to overwrite the state of the reprocessing mails, and thus select the processors they will start their processing in.
 
+While `processor` being an optional parameter, not specifying it will result reprocessing the mails in their current state ([see documentation about processors and state](https://james.apache.org/server/feature-mailetcontainer.html#Processors)).
+Consequently, only few cases will give a different result, definitively storing them out of the mail repository.
 
 For instance:
 
@@ -2129,27 +2336,14 @@ curl -XPATCH http://ip:port/mailRepositories/var%2Fmail%2Ferror%2F/mails/name1?a
 
 Note that the `action` query parameter is compulsary and can only take value `reprocess`.
 
-
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
- - 201: Success. Corresponding task id is returned.
+ - 201: Task generation succeeded. Corresponding task id is returned.
  - 404: Could not find that mail repository
 
-The scheduled task will have the following type `reprocessingOneTask` and the following `additionalInformation`:
+The scheduled task will have the following type `reprocessing-one` and the following `additionalInformation`:
 
 ```
 {
@@ -2248,14 +2442,15 @@ This request should have exactly one query parameter from the following list:
 
 The mails from the given mail queue matching the query parameter will be deleted.
 
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
- - 201: Success. Corresponding task id is returned.
+ - 201: Task generation succeeded. Corresponding task id is returned.
  - 400: Invalid request
  - 404: The mail queue does not exist
 
-The scheduled task will have the following type `deleteMailsFromMailQueue` and the following `additionalInformation`:
+The scheduled task will have the following type `delete-mails-from-mail-queue` and the following `additionalInformation`:
 
 ```
 {
@@ -2276,14 +2471,15 @@ curl -XDELETE http://ip:port/mailQueues/mailQueueName/mails
 
 All mails from the given mail queue will be deleted.
 
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
- - 201: Success. Corresponding task id is returned.
+ - 201: Task generation succeeded. Corresponding task id is returned.
  - 400: Invalid request
  - 404: The mail queue does not exist
 
-The scheduled task will have the following type `clearMailQueue` and the following `additionalInformation`:
+The scheduled task will have the following type `clear-mail-queue` and the following `additionalInformation`:
 
 ```
 {
@@ -2305,6 +2501,8 @@ The payload should set the `delayed` field to false inorder to remove the delay.
 and it performs a flush.
 
 The mails delayed in the given mail queue will be flushed.
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
@@ -2556,292 +2754,6 @@ curl -XDELETE http://ip:port/sieve/quota/users/user@domain.com
 Response codes:
  - 204: Operation succeeded
 
-
-## ReIndexing
-
- - [ReIndexing all mails](#ReIndexing_all_mails)
- - [ReIndexing a user mails](#ReIndexing_a_user_mails)
- - [ReIndexing a mailbox mails](#ReIndexing_a_mailbox_mails)
- - [ReIndexing a single mail](#ReIndexing_a_single_mail)
- - [ReIndexing a single mail by messageId](#ReIndexing_a_single_mail_by_messageId)
-
-Be also aware of the limits of these APIs:
-
-Warning: During the re-indexing, the result of search operations might be altered.
-
-Warning: Canceling this task should be considered unsafe as it will leave the currently reIndexed mailbox as partially indexed.
-
-Warning: While we have been trying to reduce the inconsistency window to a maximum (by keeping track of ongoing events),
-concurrent changes done during the reIndexing might be ignored.
-
-### ReIndexing all mails
-
-```
-curl -XPOST http://ip:port/mailboxes?task=reIndex
-```
-
-Will schedule a task for reIndexing all the mails stored on this James server.
-
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
-
-Response codes:
-
- - 201: Success. Corresponding task id is returned.
- - 400: Error in the request. Details can be found in the reported error.
-
-The scheduled task will have the following type `FullReIndexing` and the following `additionalInformation`:
-
-```
-{
-  "successfullyReprocessedMailCount":18,
-  "failedReprocessedMailCount": 3,
-  "failures": {
-    "mbx1": [{"uid": 35}, {"uid": 45}],
-    "mbx2": [{"uid": 38}]
-  }
-}
-```
-
-Warning: During the re-indexing, the result of search operations might be altered.
-
-Warning: Canceling this task should be considered unsafe as it will leave the currently reIndexed mailbox as partially indexed.
-
-Warning: While we have been trying to reduce the inconsistency window to a maximum (by keeping track of ongoing events),
-concurrent changes done during the reIndexing might be ignored.
-
-### ReIndexing a user mails
-
-```
-curl -XPOST http://ip:port/mailboxes?task=reIndex,user=bob%40domain.com
-```
-
-Will schedule a task for reIndexing all the mails in "bob@domain.com" mailboxes (encoded above).
-
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
-
-Response codes:
-
- - 201: Success. Corresponding task id is returned.
- - 400: Error in the request. Details can be found in the reported error.
-
-The scheduled task will have the following type `userReIndexing` and the following `additionalInformation`:
-
-```
-{
-  "user":"bob@domain.com",
-  "successfullyReprocessedMailCount":18,
-  "failedReprocessedMailCount": 3,
-  "failures": {
-    "mbx1": [{"uid": 35}, {"uid": 45}],
-    "mbx2": [{"uid": 38}]
-  }
-}
-```
-
-Warning: During the re-indexing, the result of search operations might be altered.
-
-Warning: Canceling this task should be considered unsafe as it will leave the currently reIndexed mailbox as partially indexed.
-
-Warning: While we have been trying to reduce the inconsistency window to a maximum (by keeping track of ongoing events),
-concurrent changes done during the reIndexing might be ignored.
-
-### ReIndexing a mailbox mails
-
-```
-curl -XPOST http://ip:port/mailboxes/{mailboxId}?task=reIndex
-```
-
-Will schedule a task for reIndexing all the mails in one mailbox.
-
-Note that 'mailboxId' path parameter needs to be a (implementation dependent) valid mailboxId.
-
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
-
-Response codes:
-
- - 201: Success. Corresponding task id is returned.
- - 400: Error in the request. Details can be found in the reported error.
-
-The scheduled task will have the following type `mailboxReIndexing` and the following `additionalInformation`:
-
-```
-{
-  "mailboxId":"{mailboxId}",
-  "successfullyReprocessedMailCount":18,
-  "failedReprocessedMailCount": 3,
-  "failures": {
-    "mbx1": [{"uid": 35}, {"uid": 45}],
-    "mbx2": [{"uid": 38}]
-  }
-}
-```
-
-Warning: During the re-indexing, the result of search operations might be altered.
-
-Warning: Canceling this task should be considered unsafe as it will leave the currently reIndexed mailbox as partially indexed.
-
-Warning: While we have been trying to reduce the inconsistency window to a maximum (by keeping track of ongoing events),
-concurrent changes done during the reIndexing might be ignored.
-
-### Fixing previously failed ReIndexing
-
-Given `bbdb69c9-082a-44b0-a85a-6e33e74287a5` being a taskId generated for a reIndexing tasks
-
-```
-curl -XPOST http://ip:port/mailboxes?task=reIndex&reIndexFailedMessagesOf=bbdb69c9-082a-44b0-a85a-6e33e74287a5
-```
-
-Will schedule a task for reIndexing all the mails that this task failed to reIndex.
-
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positioned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
-
-Response codes:
-
- - 201: Success. Corresponding task id is returned.
- - 400: Error in the request. Details can be found in the reported error.
-
-The scheduled task will have the following type `ReIndexPreviousFailures` and the following `additionalInformation`:
-
-```
-{
-  "successfullyReprocessedMailCount":18,
-  "failedReprocessedMailCount": 3,
-  "failures": {
-    "mbx1": [{"uid": 35}, {"uid": 45}],
-    "mbx2": [{"uid": 38}]
-  }
-}
-```
-
-### ReIndexing a single mail
-
-```
-curl -XPOST http://ip:port/mailboxes/{mailboxId}/uid/36?task=reIndex
-```
-
-Will schedule a task for reIndexing a single email.
-
-Note that 'mailboxId' path parameter needs to be a (implementation dependent) valid mailboxId.
-
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
-
-Response codes:
-
- - 201: Success. Corresponding task id is returned.
- - 400: Error in the request. Details can be found in the reported error.
-
-The scheduled task will have the following type `messageReIndexing` and the following `additionalInformation`:
-
-```
-{
-  "mailboxId":"{mailboxId}",
-  "uid":18
-}
-```
-
-Warning: During the re-indexing, the result of search operations might be altered.
-
-Warning: Canceling this task should be considered unsafe as it will leave the currently reIndexed mailbox as partially indexed.
-
-### ReIndexing a single mail by messageId
-
-```
-curl -XPOST http://ip:port/messages/{messageId}?task=reIndex
-```
-
-Will schedule a task for reIndexing a single email in all the mailboxes containing it.
-
-Note that 'messageId' path parameter needs to be a (implementation dependent) valid messageId.
-
-The response to that request will be the scheduled `taskId` :
-
-```
-{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
-```
-
-Positionned headers:
-
- - Location header indicates the location of the resource associated with the scheduled task. Example:
-
-```
-Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
-```
-
-Response codes:
-
- - 201: Success. Corresponding task id is returned.
- - 400: Error in the request. Details can be found in the reported error.
-
-The scheduled task will have the following type `MessageIdReIndexingTask` and the following `additionalInformation`:
-
-```
-{
-  "messageId":"18"
-}
-```
-
-Warning: During the re-indexing, the result of search operations might be altered.
-
 ## Event Dead Letter
 
 The EventBus allows to register 'group listeners' that are called in a (potentially) distributed fashion. These group
@@ -2932,6 +2844,8 @@ curl -XPOST http://ip:port/events/deadLetter
 Will create a task that will attempt to redeliver all events stored in "Event Dead Letter".
 If successful, redelivered events will then be removed from "Dead Letter".
 
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
+
 Response codes:
 
  - 201: the taskId of the created task
@@ -2946,6 +2860,8 @@ curl -XPOST http://ip:port/events/deadLetter/groups/org.apache.james.mailbox.eve
 Will create a task that will attempt to redeliver all events of a particular group stored in "Event Dead Letter".
 If successful, redelivered events will then be removed from "Dead Letter".
 
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
+
 Response codes:
 
  - 201: the taskId of the created task
@@ -2959,6 +2875,8 @@ curl -XPOST http://ip:port/events/deadLetter/groups/org.apache.james.mailbox.eve
 
 Will create a task that will attempt to redeliver a single event of a particular group stored in "Event Dead Letter".
 If successful, redelivered event will then be removed from "Dead Letter".
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes:
 
@@ -3107,8 +3025,10 @@ Response code:
    - Json query object contains unsupported operator, fieldName
    - Json query object values violate parsing rules 
  - 404: User not found
+ 
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
-The scheduled task will have the following type `deletedMessages/restore` and the following `additionalInformation`:
+The scheduled task will have the following type `deleted-messages-restore` and the following `additionalInformation`:
 
 ```
 {
@@ -3148,7 +3068,9 @@ Response code:
    - Json query object values violate parsing rules 
  - 404: User not found
 
-The scheduled task will have the following type `deletedMessages/export` and the following `additionalInformation`:
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
+
+The scheduled task will have the following type `deleted-messages-export` and the following `additionalInformation`:
 
 ```
 {
@@ -3170,8 +3092,10 @@ You can overwrite 'retentionPeriod' configuration in 'deletedMessageVault' confi
 Purge all deleted messages older than the configured 'retentionPeriod'
 
 ```
-curl -XDEL http://ip:port/deletedMessages?scope=expired
+curl -XDELETE http://ip:port/deletedMessages?scope=expired
 ```
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response code:
 
@@ -3187,8 +3111,10 @@ You may want to call this endpoint on a regular basis.
 Delete a Deleted Message with MessageId
 
 ```
-curl -XDEL http://ip:port/deletedMessages/users/user@domain.ext/messages/3294a976-ce63-491e-bd52-1b6f465ed7a2
+curl -XDELETE http://ip:port/deletedMessages/users/user@domain.ext/messages/3294a976-ce63-491e-bd52-1b6f465ed7a2
 ```
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response code:
 
@@ -3198,14 +3124,14 @@ Response code:
    - messageId parameter is invalid
  - 404: User not found
  
- The scheduled task will have the following type `deletedMessages/delete` and the following `additionalInformation`:
+The scheduled task will have the following type `deleted-messages-delete` and the following `additionalInformation`:
  
- ```
+```
  {
    "user": "user@domain.ext",
    "deleteMessageId": "3294a976-ce63-491e-bd52-1b6f465ed7a2"
  }
- ```
+```
  
 while:
  - user: delete deleted messages from this user
@@ -3221,6 +3147,7 @@ Note that the `taskId` used in the following APIs is returned by other WebAdmin 
  - [Awaiting a task](#Awaiting_a_task)
  - [Cancelling a task](#Cancelling_a_task)
  - [Listing tasks](#Listing_tasks)
+ - [Endpoints returning a task](#Endpoints_returning_a_task)
 
 ### Getting a task details
 
@@ -3240,7 +3167,7 @@ An Execution Report will be returned:
     "taskId": "3294a976-ce63-491e-bd52-1b6f465ed7a2",
     "additionalInformation": {},
     "status": "completed",
-    "type": "typeOfTheTask"
+    "type": "type-of-the-task"
 }
 ```
 
@@ -3269,16 +3196,29 @@ One can await the end of a task, then receive it's final execution report.
 That feature is especially usefull for testing purpose but still can serve real-life scenari.
 
 ```
-curl -XGET http://ip:port/tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2/await
+curl -XGET http://ip:port/tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2/await?timeout=duration
 ```
 
 An Execution Report will be returned.
 
+`timeout` is optional.
+By default it is set to 365 days (the maximum value).
+The expected value is expressed in the following format: `Nunit`.
+`N` should be strictly positive.
+`unit` could be either in the short form (`s`, `m`, `h`, etc.), or in the long form (`day`, `week`, `month`, etc.).
+
+Examples:
+ - `30s`
+ - `5m`
+ - `7d`
+ - `1y`
+
 Response codes:
 
  - 200: The specific task was found and the execution report exposed above is returned
- - 400: Invalid task ID
+ - 400: Invalid task ID or invalid timeout
  - 404: Task ID was not found
+ - 408: The timeout has been reached
 
 ### Cancelling a task
 
@@ -3314,6 +3254,37 @@ Response codes:
 
  - 200: A list of corresponding tasks is returned
  - 400: Invalid status value
+ 
+### Endpoints returning a task
+
+Many endpoints do generate a task.
+
+Example:
+
+```
+curl -XPOST /endpoint?action=XXX
+```
+
+The response to these requests will be the scheduled `taskId` :
+
+```
+{"taskId":"5641376-02ed-47bd-bcc7-76ff6262d92a"}
+```
+
+Positionned headers:
+
+ - Location header indicates the location of the resource associated with the scheduled task. Example:
+
+```
+Location: /tasks/3294a976-ce63-491e-bd52-1b6f465ed7a2
+```
+
+Response codes:
+
+ - 201: Task generation succeeded. Corresponding task id is returned.
+ - Other response codes might be returned depending on the endpoint
+
+The additional information returned depends on the scheduled task type and is documented in the endpoint documentation.
 
 ## Cassandra extra operations
 
@@ -3341,6 +3312,8 @@ For example :
 ```
 curl -XPOST /cassandra/mappings?action=SolveInconsistencies
 ```
+
+[More details about endpoints returning a task](#Endpoints_returning_a_task).
 
 Response codes :
 

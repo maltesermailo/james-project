@@ -18,29 +18,40 @@
  ****************************************************************/
 package org.apache.james.mailbox.maildir;
 
-import org.apache.james.mailbox.AbstractSubscriptionManagerTest;
+import java.io.File;
+
 import org.apache.james.mailbox.SubscriptionManager;
+import org.apache.james.mailbox.SubscriptionManagerContract;
+import org.apache.james.mailbox.exception.SubscriptionException;
 import org.apache.james.mailbox.store.JVMMailboxPathLocker;
 import org.apache.james.mailbox.store.StoreSubscriptionManager;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
 
-public class MaildirSubscriptionManagerTest extends AbstractSubscriptionManagerTest {
+class MaildirSubscriptionManagerTest implements SubscriptionManagerContract {
 
-    @Rule
-    public TemporaryFolder tmpFolder = new TemporaryFolder();
-    
-    @Before
-    public void setUp() throws Exception {
-        super.setup();
-    }
-    
+    @TempDir
+    File tmpFolder;
+
+    SubscriptionManager subscriptionManager;
+
     @Override
-    public SubscriptionManager createSubscriptionManager() {
+    public SubscriptionManager getSubscriptionManager() {
+        return subscriptionManager;
+    }
+
+    @BeforeEach
+    void setUp() {
         MaildirStore store = new MaildirStore(tmpFolder + "/Maildir/%domain/%user", new JVMMailboxPathLocker());
         MaildirMailboxSessionMapperFactory factory = new MaildirMailboxSessionMapperFactory(store);
-        return new StoreSubscriptionManager(factory);
+
+        subscriptionManager = new StoreSubscriptionManager(factory);
     }
 
+    @AfterEach
+    void tearDown() throws SubscriptionException {
+        subscriptionManager.unsubscribe(SESSION, MAILBOX1);
+        subscriptionManager.unsubscribe(SESSION, MAILBOX2);
+    }
 }

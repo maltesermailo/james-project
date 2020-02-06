@@ -21,13 +21,13 @@ package org.apache.james.blob.objectstorage.aws;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import javax.annotation.PreDestroy;
@@ -36,7 +36,7 @@ import javax.inject.Inject;
 import org.apache.commons.io.FileUtils;
 import org.apache.james.blob.api.BlobId;
 import org.apache.james.blob.objectstorage.BlobPutter;
-import org.apache.james.blob.objectstorage.ObjectStorageBlobsDAOBuilder;
+import org.apache.james.blob.objectstorage.ObjectStorageBlobStoreBuilder;
 import org.apache.james.blob.objectstorage.ObjectStorageBucketName;
 import org.apache.james.util.Size;
 import org.apache.james.util.concurrent.NamedThreadFactory;
@@ -54,10 +54,11 @@ import com.amazonaws.retry.PredefinedRetryPolicies;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
-import com.github.fge.lambdas.Throwing;
+import com.github.fge.lambdas.runnable.ThrowingRunnable;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Module;
@@ -69,12 +70,11 @@ import reactor.retry.Retry;
 public class AwsS3ObjectStorage {
 
     private static final Iterable<Module> JCLOUDS_MODULES = ImmutableSet.of(new SLF4JLoggingModule());
-    public  static final int MAX_THREADS = 5;
+    private static final int MAX_THREADS = 5;
     private static final boolean DO_NOT_SHUTDOWN_THREAD_POOL = false;
     private static final int MAX_ERROR_RETRY = 5;
-    private static final int FIRST_TRY = 0;
     private static final int MAX_RETRY_ON_EXCEPTION = 3;
-    public static Size MULTIPART_UPLOAD_THRESHOLD;
+    private static Size MULTIPART_UPLOAD_THRESHOLD;
 
     static {
         try {
@@ -97,8 +97,8 @@ public class AwsS3ObjectStorage {
         executorService.shutdownNow();
     }
 
-    public static ObjectStorageBlobsDAOBuilder.RequireBlobIdFactory daoBuilder(AwsS3AuthConfiguration configuration) {
-        return ObjectStorageBlobsDAOBuilder.forBlobStore(new BlobStoreBuilder(configuration));
+    public static ObjectStorageBlobStoreBuilder.RequireBlobIdFactory blobStoreBuilder(AwsS3AuthConfiguration configuration) {
+        return ObjectStorageBlobStoreBuilder.forBlobStore(new BlobStoreBuilder(configuration));
     }
 
     public Optional<BlobPutter> putBlob(AwsS3AuthConfiguration configuration) {
@@ -137,68 +137,76 @@ public class AwsS3ObjectStorage {
         private static final Duration FIRST_BACK_OFF = Duration.ofMillis(100);
         private static final Duration FOREVER = Duration.ofMillis(Long.MAX_VALUE);
 
-        private final AwsS3AuthConfiguration configuration;
-        private final ExecutorService executorService;
+        private final AmazonS3 s3Client;
+        private final TransferManager transferManager;
 
-        AwsS3BlobPutter(AwsS3AuthConfiguration configuration, ExecutorService executorService) {
-            this.configuration = configuration;
-            this.executorService = executorService;
+        AwsS3BlobPutter(AwsS3AuthConfiguration authConfiguration, ExecutorService executorService) {
+            this.s3Client = getS3Client(authConfiguration, getClientConfiguration());
+            this.transferManager = getTransferManager(s3Client, executorService);
         }
 
         @Override
-        public void putDirectly(ObjectStorageBucketName bucketName, Blob blob) {
-            writeFileAndAct(blob, (file) -> putWithRetry(bucketName, configuration, blob, file, FIRST_TRY).block());
+        public Mono<Void> putDirectly(ObjectStorageBucketName bucketName, Blob blob) {
+            return putWithRetry(bucketName, () -> uploadByBlob(bucketName, blob));
         }
 
         @Override
-        public BlobId putAndComputeId(ObjectStorageBucketName bucketName, Blob initialBlob, Supplier<BlobId> blobIdSupplier) {
-            Consumer<File> putChangedBlob = (file) -> {
-                initialBlob.getMetadata().setName(blobIdSupplier.get().asString());
-                putWithRetry(bucketName, configuration, initialBlob, file, FIRST_TRY).block();
-            };
-            writeFileAndAct(initialBlob, putChangedBlob);
-            return blobIdSupplier.get();
+        public Mono<BlobId> putAndComputeId(ObjectStorageBucketName bucketName, Blob initialBlob, Supplier<BlobId> blobIdSupplier) {
+            return Mono.using(
+                () -> copyToTempFile(initialBlob),
+                file -> putByFile(bucketName, blobIdSupplier, file),
+                this::deleteFileAsync);
         }
 
-        private void writeFileAndAct(Blob blob, Consumer<File> putFile) {
-            File file = null;
-            try {
-                file = File.createTempFile(UUID.randomUUID().toString(), ".tmp");
-                FileUtils.copyToFile(blob.getPayload().openStream(), file);
-                putFile.accept(file);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } finally {
-                if (file != null) {
-                    FileUtils.deleteQuietly(file);
-                }
-            }
+        private Mono<BlobId> putByFile(ObjectStorageBucketName bucketName, Supplier<BlobId> blobIdSupplier, File file) {
+            return Mono.fromSupplier(blobIdSupplier)
+                .flatMap(blobId -> putWithRetry(bucketName, () -> uploadByFile(bucketName, blobId, file))
+                    .then(Mono.just(blobId)));
         }
 
-        private Mono<Void> putWithRetry(ObjectStorageBucketName bucketName, AwsS3AuthConfiguration configuration, Blob blob, File file, int tried) {
-            return Mono.<Void>fromRunnable(Throwing.runnable(() -> put(bucketName, configuration, blob, file)).sneakyThrow())
+        private File copyToTempFile(Blob blob) throws IOException {
+            File file = File.createTempFile(UUID.randomUUID().toString(), ".tmp");
+            FileUtils.copyToFile(blob.getPayload().openStream(), file);
+            return file;
+        }
+
+        private void deleteFileAsync(File file) {
+            Mono.fromRunnable(() -> FileUtils.deleteQuietly(file))
+                .subscribeOn(Schedulers.elastic())
+                .subscribe();
+        }
+
+        private Mono<Void> putWithRetry(ObjectStorageBucketName bucketName, ThrowingRunnable puttingAttempt) {
+            return Mono.<Void>fromRunnable(puttingAttempt)
                 .publishOn(Schedulers.elastic())
                 .retryWhen(Retry
                     .<Void>onlyIf(retryContext -> needToCreateBucket(retryContext.exception()))
                     .exponentialBackoff(FIRST_BACK_OFF, FOREVER)
                     .withBackoffScheduler(Schedulers.elastic())
                     .retryMax(MAX_RETRY_ON_EXCEPTION)
-                    .doOnRetry(retryContext -> createBucket(bucketName, configuration)));
+                    .doOnRetry(retryContext -> s3Client.createBucket(bucketName.asString())));
         }
 
-        private void put(ObjectStorageBucketName bucketName, AwsS3AuthConfiguration configuration, Blob blob, File file) throws InterruptedException {
-            PutObjectRequest request = new PutObjectRequest(bucketName.asString(),
-                blob.getMetadata().getName(),
-                file);
+        private void uploadByFile(ObjectStorageBucketName bucketName, BlobId blobId, File file) throws InterruptedException {
+            PutObjectRequest request = new PutObjectRequest(bucketName.asString(), blobId.asString(), file);
+            upload(request);
+        }
 
-            getTransferManager(configuration)
+        private void uploadByBlob(ObjectStorageBucketName bucketName, Blob blob) throws InterruptedException, IOException {
+            try (InputStream payload = blob.getPayload().openStream()) {
+                PutObjectRequest request = new PutObjectRequest(bucketName.asString(),
+                    blob.getMetadata().getName(),
+                    payload,
+                    new ObjectMetadata());
+
+                upload(request);
+            }
+        }
+
+        private void upload(PutObjectRequest request) throws InterruptedException {
+            transferManager
                 .upload(request)
                 .waitForUploadResult();
-        }
-
-        private void createBucket(ObjectStorageBucketName bucketName, AwsS3AuthConfiguration configuration) {
-            getS3Client(configuration, getClientConfiguration())
-                .createBucket(bucketName.asString());
         }
 
         private boolean needToCreateBucket(Throwable th) {
@@ -211,13 +219,10 @@ public class AwsS3ObjectStorage {
             return false;
         }
 
-        private TransferManager getTransferManager(AwsS3AuthConfiguration configuration) {
-            ClientConfiguration clientConfiguration = getClientConfiguration();
-            AmazonS3 amazonS3 = getS3Client(configuration, clientConfiguration);
-
+        private static TransferManager getTransferManager(AmazonS3 s3Client, ExecutorService executorService) {
             return TransferManagerBuilder
                     .standard()
-                    .withS3Client(amazonS3)
+                    .withS3Client(s3Client)
                     .withMultipartUploadThreshold(MULTIPART_UPLOAD_THRESHOLD.getValue())
                     .withExecutorFactory(() -> executorService)
                     .withShutDownThreadPools(DO_NOT_SHUTDOWN_THREAD_POOL)
@@ -237,6 +242,12 @@ public class AwsS3ObjectStorage {
             ClientConfiguration clientConfiguration = new ClientConfiguration();
             clientConfiguration.setRetryPolicy(PredefinedRetryPolicies.getDefaultRetryPolicyWithCustomMaxRetries(MAX_ERROR_RETRY));
             return clientConfiguration;
+        }
+
+        @Override
+        public void close() throws IOException {
+            transferManager.shutdownNow();
+            s3Client.shutdown();
         }
     }
 }

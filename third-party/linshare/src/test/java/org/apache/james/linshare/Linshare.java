@@ -94,7 +94,7 @@ public class Linshare {
 
     @SuppressWarnings("resource")
     private GenericContainer<?> createDockerDatabase() {
-        return new GenericContainer<>("linagora/linshare-database:2.2")
+        return new GenericContainer<>("linagora/linshare-database:2.3.2")
             .withLogConsumer(frame -> LOGGER.debug("<linshare-database> " + frame.getUtf8String()))
             .withNetworkAliases("database", "linshare_database")
             .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata")
@@ -114,7 +114,7 @@ public class Linshare {
 
     @SuppressWarnings("resource")
     private GenericContainer<?> createDockerLdap() {
-        return new GenericContainer<>("linagora/linshare-ldap-for-tests:1.0")
+        return new GenericContainer<>("linagora/linshare-ldap-for-tests:1.0.0")
             .withLogConsumer(frame -> LOGGER.debug("<linshare-ldap-for-tests> " + frame.getUtf8String()))
             .withNetworkAliases("ldap")
             .withNetwork(network);
@@ -155,7 +155,7 @@ public class Linshare {
 
     @SuppressWarnings("resource")
     private GenericContainer<?> createLinshareBackendInit() {
-        return new GenericContainer<>("linagora/linshare-init:2.2")
+        return new GenericContainer<>("linagora/linshare-init:2.3.2")
             .withNetworkAliases("init")
             .withLogConsumer(frame -> LOGGER.debug("<linshare-init> " + frame.getUtf8String()))
             .withEnv("LS_HOST", "backend")

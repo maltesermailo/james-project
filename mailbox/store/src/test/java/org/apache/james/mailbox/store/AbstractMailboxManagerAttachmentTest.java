@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.MailboxSessionUtil;
@@ -44,13 +45,13 @@ import org.apache.james.mailbox.store.mail.MailboxMapper;
 import org.apache.james.mailbox.store.mail.MessageMapper;
 import org.apache.james.mailbox.store.mail.MessageMapper.FetchType;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.github.fge.lambdas.Throwing;
 import com.google.common.collect.ImmutableList;
 
 public abstract class AbstractMailboxManagerAttachmentTest {
-    private static final String USERNAME = "user@domain.tld";
+    private static final Username USERNAME = Username.of("user@domain.tld");
 
     private MailboxManager mailboxManager;
     private MessageMapper messageMapper;
@@ -68,8 +69,8 @@ public abstract class AbstractMailboxManagerAttachmentTest {
     protected abstract MailboxSessionMapperFactory getMailboxSessionMapperFactory();
     
     protected abstract AttachmentMapperFactory getAttachmentMapperFactory();
-    
-    public void setUp() throws Exception {
+
+    protected void setUp() throws Exception {
         mailboxSession = MailboxSessionUtil.create(USERNAME);
         messageMapper = getMailboxSessionMapperFactory().getMessageMapper(mailboxSession);
         mailboxMapper = getMailboxSessionMapperFactory().getMailboxMapper(mailboxSession);
@@ -82,7 +83,7 @@ public abstract class AbstractMailboxManagerAttachmentTest {
     }
 
     @Test
-    public void appendMessageShouldStoreWithoutAttachmentWhenMailWithoutAttachment() throws Exception {
+    void appendMessageShouldStoreWithoutAttachmentWhenMailWithoutAttachment() throws Exception {
         String mail = "Subject: Test\n\nBody";
         InputStream mailInputStream = new ByteArrayInputStream(mail.getBytes());
         inboxMessageManager.appendMessage(MessageManager.AppendCommand.builder()
@@ -94,7 +95,7 @@ public abstract class AbstractMailboxManagerAttachmentTest {
     }
 
     @Test
-    public void appendMessageShouldStoreAttachmentWhenMailWithOneAttachment() throws Exception {
+    void appendMessageShouldStoreAttachmentWhenMailWithOneAttachment() throws Exception {
         InputStream mailInputStream = ClassLoader.getSystemResourceAsStream("eml/oneAttachmentAndSomeTextInlined.eml");
         inboxMessageManager.appendMessage(MessageManager.AppendCommand.builder()
             .build(mailInputStream), mailboxSession);
@@ -105,7 +106,7 @@ public abstract class AbstractMailboxManagerAttachmentTest {
     }
 
     @Test
-    public void appendMessageShouldStoreAttachmentNameWhenMailWithOneAttachment() throws Exception {
+    void appendMessageShouldStoreAttachmentNameWhenMailWithOneAttachment() throws Exception {
         InputStream mailInputStream = ClassLoader.getSystemResourceAsStream("eml/oneAttachmentAndSomeTextInlined.eml");
         inboxMessageManager.appendMessage(MessageManager.AppendCommand.builder()
             .build(mailInputStream), mailboxSession);
@@ -118,7 +119,7 @@ public abstract class AbstractMailboxManagerAttachmentTest {
     }
 
     @Test
-    public void appendMessageShouldStoreARetrievableAttachmentWhenMailWithOneAttachment() throws Exception {
+    void appendMessageShouldStoreARetrievableAttachmentWhenMailWithOneAttachment() throws Exception {
         InputStream mailInputStream = ClassLoader.getSystemResourceAsStream("eml/oneAttachmentAndSomeTextInlined.eml");
 
         inboxMessageManager.appendMessage(MessageManager.AppendCommand.builder()
@@ -133,7 +134,7 @@ public abstract class AbstractMailboxManagerAttachmentTest {
     }
 
     @Test
-    public void appendMessageShouldStoreAttachmentsWhenMailWithTwoAttachment() throws Exception {
+    void appendMessageShouldStoreAttachmentsWhenMailWithTwoAttachment() throws Exception {
         InputStream mailInputStream = ClassLoader.getSystemResourceAsStream("eml/twoAttachments.eml");
 
         inboxMessageManager.appendMessage(MessageManager.AppendCommand.builder()
@@ -145,7 +146,7 @@ public abstract class AbstractMailboxManagerAttachmentTest {
     }
 
     @Test
-    public void appendMessageShouldStoreTwoRetrievableAttachmentsWhenMailWithTwoAttachment() throws Exception {
+    void appendMessageShouldStoreTwoRetrievableAttachmentsWhenMailWithTwoAttachment() throws Exception {
         InputStream mailInputStream = ClassLoader.getSystemResourceAsStream("eml/twoAttachments.eml");
 
         inboxMessageManager.appendMessage(MessageManager.AppendCommand.builder()
@@ -172,7 +173,7 @@ public abstract class AbstractMailboxManagerAttachmentTest {
     }
 
     @Test
-    public void appendMessageShouldStoreEmbeddedMailAsAttachmentWhenMailWithEmbeddedAttachment() throws Exception {
+    void appendMessageShouldStoreEmbeddedMailAsAttachmentWhenMailWithEmbeddedAttachment() throws Exception {
         InputStream mailInputStream = ClassLoader.getSystemResourceAsStream("eml/embeddedAttachmentWithAttachment.eml");
 
         inboxMessageManager.appendMessage(MessageManager.AppendCommand.builder()
@@ -184,7 +185,7 @@ public abstract class AbstractMailboxManagerAttachmentTest {
     }
 
     @Test
-    public void appendMessageShouldNotStoreAnyAttachmentWhenUnparsableMail() throws Exception {
+    void appendMessageShouldNotStoreAnyAttachmentWhenUnparsableMail() throws Exception {
         MailboxManager parseFailingMailboxManager = getParseFailingMailboxManager();
         MessageManager parseFailingInboxMessageManager = parseFailingMailboxManager.getMailbox(inboxPath, mailboxSession);
         InputStream mailInputStream = new ByteArrayInputStream("content".getBytes());

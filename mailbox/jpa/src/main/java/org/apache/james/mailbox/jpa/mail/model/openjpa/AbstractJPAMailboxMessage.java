@@ -23,7 +23,6 @@ import java.io.InputStream;
 import java.io.SequenceInputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 
@@ -43,6 +42,7 @@ import javax.persistence.OneToMany;
 import javax.persistence.OrderBy;
 
 import org.apache.james.mailbox.MessageUid;
+import org.apache.james.mailbox.ModSeq;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.jpa.JPAId;
 import org.apache.james.mailbox.jpa.mail.model.JPAMailbox;
@@ -59,12 +59,12 @@ import org.apache.james.mailbox.store.mail.model.MailboxMessage;
 import org.apache.james.mailbox.store.mail.model.Property;
 import org.apache.james.mailbox.store.mail.model.impl.MessageParser;
 import org.apache.james.mailbox.store.mail.model.impl.PropertyBuilder;
-import org.apache.james.mailbox.store.search.comparator.UidComparator;
 import org.apache.james.mime4j.MimeException;
 import org.apache.openjpa.persistence.jdbc.ElementJoinColumn;
 import org.apache.openjpa.persistence.jdbc.ElementJoinColumns;
 import org.apache.openjpa.persistence.jdbc.Index;
 
+import com.github.steveash.guavate.Guavate;
 import com.google.common.base.Objects;
 
 /**
@@ -93,12 +93,10 @@ import com.google.common.base.Objects;
         @NamedQuery(name = "countMessagesInMailbox", query = "SELECT COUNT(message) FROM MailboxMessage message WHERE message.mailbox.mailboxId = :idParam"),
         @NamedQuery(name = "deleteMessages", query = "DELETE FROM MailboxMessage message WHERE message.mailbox.mailboxId = :idParam"),
         @NamedQuery(name = "findLastUidInMailbox", query = "SELECT message.uid FROM MailboxMessage message WHERE message.mailbox.mailboxId = :idParam ORDER BY message.uid DESC"),
-        @NamedQuery(name = "findHighestModSeqInMailbox", query = "SELECT message.modSeq FROM MailboxMessage message WHERE message.mailbox.mailboxId = :idParam ORDER BY message.modSeq DESC"),
-        @NamedQuery(name = "deleteAllMemberships", query = "DELETE FROM MailboxMessage message") })
+        @NamedQuery(name = "findHighestModSeqInMailbox", query = "SELECT message.modSeq FROM MailboxMessage message WHERE message.mailbox.mailboxId = :idParam ORDER BY message.modSeq DESC")
+})
 @MappedSuperclass
 public abstract class AbstractJPAMailboxMessage implements MailboxMessage {
-
-    private static final Comparator<MailboxMessage> MESSAGE_UID_COMPARATOR = new UidComparator();
     private static final String TOSTRING_SEPARATOR = " ";
 
     /** Identifies composite key */
@@ -278,12 +276,12 @@ public abstract class AbstractJPAMailboxMessage implements MailboxMessage {
      * @param original
      *            message to be copied, not null
      */
-    public AbstractJPAMailboxMessage(JPAMailbox mailbox, MessageUid uid, long modSeq, MailboxMessage original)
+    public AbstractJPAMailboxMessage(JPAMailbox mailbox, MessageUid uid, ModSeq modSeq, MailboxMessage original)
             throws MailboxException {
         super();
         this.mailbox = mailbox;
         this.uid = uid.asLong();
-        this.modSeq = modSeq;
+        this.modSeq = modSeq.asLong();
         this.userFlags = new ArrayList<>();
         setFlags(original.createFlags());
 
@@ -325,20 +323,20 @@ public abstract class AbstractJPAMailboxMessage implements MailboxMessage {
     @Override
     public ComposedMessageIdWithMetaData getComposedMessageIdWithMetaData() {
         return ComposedMessageIdWithMetaData.builder()
-            .modSeq(modSeq)
+            .modSeq(getModSeq())
             .flags(createFlags())
             .composedMessageId(new ComposedMessageId(mailbox.getMailboxId(), getMessageId(), MessageUid.of(uid)))
             .build();
     }
 
     @Override
-    public long getModSeq() {
-        return modSeq;
+    public ModSeq getModSeq() {
+        return ModSeq.of(modSeq);
     }
 
     @Override
-    public void setModSeq(long modSeq) {
-        this.modSeq = modSeq;
+    public void setModSeq(ModSeq modSeq) {
+        this.modSeq = modSeq.asLong();
     }
 
     @Override
@@ -360,7 +358,9 @@ public abstract class AbstractJPAMailboxMessage implements MailboxMessage {
      */
     @Override
     public List<Property> getProperties() {
-        return new ArrayList<>(properties);
+        return properties.stream()
+            .map(JPAProperty::toProperty)
+            .collect(Guavate.toImmutableList());
     }
 
     @Override
@@ -488,11 +488,6 @@ public abstract class AbstractJPAMailboxMessage implements MailboxMessage {
         return new DefaultMessageId();
     }
 
-    @Override
-    public int compareTo(MailboxMessage other) {
-        return MESSAGE_UID_COMPARATOR.compare(this, other);
-    }
-
     public String toString() {
         return "message("
                 + "mailboxId = " + this.getMailboxId() + TOSTRING_SEPARATOR
@@ -514,6 +509,11 @@ public abstract class AbstractJPAMailboxMessage implements MailboxMessage {
         } catch (MimeException | IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public boolean hasAttachment() {
+        return !getAttachments().isEmpty();
     }
 
 }

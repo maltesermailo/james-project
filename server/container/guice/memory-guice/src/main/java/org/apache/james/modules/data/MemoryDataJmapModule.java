@@ -19,20 +19,25 @@
 
 package org.apache.james.modules.data;
 
+import org.apache.james.core.healthcheck.HealthCheck;
 import org.apache.james.jmap.api.access.AccessTokenRepository;
 import org.apache.james.jmap.api.filtering.FilteringManagement;
 import org.apache.james.jmap.api.filtering.impl.EventSourcingFilteringManagement;
+import org.apache.james.jmap.api.projections.MessageFastViewProjection;
+import org.apache.james.jmap.api.projections.MessageFastViewProjectionHealthCheck;
 import org.apache.james.jmap.api.vacation.NotificationRegistry;
 import org.apache.james.jmap.api.vacation.VacationRepository;
 import org.apache.james.jmap.memory.access.MemoryAccessTokenRepository;
+import org.apache.james.jmap.memory.projections.MemoryMessageFastViewProjection;
 import org.apache.james.jmap.memory.vacation.MemoryNotificationRegistry;
 import org.apache.james.jmap.memory.vacation.MemoryVacationRepository;
 import org.apache.james.mailbox.extractor.TextExtractor;
-import org.apache.james.mailbox.inmemory.JsoupTextExtractor;
 import org.apache.james.mailbox.store.extractor.DefaultTextExtractor;
+import org.apache.james.mailbox.store.extractor.JsoupTextExtractor;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
+import com.google.inject.multibindings.Multibinder;
 
 public class MemoryDataJmapModule extends AbstractModule {
 
@@ -52,5 +57,13 @@ public class MemoryDataJmapModule extends AbstractModule {
 
         bind(DefaultTextExtractor.class).in(Scopes.SINGLETON);
         bind(TextExtractor.class).to(JsoupTextExtractor.class);
+
+        bind(MemoryMessageFastViewProjection.class).in(Scopes.SINGLETON);
+        bind(MessageFastViewProjection.class).to(MemoryMessageFastViewProjection.class);
+
+        bind(MessageFastViewProjectionHealthCheck.class).in(Scopes.SINGLETON);
+        Multibinder.newSetBinder(binder(), HealthCheck.class)
+            .addBinding()
+            .to(MessageFastViewProjectionHealthCheck.class);
     }
 }

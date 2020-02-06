@@ -18,51 +18,49 @@
  ****************************************************************/
 package org.apache.mailbox.tools.indexer;
 
-import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import java.io.IOException;
+import java.time.Instant;
 
+import org.apache.james.JsonSerializationVerifier;
 import org.apache.james.mailbox.MessageUid;
 import org.apache.james.mailbox.model.TestId;
-import org.apache.james.server.task.json.JsonTaskSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-
 class SingleMessageReindexingTaskSerializationTest {
+    private static final Instant TIMESTAMP = Instant.parse("2018-11-13T12:00:55Z");
 
+    private final TestId.Factory mailboxIdFactory = new TestId.Factory();
+    private final String serializedMessageReindexingTask = "{\"type\": \"message-reindexing\", \"mailboxId\": \"1\", \"uid\": 10}";
+    private final String serializedAdditionalInformation = "{\"type\": \"message-reindexing\", \"mailboxId\": \"1\", \"uid\": 10, \"timestamp\":\"2018-11-13T12:00:55Z\"}";
+    private final TestId mailboxId = TestId.of(1L);
+    private final MessageUid messageUid = MessageUid.of(10L);
+
+    private SingleMessageReindexingTask.Factory factory;
     private ReIndexerPerformer reIndexerPerformer;
-    private JsonTaskSerializer taskSerializer;
-    private final String serializedMessageReindexingTask = "{\"type\": \"messageReIndexing\", \"mailboxId\": \"1\", \"uid\": 10}";
 
     @BeforeEach
     void setUp() {
         reIndexerPerformer = mock(ReIndexerPerformer.class);
-        SingleMessageReindexingTask.Factory factory = new SingleMessageReindexingTask.Factory(reIndexerPerformer, new TestId.Factory());
-        taskSerializer = new JsonTaskSerializer(SingleMessageReindexingTask.MODULE.apply(factory));
+        factory = new SingleMessageReindexingTask.Factory(reIndexerPerformer, mailboxIdFactory);
     }
 
     @Test
-    void singleMessageReindexingShouldBeSerializable() throws JsonProcessingException {
-        TestId mailboxId = TestId.of(1L);
-        MessageUid messageUid = MessageUid.of(10L);
-        SingleMessageReindexingTask task = new SingleMessageReindexingTask(reIndexerPerformer, mailboxId, messageUid);
-
-        assertThatJson(taskSerializer.serialize(task))
-            .isEqualTo(serializedMessageReindexingTask);
+    void singleMessageReindexingShouldBeSerializable() throws Exception {
+        JsonSerializationVerifier.dtoModule(SingleMessageReindexingTaskDTO.module(factory))
+            .bean(new SingleMessageReindexingTask(reIndexerPerformer, mailboxId, messageUid))
+            .json(serializedMessageReindexingTask)
+            .verify();
     }
 
     @Test
-    void singleMessageReindexingShouldBeDeserializable() throws IOException {
-        TestId mailboxId = TestId.of(1L);
-        MessageUid messageUid = MessageUid.of(10L);
-        SingleMessageReindexingTask task = new SingleMessageReindexingTask(reIndexerPerformer, mailboxId, messageUid);
-
-        assertThat(taskSerializer.deserialize(serializedMessageReindexingTask))
-            .isEqualToComparingOnlyGivenFields(task, "reIndexerPerformer", "mailboxId", "uid");
+    void additionalInformationShouldBeSerializable() throws Exception {
+        SingleMessageReindexingTask.AdditionalInformation details = new SingleMessageReindexingTask.AdditionalInformation(mailboxId, messageUid, TIMESTAMP);
+        JsonSerializationVerifier.dtoModule(SingleMessageReindexingTaskAdditionalInformationDTO.serializationModule(mailboxIdFactory))
+            .bean(details)
+            .json(serializedAdditionalInformation)
+            .verify();
     }
 }
 

@@ -28,19 +28,20 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 
-import org.apache.james.core.quota.QuotaCount;
-import org.apache.james.core.quota.QuotaSize;
+import org.apache.james.core.quota.QuotaCountLimit;
+import org.apache.james.core.quota.QuotaSizeLimit;
 import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.webadmin.Routes;
 import org.apache.james.webadmin.dto.QuotaDTO;
+import org.apache.james.webadmin.dto.ValidatedQuotaDTO;
 import org.apache.james.webadmin.jackson.QuotaModule;
 import org.apache.james.webadmin.service.GlobalQuotaService;
 import org.apache.james.webadmin.utils.ErrorResponder;
 import org.apache.james.webadmin.utils.ErrorResponder.ErrorType;
-import org.apache.james.webadmin.utils.JsonExtractException;
 import org.apache.james.webadmin.utils.JsonExtractor;
 import org.apache.james.webadmin.utils.JsonTransformer;
 import org.apache.james.webadmin.utils.Responses;
+import org.apache.james.webadmin.validation.QuotaDTOValidator;
 import org.apache.james.webadmin.validation.Quotas;
 import org.eclipse.jetty.http.HttpStatus;
 
@@ -65,6 +66,7 @@ public class GlobalQuotaRoutes implements Routes {
 
     private final JsonTransformer jsonTransformer;
     private final JsonExtractor<QuotaDTO> jsonExtractor;
+    private final QuotaDTOValidator quotaDTOValidator;
     private final GlobalQuotaService globalQuotaService;
     private Service service;
 
@@ -73,6 +75,7 @@ public class GlobalQuotaRoutes implements Routes {
         this.globalQuotaService = globalQuotaService;
         this.jsonTransformer = jsonTransformer;
         this.jsonExtractor = new JsonExtractor<>(QuotaDTO.class, new QuotaModule().asJacksonModule());
+        quotaDTOValidator = new QuotaDTOValidator();
     }
 
     @Override
@@ -104,7 +107,7 @@ public class GlobalQuotaRoutes implements Routes {
     @PUT
     @ApiOperation(value = "Updating count and size at the same time")
     @ApiImplicitParams({
-            @ApiImplicitParam(required = true, dataType = "org.apache.james.webadmin.dto.QuotaDTO", paramType = "body")
+            @ApiImplicitParam(required = true, dataTypeClass = QuotaDTO.class, paramType = "body")
     })
     @ApiResponses(value = {
             @ApiResponse(code = HttpStatus.NO_CONTENT_204, message = "OK. The value has been updated."),
@@ -115,15 +118,9 @@ public class GlobalQuotaRoutes implements Routes {
         service.put(QUOTA_ENDPOINT, ((request, response) -> {
             try {
                 QuotaDTO quotaDTO = jsonExtractor.parse(request.body());
-                globalQuotaService.defineQuota(quotaDTO);
+                ValidatedQuotaDTO validatedQuotaDTO = quotaDTOValidator.validatedQuotaDTO(quotaDTO);
+                globalQuotaService.defineQuota(validatedQuotaDTO);
                 return Responses.returnNoContent(response);
-            } catch (JsonExtractException e) {
-                throw ErrorResponder.builder()
-                    .statusCode(HttpStatus.BAD_REQUEST_400)
-                    .type(ErrorType.INVALID_ARGUMENT)
-                    .message("Malformed JSON input")
-                    .cause(e)
-                    .haltError();
             } catch (IllegalArgumentException e) {
                 throw ErrorResponder.builder()
                     .statusCode(HttpStatus.BAD_REQUEST_400)
@@ -175,7 +172,7 @@ public class GlobalQuotaRoutes implements Routes {
     })
     public void defineUpdateQuotaSize() {
         service.put(SIZE_ENDPOINT, (request, response) -> {
-            QuotaSize quotaSize = Quotas.quotaSize(request.body());
+            QuotaSizeLimit quotaSize = Quotas.quotaSize(request.body());
             globalQuotaService.defineMaxSizeQuota(quotaSize);
             return Responses.returnNoContent(response);
         });
@@ -192,8 +189,8 @@ public class GlobalQuotaRoutes implements Routes {
         service.get(SIZE_ENDPOINT, this::getQuotaSize, jsonTransformer);
     }
 
-    private QuotaSize getQuotaSize(Request request, Response response) throws MailboxException {
-        Optional<QuotaSize> maxSizeQuota = globalQuotaService.getMaxSizeQuota();
+    private QuotaSizeLimit getQuotaSize(Request request, Response response) throws MailboxException {
+        Optional<QuotaSizeLimit> maxSizeQuota = globalQuotaService.getMaxSizeQuota();
         if (maxSizeQuota.isPresent()) {
             return maxSizeQuota.get();
         }
@@ -228,7 +225,7 @@ public class GlobalQuotaRoutes implements Routes {
     })
     public void defineUpdateQuotaCount() {
         service.put(COUNT_ENDPOINT, (request, response) -> {
-            QuotaCount quotaRequest = Quotas.quotaCount(request.body());
+            QuotaCountLimit quotaRequest = Quotas.quotaCount(request.body());
             globalQuotaService.defineMaxCountQuota(quotaRequest);
             return Responses.returnNoContent(response);
         });
@@ -246,8 +243,8 @@ public class GlobalQuotaRoutes implements Routes {
         service.get(COUNT_ENDPOINT, this::getQuotaCount, jsonTransformer);
     }
 
-    private QuotaCount getQuotaCount(Request request, Response response) throws MailboxException {
-        Optional<QuotaCount> maxCountQuota = globalQuotaService.getMaxCountQuota();
+    private QuotaCountLimit getQuotaCount(Request request, Response response) throws MailboxException {
+        Optional<QuotaCountLimit> maxCountQuota = globalQuotaService.getMaxCountQuota();
         if (maxCountQuota.isPresent()) {
             return maxCountQuota.get();
         }

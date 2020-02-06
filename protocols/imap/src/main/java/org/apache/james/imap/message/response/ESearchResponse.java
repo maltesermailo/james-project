@@ -21,25 +21,25 @@ package org.apache.james.imap.message.response;
 
 import java.util.List;
 
+import org.apache.james.imap.api.Tag;
 import org.apache.james.imap.api.message.IdRange;
 import org.apache.james.imap.api.message.UidRange;
 import org.apache.james.imap.api.message.request.SearchResultOption;
 import org.apache.james.imap.api.message.response.ImapResponseMessage;
+import org.apache.james.mailbox.ModSeq;
 
 public class ESearchResponse implements ImapResponseMessage {
-
     private final long minUid;
     private final long maxUid;
     private final long count;
     private final IdRange[] all;
-    private final String tag;
+    private final Tag tag;
     private final boolean useUid;
     private final List<SearchResultOption> options;
-    private final Long highestModSeq;
+    private final ModSeq highestModSeq;
     private UidRange[] allUids;
 
-    public ESearchResponse(long minUid, long maxUid, long count, IdRange[] all, UidRange[] allUids, Long highestModSeq, String tag, boolean useUid, List<SearchResultOption> options) {
-        super();
+    public ESearchResponse(long minUid, long maxUid, long count, IdRange[] all, UidRange[] allUids, ModSeq highestModSeq, Tag tag, boolean useUid, List<SearchResultOption> options) {
         this.options = options;
         this.minUid = minUid;
         this.maxUid = maxUid;
@@ -71,7 +71,7 @@ public class ESearchResponse implements ImapResponseMessage {
         return allUids;
     }
     
-    public String getTag() {
+    public Tag getTag() {
         return tag;
     }
     
@@ -83,7 +83,7 @@ public class ESearchResponse implements ImapResponseMessage {
         return options;
     }
     
-    public final Long getHighestModSeq() {
+    public final ModSeq getHighestModSeq() {
         return highestModSeq;
     }
     

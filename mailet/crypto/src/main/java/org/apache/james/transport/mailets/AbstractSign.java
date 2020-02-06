@@ -36,6 +36,7 @@ import javax.mail.internet.MimeMultipart;
 import javax.mail.internet.ParseException;
 
 import org.apache.james.core.MailAddress;
+import org.apache.james.core.Username;
 import org.apache.james.transport.KeyHolder;
 import org.apache.james.transport.SMIMEAttributeNames;
 import org.apache.james.user.api.UsersRepository;
@@ -172,7 +173,7 @@ public abstract class AbstractSign extends GenericMailet {
      * Initializer for property debug.
      */
     protected void initDebug() {
-        setDebug((getInitParameter("debug") == null) ? false : Boolean.valueOf(getInitParameter("debug")));
+        setDebug((getInitParameter("debug") == null) ? false : Boolean.parseBoolean(getInitParameter("debug")));
     }
     
     /**
@@ -335,7 +336,7 @@ public abstract class AbstractSign extends GenericMailet {
      * Initializer for property postmasterSigns.
      */
     protected void initPostmasterSigns() {
-        setPostmasterSigns((getInitParameter("postmasterSigns") == null) ? false : Boolean.valueOf(getInitParameter("postmasterSigns")));
+        setPostmasterSigns((getInitParameter("postmasterSigns") == null) ? false : Boolean.parseBoolean(getInitParameter("postmasterSigns")));
     }
     
     /**
@@ -359,7 +360,7 @@ public abstract class AbstractSign extends GenericMailet {
      * Initializer for property rebuildFrom.
      */
     protected void initRebuildFrom() throws MessagingException {
-        setRebuildFrom((getInitParameter("rebuildFrom") == null) ? false : Boolean.valueOf(getInitParameter("rebuildFrom")));
+        setRebuildFrom((getInitParameter("rebuildFrom") == null) ? false : Boolean.parseBoolean(getInitParameter("rebuildFrom")));
         if (isDebug()) {
             if (isRebuildFrom()) {
                 LOGGER.debug("Will modify the \"From:\" header.");
@@ -573,7 +574,7 @@ public abstract class AbstractSign extends GenericMailet {
             return false;
         }
 
-        String authUser = fetchedAuthUser.get();
+        Username authUser = Username.of(fetchedAuthUser.get());
 
         // The sender is the postmaster?
         if (Objects.equal(getMailetContext().getPostmaster(), reversePath)) {
@@ -584,9 +585,9 @@ public abstract class AbstractSign extends GenericMailet {
             }
         } else {
             // is the reverse-path user different from the SMTP authorized user?
-            String username = getUsername(reversePath);
+            Username username = getUsername(reversePath);
             if (!username.equals(authUser)) {
-                LOGGER.info("SMTP logged in as <{}> but pretend to be sender <{}>", authUser, username);
+                LOGGER.info("SMTP logged in as <{}> but pretend to be sender <{}>", authUser.asString(), username.asString());
                 return false;
             }
             // is there no "From:" address same as the reverse-path?
@@ -607,7 +608,7 @@ public abstract class AbstractSign extends GenericMailet {
 
     }
 
-    private String getUsername(MailAddress mailAddress) {
+    private Username getUsername(MailAddress mailAddress) {
         try {
             return usersRepository.getUser(mailAddress);
         } catch (UsersRepositoryException e) {
